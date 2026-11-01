@@ -1,0 +1,64 @@
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.81s
+     Running unittests examples/model_quality/main.rs (target/debug/examples/model_quality-dc44eca642ae934c)
+
+running 16 tests
+test activations::tests::test_model_research_execution_identity_and_sequential_preflight ... ok
+test argument_tests::test_compact_comparison_arguments_reject_other_transforms ... ok
+test argument_tests::test_layer_ranking_arguments_are_explicit_and_exclusive ... ok
+test compact::tests::test_compact_logit_gate_rejects_hidden_non_top_drift ... ok
+test compact::tests::test_compact_preflight_binds_actual_export_and_source_mask ... ok
+test compact::tests::test_compact_preflight_rejects_stale_or_altered_export_records ... ok
+test compact::tests::test_real_compact_model_matches_masked_source_logits_and_allocations ... ok
+test layers::tests::test_ranked_variant_identity_and_frozen_mask_preflight ... ok
+test layers::tests::test_ranking_mask_trials_reset_state_and_preserve_source_allocation ... FAILED
+test records::tests::test_quality_conclusions_require_passing_reference ... ok
+test records::tests::test_report_keeps_rows_and_refuses_overwrite ... ok
+test run::tests::test_preflight_rejects_truncation_and_tokenizer_mismatch ... ok
+test step_timing::tests::test_paired_step_records_preserve_scope ... FAILED
+test step_timing::tests::test_paired_steps_require_the_declared_reference_mask ... FAILED
+test step_timing::tests::test_step_trace_forces_prefixes_and_resets ... FAILED
+test tasks::tests::test_task_records_use_explicit_dense_reference ... FAILED
+
+failures:
+
+---- layers::tests::test_ranking_mask_trials_reset_state_and_preserve_source_allocation stdout ----
+[cuda] upload_weights: 503808 bytes (total=503808) tag=weights
+Error: parallel head128 attention requires dense FP16 KV with head_dim=128
+
+---- step_timing::tests::test_paired_step_records_preserve_scope stdout ----
+[cuda] upload_weights: 339968 bytes (total=339968) tag=weights
+[cuda] upload_weights: 339968 bytes (total=679936) tag=weights
+Error: parallel head128 attention requires dense FP16 KV with head_dim=128
+
+---- step_timing::tests::test_paired_steps_require_the_declared_reference_mask stdout ----
+[cuda] upload_weights: 339968 bytes (total=339968) tag=weights
+[cuda] upload_weights: 339968 bytes (total=679936) tag=weights
+Error: parallel head128 attention requires dense FP16 KV with head_dim=128
+
+---- step_timing::tests::test_step_trace_forces_prefixes_and_resets stdout ----
+[cuda] upload_weights: 339968 bytes (total=339968) tag=weights
+Error: parallel head128 attention requires dense FP16 KV with head_dim=128
+
+---- tasks::tests::test_task_records_use_explicit_dense_reference stdout ----
+[cuda] upload_weights: 196608 bytes (total=196608) tag=weights
+[cuda] upload_weights: 196608 bytes (total=393216) tag=weights
+[generate] mapped 2 standard layers d_model=64 hidden_dim=128
+Error: generation failed after 0 generated tokens (seq_len=2, prompt_tokens=2, context_remaining=62, kv_mode=Off, top_blocks=8, exact_old_backing=dense, exact_old_attention=staged)
+
+Caused by:
+    parallel head128 attention requires dense FP16 KV with head_dim=128
+
+
+failures:
+    layers::tests::test_ranking_mask_trials_reset_state_and_preserve_source_allocation
+    step_timing::tests::test_paired_step_records_preserve_scope
+    step_timing::tests::test_paired_steps_require_the_declared_reference_mask
+    step_timing::tests::test_step_trace_forces_prefixes_and_resets
+    tasks::tests::test_task_records_use_explicit_dense_reference
+
+test result: FAILED. 11 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 114.01s
+
+error: test failed, to rerun pass `--example model_quality`

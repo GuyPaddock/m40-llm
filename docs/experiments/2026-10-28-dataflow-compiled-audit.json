@@ -1,0 +1,7 @@
+{
+   "is_passed" : true,
+   "reference" : "docs/experiments/2026-10-28-draft-compiled-audit.json",
+   "sass_sha256" : "50a6244ff1d507ef75156b61d9ba998226dc78acc9eb3281dc846a5202ffc8d7",
+   "scope" : "Instruction identity only; no achieved occupancy or traffic claim",
+   "unchanged_entries" : 138
+}

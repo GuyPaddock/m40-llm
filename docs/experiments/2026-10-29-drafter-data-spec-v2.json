@@ -1,0 +1,460 @@
+{
+  "schema_version": 2,
+  "kind": "compact_drafter_data_preparation_specification",
+  "date": "2026-10-29",
+  "review_status": "cpu_preparation_authorized_gpu_execution_not_authorized",
+  "is_realized_row_manifest": false,
+  "ready_for_teacher_generation": false,
+  "ready_for_training": false,
+  "source_revision": "caf4ee15bd0b0f639f158ac109e9aec3fa6199d7",
+  "plan_path": "docs/experiments/2026-10-29-drafter-pilot-admission.md",
+  "accepted_cost_evidence": {
+    "implementation_commit": "c9c1853",
+    "report_commit": "caf4ee1",
+    "raw_path": "docs/experiments/2026-10-29-compact-draft-cost.jsonl",
+    "raw_sha256": "8d46eab99a57c831c3a0c4958f71374a9d824e814a8bf468e351cdaca4113722",
+    "artifact_checksum_manifest": "docs/experiments/2026-10-29-compact-draft-cost.sha256",
+    "scope": "cost only, not learned acceptance or runtime gain"
+  },
+  "prohibited_before_review": [
+    "gpu_calibration",
+    "teacher_feature_generation",
+    "model_training",
+    "gpu_switching",
+    "speculative_runtime_integration"
+  ],
+  "approval_sequence": [
+    "CPU: versioned MBPP-only eligibility approved; prepare and review realized manifest with all original isolation and quota gates",
+    "Calibration: review frozen short-context protocol and realized manifest before separate GPU authorization",
+    "R1: teacher/training require admitted manifest, cost coverage and all original prerequisites",
+    "R2: review pilot outcome before any larger allocation or integration"
+  ],
+  "target": {
+    "model_name": "Qwen2.5-3B-Instruct",
+    "format": "GGUF Q8_0",
+    "local_path": "/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+    "sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+    "layers": 36,
+    "hidden_width": 2048,
+    "vocabulary_size": 151936,
+    "kv_mode": "off",
+    "kv_helper": "KvCompressionConfig::dense_reference()",
+    "ffn_consumer": "joint-shared-scales-128",
+    "prepared_ownership": "joint-only",
+    "exact_portfolio_enabled": false,
+    "approximate_numerics_enabled": false,
+    "reference_manifest": "docs/experiments/2026-10-27-compound-reference.json",
+    "reference_manifest_sha256": "663fae5b5b58aca83a92f661f4d7be46276f4b1660c0ab6f4673caa767eb7f90",
+    "preserve_original_down_vocabulary_and_prefill": true,
+    "prompt_format": "QwenChat",
+    "system_message": null,
+    "add_bos": false,
+    "sampling": "target greedy top_k=1 with existing tie and stop rules",
+    "tokenizer_sha256": null,
+    "export_executable_sha256": null,
+    "export_environment_sha256": null,
+    "license_metadata_revision": "aa8e72537993ba99e69dfaafa59ed015b17504d1",
+    "license_url": "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct/raw/aa8e72537993ba99e69dfaafa59ed015b17504d1/LICENSE",
+    "license_text_sha256": "ef52482bb785733093dc9a2e8edd8e764c77d12d8e9d8f10a80c9b547d32d0f9",
+    "license": "Qwen RESEARCH LICENSE AGREEMENT",
+    "license_metadata_does_not_establish_gguf_conversion_revision": true,
+    "use_scope": "local non-commercial research; distribution/commercial clearance not granted"
+  },
+  "sources": [
+    {
+      "repository": "databricks/databricks-dolly-15k",
+      "revision": "bdd27f4d94b9c1f951818a7da7fd7aeea5dbff1a",
+      "data_files": [
+        "databricks-dolly-15k.jsonl"
+      ],
+      "data_file_sha256": null,
+      "metadata_url": "https://huggingface.co/datasets/databricks/databricks-dolly-15k/raw/bdd27f4d94b9c1f951818a7da7fd7aeea5dbff1a/README.md",
+      "metadata_sha256": "db06c60090a11b20e79d1933b2f316f781605f07761ff2ae2795d6523e3e960b",
+      "license": "CC-BY-SA-3.0",
+      "attribution": [
+        "Databricks, 2023",
+        "Wikipedia contributors where context applies"
+      ],
+      "input_fields": [
+        "instruction",
+        "context"
+      ],
+      "answer_fields_excluded_from_model_input": [
+        "response"
+      ],
+      "selected_row_ids": null,
+      "document_provenance_review": "pending; unresolved upstream documents must be quarantined"
+    },
+    {
+      "repository": "google-research-datasets/mbpp",
+      "revision": "4bb6404fdc6cacfda99d4ac4205087b89d32030c",
+      "configuration": "full",
+      "data_files": [
+        "full/train-00000-of-00001.parquet",
+        "full/validation-00000-of-00001.parquet",
+        "full/test-00000-of-00001.parquet"
+      ],
+      "data_file_sha256": null,
+      "metadata_url": "https://huggingface.co/datasets/google-research-datasets/mbpp/raw/4bb6404fdc6cacfda99d4ac4205087b89d32030c/README.md",
+      "metadata_sha256": "6377d5c76ba46b9e650daa6d5eb592e671c9b15586e39f23f50ed9bf2ac54cf6",
+      "license": "CC-BY-4.0",
+      "attribution": [
+        "Google Research",
+        "Austin et al., 2021"
+      ],
+      "input_fields": [
+        "text"
+      ],
+      "execute_reference_code_or_tests": false,
+      "source_task_id_ranges": {
+        "train": [
+          601,
+          974
+        ],
+        "calibration": [
+          511,
+          600
+        ],
+        "held_out": [
+          11,
+          510
+        ],
+        "excluded_few_shot": [
+          1,
+          10
+        ]
+      },
+      "selected_row_ids": null
+    }
+  ],
+  "selection": {
+    "seed": 20261029,
+    "group_before_split": true,
+    "group_keys": [
+      "canonical_upstream_document",
+      "substantive_task_template",
+      "near_duplicate_component"
+    ],
+    "stable_group_order": "SHA256(UTF-8('20261029:' || canonical_group_id))",
+    "comparison_normalization": "NFKC, lowercase, collapsed whitespace; emitted prompts unchanged",
+    "quarantine_unresolved_provenance": true,
+    "quarantine_cross_partition_mbpp_groups": true,
+    "near_duplicate_rules": {
+      "shared_contiguous_tokens": 32,
+      "word_shingle_width": 5,
+      "jaccard_minimum": 0.5,
+      "manual_paraphrase_template_review_required": true,
+      "transport_wrapper_exempt": true
+    },
+    "strata": [
+      {
+        "name": "dolly_prose_open_qa",
+        "source_categories": [
+          "creative_writing",
+          "open_qa"
+        ],
+        "train": 256,
+        "calibration": 48,
+        "held_out": 96
+      },
+      {
+        "name": "dolly_grounded_qa",
+        "source_categories": [
+          "closed_qa"
+        ],
+        "requires_nonempty_context": true,
+        "train": 256,
+        "calibration": 48,
+        "held_out": 96
+      },
+      {
+        "name": "dolly_extraction_classification",
+        "source_categories": [
+          "information_extraction",
+          "classification"
+        ],
+        "train": 256,
+        "calibration": 48,
+        "held_out": 96
+      },
+      {
+        "name": "mbpp_code",
+        "train": 256,
+        "calibration": 48,
+        "held_out": 96
+      }
+    ],
+    "total_prompts": {
+      "train": 1024,
+      "calibration": 192,
+      "held_out": 384
+    },
+    "prompt_token_buckets_inclusive": [
+      [
+        65,
+        127
+      ],
+      [
+        128,
+        255
+      ],
+      [
+        256,
+        447
+      ]
+    ],
+    "minimum_held_out_prompts_per_context_bucket": 32,
+    "minimum_held_out_independent_groups_per_stratum": 16,
+    "max_generated_tokens": 128,
+    "pad_or_rewrite_to_meet_quotas": false,
+    "quota_failure_action": "stop for review, no substitutions",
+    "prompt_token_buckets_by_stratum": {
+      "dolly_prose_open_qa": [
+        [
+          65,
+          127
+        ],
+        [
+          128,
+          255
+        ],
+        [
+          256,
+          447
+        ]
+      ],
+      "dolly_grounded_qa": [
+        [
+          65,
+          127
+        ],
+        [
+          128,
+          255
+        ],
+        [
+          256,
+          447
+        ]
+      ],
+      "dolly_extraction_classification": [
+        [
+          65,
+          127
+        ],
+        [
+          128,
+          255
+        ],
+        [
+          256,
+          447
+        ]
+      ],
+      "mbpp_code": [
+        [
+          1,
+          64
+        ],
+        [
+          65,
+          127
+        ],
+        [
+          128,
+          255
+        ],
+        [
+          256,
+          447
+        ]
+      ]
+    },
+    "require_nonempty_source_text": true,
+    "minimum_held_out_prompts_per_context_bucket_applies_to": [
+      [
+        65,
+        127
+      ],
+      [
+        128,
+        255
+      ],
+      [
+        256,
+        447
+      ]
+    ]
+  },
+  "feature_alignment": {
+    "feature": "raw final residual after layer35, before output RMSNorm",
+    "dtype": "little-endian float32",
+    "width": 2048,
+    "indexing": "zero-based absolute token positions",
+    "prefix_ending_at": "t",
+    "committed_kv_length": "t+1",
+    "known_seed": "x[t+1]",
+    "target_labels": [
+      "x[t+2]",
+      "x[t+3]",
+      "x[t+4]"
+    ],
+    "first_prompt_feature_position": "prompt_tokens-1",
+    "seed_is_learned_input": false,
+    "allow_future_hidden_features": false,
+    "teacher_trajectory": "ordinary exact target greedy, no draft-conditioned prefixes",
+    "stop_handling": "include first stop label; mask later labels; terminal seed never proposes",
+    "length_limit_handling": "mask missing future labels as censored, not EOS",
+    "zero_valid_labels": "retain ledger row, exclude from loss"
+  },
+  "exclusions": {
+    "apply_to_all_pilot_splits": true,
+    "reserved_markers": [
+      "ZXQ-NEEDLE-41729",
+      "M40_BATCH_LIMIT"
+    ],
+    "exclude_browser_loading_topic_and_templates": true,
+    "seed_artifacts": [
+      {
+        "path": "data/research_quality/v1.json",
+        "sha256": "2a1270959ef105a3ec19e0be0ab888048fb619880fd4f014ce216acfb8710c38"
+      },
+      {
+        "path": "docs/experiments/2026-10-28-draft-heldout-prompts.json",
+        "sha256": "95bf28af5e9fe8d8061b31b658b142f7b8c73c19484554b9f8fc70ecf9b9017f"
+      },
+      {
+        "path": "docs/experiments/2026-10-28-draft-heldout.jsonl",
+        "sha256": "88710befbed346ff97ab079b49ee9c144f8bab6599e11e6506aecabf34fde015"
+      },
+      {
+        "path": "docs/experiments/2026-10-27-maxwell-compound-runtime-quality.jsonl",
+        "sha256": "adf09f0077f7ec24e7ca61f1a846f8b4e97db4b631fa82c86a6af0201b5e4f24"
+      },
+      {
+        "path": "src/evaluation/corpus.rs",
+        "sha256": "d0393221acf9497eb7d40c680ecd02f23de34ede52da2d9737eb99f3c272f1a6"
+      },
+      {
+        "path": "tests/kv_compression_long_context.rs",
+        "sha256": "da454a62accad5d16808197fa9162d6d6eeaee4b1191d7ff98795a96d2f57b34"
+      }
+    ],
+    "expand_seed_list_before_admission": "all fixture modules, historical prompts/outputs, experiment traces and referenced retained artifacts",
+    "expanded_content_manifest_sha256": null,
+    "post_teacher_output_overlap_check_required": true
+  },
+  "training": {
+    "architecture": "three independent 2048x256 affine-SiLU heads, one shared 256x151936 vocabulary matrix",
+    "parameter_count": 40469248,
+    "target_frozen": true,
+    "seed": 20261029,
+    "initialization": "Xavier uniform per matrix, zero hidden biases, no vocabulary bias",
+    "dtype": "float32",
+    "amp_enabled": false,
+    "tf32_enabled": false,
+    "loss": "full-vocabulary cross entropy averaged over valid head labels",
+    "optimizer": "AdamW",
+    "learning_rate": 0.0003,
+    "betas": [
+      0.9,
+      0.999
+    ],
+    "epsilon": 1e-8,
+    "matrix_weight_decay": 0.01,
+    "bias_weight_decay": 0,
+    "gradient_clip_global_norm": 1,
+    "batch_size": 128,
+    "epochs": 4,
+    "maximum_optimizer_steps": 4096,
+    "include_short_last_batch": true,
+    "dropout": 0,
+    "gradient_accumulation_steps": 1,
+    "learning_rate_schedule": "constant",
+    "checkpoint_selection": "fixed epoch4 only; no held-out selection",
+    "toolchain_manifest_sha256": null,
+    "training_device": "M40 unless a separately approved switch selects A4000"
+  },
+  "cost_model": {
+    "reference": "docs/experiments/2026-10-29-compact-draft-model.json",
+    "reference_sha256": "0f14a5109759cd592cca163e547ba5c9c0f2504a20e3ee0b3d7ca698b498f2f8",
+    "proposal_median_ms": 1.5380845,
+    "proposal_p95_ms": 1.5555975,
+    "is_learned_acceptance_measured": false,
+    "is_speculative_http_measured": false,
+    "measured_serial_positions_inclusive": [
+      65,
+      575
+    ],
+    "measured_batch_positions_inclusive": [
+      65,
+      569
+    ],
+    "reference_http_tokens_per_second": 50.910426,
+    "target_http_tokens_per_second": 56.153149,
+    "bootstrap_unit": "independent document/template group, stratified by task family",
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 20261029,
+    "additional_unmeasured_attempt_cost_ms": [
+      0,
+      1,
+      5
+    ],
+    "minimum_held_out_reached_guess3": 256,
+    "minimum_held_out_reached_guess3_per_stratum": 32,
+    "pilot_decision_rules": "see Stops And Review Gates in the linked plan; projections cannot qualify runtime speed",
+    "short_context_measured": false,
+    "uncovered_cost_admission": "unknown; never substitute position-65 costs as short-context measurements"
+  },
+  "budget_gpu_hours": {
+    "aggregate_cap": 72,
+    "parent_caps": {
+      "cost": 4,
+      "teacher": 20,
+      "training": 40,
+      "evaluation": 8
+    },
+    "already_used": {
+      "cost": 0.005923,
+      "teacher": 0,
+      "training": 0,
+      "evaluation": 0
+    },
+    "proposed_additional_pilot_caps": {
+      "cost": 0,
+      "teacher": 2,
+      "training": 2,
+      "evaluation": 1
+    },
+    "teacher_scout_included_hours": 0.25,
+    "automatic_parent_budget_unlock": false,
+    "phase_transfer_allowed": false,
+    "every_gpu_switch_requires_confirmation": true
+  },
+  "storage_estimates": {
+    "maximum_feature_rows": 204800,
+    "bytes_per_feature": 8192,
+    "maximum_feature_payload_bytes": 1677721600,
+    "free_disk_required_gib": 8,
+    "is_teacher_throughput_measured": false
+  },
+  "unresolved_admission_artifacts": {
+    "realized_row_manifest_sha256": null,
+    "split_group_audit_sha256": null,
+    "expanded_exclusion_audit_sha256": null,
+    "license_review_record": null,
+    "tokenized_prompt_manifest_sha256": null,
+    "training_toolchain_manifest_sha256": null,
+    "reviewer_approval": null
+  },
+  "parent_specification": {
+    "path": "docs/experiments/2026-10-29-drafter-data-spec.json",
+    "sha256": "6ba7fc6606525bb142de110c7a7cd78cbe26d01a6f1edb8f03646871095d4bcd"
+  },
+  "amendment": {
+    "path": "docs/experiments/2026-10-29-short-prompt-amendment.md",
+    "commit": "2d7f0c9",
+    "scope": "MBPP-only natural short-prompt eligibility; all source partitions, quotas, isolation and training unchanged"
+  },
+  "calibration_protocol_path": "docs/experiments/2026-10-29-short-context-calibration-v2.md"
+}

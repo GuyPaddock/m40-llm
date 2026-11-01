@@ -1,0 +1,2 @@
+# CPU-only reader for the pinned MBPP Parquet source, not a training environment.
+pyarrow==22.0.0

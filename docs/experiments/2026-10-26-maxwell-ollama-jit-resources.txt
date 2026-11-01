@@ -1,0 +1,4 @@
+ Function _Z13mul_mat_vec_qIL9ggml_type8ELi1ELb0ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj:
+  REG:48 STACK:0 SHARED:384 LOCAL:0 CONSTANT[0]:512 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z13quantize_q8_1PKfPvlllllj5uint3:
+  REG:23 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:392 TEXTURE:0 SURFACE:0 SAMPLER:0

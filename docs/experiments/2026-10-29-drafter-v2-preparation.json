@@ -1,0 +1,80 @@
+{
+  "additional_gpu_hours": 0,
+  "candidate_manifest_path": "local-artifacts/2026-10-29-drafter-data-v2/candidates.json",
+  "candidate_manifest_sha256": "8aec641405b976e696a1c295d6139daa82cbd3dfe8fbd5f6cb99a3ff641e6020",
+  "dolly_provenance": {
+    "dolly_extraction_classification": {
+      "source_rows": 3642,
+      "unresolved_context_rows": 1506
+    },
+    "dolly_grounded_qa": {
+      "source_rows": 1773,
+      "unresolved_context_rows": 1773
+    },
+    "dolly_prose_open_qa": {
+      "source_rows": 4451,
+      "unresolved_context_rows": 0
+    }
+  },
+  "has_realized_training_manifest": false,
+  "is_r1_admitted": false,
+  "kind": "v2_cpu_manifest_preparation_checkpoint",
+  "mandatory_unfinished_checks": [
+    "Dolly upstream document resolution",
+    "normalized shared32-token audit",
+    "manual paraphrase/template and normalized-AST review",
+    "expanded benchmark exclusions",
+    "Dolly runtime tokenization and group allocation",
+    "realized manifest isolation",
+    "combined source/license review"
+  ],
+  "mbpp_length_eligible_upper_bounds": {
+    "calibration": 90,
+    "held_out": 500,
+    "train": 374
+  },
+  "mbpp_required_quotas": {
+    "calibration": 48,
+    "held_out": 96,
+    "train": 256
+  },
+  "mbpp_residual_row_upper_bounds": {
+    "calibration": 76,
+    "held_out": 449,
+    "train": 334
+  },
+  "next_action": "Review failures before further admission; never substitute sources or relax isolation.",
+  "original_token_ledger_sha256": "c6c16a3e2ed778bb2564959ad4797adb69097d3ec37fa3a34fc2c4e1bab5d721",
+  "parent_spec_sha256": "6ba7fc6606525bb142de110c7a7cd78cbe26d01a6f1edb8f03646871095d4bcd",
+  "schema_version": 2,
+  "selected_training_rows": 0,
+  "source_identity_record_sha256": "a93b19567d1adc234f86fcfa259ba9997341c420f41a6cfc868a583fddb712b0",
+  "source_payloads": [
+    {
+      "filename": "databricks-dolly-15k.jsonl",
+      "repository": "databricks/databricks-dolly-15k",
+      "revision": "bdd27f4d94b9c1f951818a7da7fd7aeea5dbff1a",
+      "sha256": "2df9083338b4abd6bceb5635764dab5d833b393b55759dffb0959b6fcbf794ec"
+    },
+    {
+      "filename": "full/train-00000-of-00001.parquet",
+      "repository": "google-research-datasets/mbpp",
+      "revision": "4bb6404fdc6cacfda99d4ac4205087b89d32030c",
+      "sha256": "09d125ca31edacb7800be8c67c45abff618faf0214ff551291817d06bdb914ae"
+    },
+    {
+      "filename": "full/validation-00000-of-00001.parquet",
+      "repository": "google-research-datasets/mbpp",
+      "revision": "4bb6404fdc6cacfda99d4ac4205087b89d32030c",
+      "sha256": "3f0ec060987432d99fe8fb409d31e6c67445b208a01741c5583517c80a10fe80"
+    },
+    {
+      "filename": "full/test-00000-of-00001.parquet",
+      "repository": "google-research-datasets/mbpp",
+      "revision": "4bb6404fdc6cacfda99d4ac4205087b89d32030c",
+      "sha256": "566fd53060ffba5766dace1d1e2f4c38906781526de222b0dfbdbc325b696c77"
+    }
+  ],
+  "spec_sha256": "f0a9db0ecb1bc292001c80dbe6cb75d0b7a17174533bfa00d05279e92609ec91",
+  "status": "blocked_before_realized_training_manifest"
+}

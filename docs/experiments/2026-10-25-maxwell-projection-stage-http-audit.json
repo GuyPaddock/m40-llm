@@ -1,0 +1,28 @@
+{
+  "passes_audit": true,
+  "profile_off": {
+    "mad_over_median": 0.00050126511222429,
+    "max": 47.53412355267867,
+    "median": 47.47016999596909,
+    "min": 47.429729691472986
+  },
+  "profile_on": {
+    "mad_over_median": 0.00024129355711100537,
+    "max": 47.064969911674524,
+    "median": 46.9909565337873,
+    "min": 46.97961791873321
+  },
+  "throughput_change": -0.010095044155571387,
+  "actual_ids_equal": 512,
+  "samples": 21,
+  "primary_profile_sessions": 5,
+  "gpu_boundary_samples": 20,
+  "clocks": [
+    {
+      "sm": "1113",
+      "memory": "3004"
+    }
+  ],
+  "stage_scope": "36 layer samples per core stage, lm_head once per token; event spans not unprofiled latency or measured bandwidth",
+  "is_optimization_claim": false
+}

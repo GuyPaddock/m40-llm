@@ -1,0 +1,15 @@
+a0f873694f622c0f46bdde91868794916c448bb8f52f329909d5a476fc820067  docs/experiments/2026-10-25-maxwell-split-ffn-audit.json
+4a5d06950f3ef9f2a529237c6b7e442e530df1642d5f71ff1604d1bf6e9ffe2a  docs/experiments/2026-10-25-maxwell-split-ffn-clippy.log.gz
+d782420a201f5c8327e9dd51d2eb9500cb0e6ac7339758e4b34a5baa1d26ecd8  docs/experiments/2026-10-25-maxwell-split-ffn-cuda-tests.log.gz
+60386163d61c57dcb970a20207a9bc9f694eaa7fe3fa310651c70ab9bb7fe278  docs/experiments/2026-10-25-maxwell-split-ffn-instructions.txt
+d0966dde58e8d4eaa4e4ff8095d8698492ab0503b47a1a219b8f93683b7ee63d  docs/experiments/2026-10-25-maxwell-split-ffn-memory-audit.jq
+e09a4b2cf9be618083569778b58707805edede6c5828d7c95ece52518e4f3b98  docs/experiments/2026-10-25-maxwell-split-ffn-memory-audit.json
+4a5acdfcfe4abb752265dc10faedc9e777abf21e4e55ef7eb011f25aedcafac8  docs/experiments/2026-10-25-maxwell-split-ffn-no-cublas.log.gz
+bf24b4b1a06a88e70d699b2e926737a231a7567bc54f3539a13ded66df6d4b93  docs/experiments/2026-10-25-maxwell-split-ffn-noncuda.log.gz
+69708c45765b560fba3c6cbb0847f4760430649a8f7d00fb3f3c3c52bcb6637a  docs/experiments/2026-10-25-maxwell-split-ffn-regressions.log.gz
+34dcf7a49e54ea7882f10c230f0e81659d8dfb54091dcd982f516f7258e60c55  docs/experiments/2026-10-25-maxwell-split-ffn-resources.txt
+bdeb134bfd29b89098c83109f12cf2fea0557b717944518added649ddb4d5b0c  docs/experiments/2026-10-25-maxwell-split-ffn-sass.txt.gz
+c45621ede48c8490d21037402f19038d4c00cde8abe4b87f0be0144324c6d9d8  docs/experiments/2026-10-25-maxwell-split-ffn-screen.jsonl
+ea8de02cf9705b9ebed7d50e88cd6aa95666492ee431412578eac98c4f08cb2c  docs/experiments/2026-10-25-maxwell-split-ffn-screen.log.gz
+cac5d14ac28f076e99aad00fe52ae4feafa532ebb5ea6e984bdb891eef509226  docs/experiments/2026-10-25-maxwell-split-ffn-screen.md
+6e3c339a61341bde6f6440c0a8bfa185e776ef473458f34a6f948b072ec505c9  scripts/audit_ffn_followup.jq

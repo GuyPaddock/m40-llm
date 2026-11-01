@@ -1,0 +1,9 @@
+d286db3bc46216300bf6ef5cac0c3faffca5bedea79eabee8d73137c9c87bf42  docs/experiments/2026-10-25-maxwell-prefill-drift-completed.md
+1a504994b99d3e946f427f30f119ad4d04ea78991e97f2001a37b3e840f1e3be  docs/experiments/2026-10-25-maxwell-prefill-drift-completed.jsonl
+58a4ae0a5b655db2fcbb6b19af02810b197dbdd0b817c2f85a72ab1f39e22c66  docs/experiments/2026-10-25-maxwell-prefill-drift-completed.log.gz
+c3326a2401048def10b062316effa6b2181cd68ba1b6cbe9a86d9cbc36df8968  docs/experiments/2026-10-25-maxwell-prefix-fix-tests.log.gz
+6b1fee17867bec31411a3444b323c01705699859ee41a56dccaa07602002646c  docs/experiments/2026-10-25-maxwell-prefix-fix-tests-off.log.gz
+4fb19e25de733cd17f9a0f404073993a6cf0a790de793c81bedefba81be465be  docs/experiments/2026-10-25-maxwell-prefix-fix-noncuda.log.gz
+23f096c9384cf3319210a626c84efc4bece35d30131e23870011999d49943da1  docs/experiments/2026-10-25-maxwell-prefix-fix-clippy.log.gz
+c271bf1d5d938c188f4aa6ea63aba9bdff4d70b20f63890461b4d60ff20f7eac  docs/experiments/2026-10-25-maxwell-prefix-contract-tests.log.gz
+466e7929852f1033d9baa9ae905f921cced4b80816bc538145b59efbdbe756c9  docs/experiments/2026-10-25-maxwell-prefix-contract-noncuda.log.gz

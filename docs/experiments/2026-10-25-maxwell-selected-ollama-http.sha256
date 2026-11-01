@@ -1,0 +1,9 @@
+ccdc3521053bbb50329a3755b078143975f132800e43d425f970b12fb4b40b93  docs/experiments/2026-10-25-maxwell-selected-ollama-http.md
+f13ef26682346dfe98b569f87dde98375947a46790bb595c8b34e95eed874634  docs/experiments/2026-10-25-maxwell-selected-ollama-http.jsonl
+e52cfb44933898facc78dcff522bf58ebf346396620d2d9635ec70f2b38d380c  docs/experiments/2026-10-25-maxwell-selected-ollama-http-audit.json
+350c34319852edd81cda4f5f3f1f144fccc4e38f8a58403f188459796fb88a73  docs/experiments/2026-10-25-maxwell-selected-ollama-http.log.gz
+b311c9a901f36085d07e6620029b6201dd9d82bee039f228b9d1b6ce2ed66e24  docs/experiments/2026-10-25-maxwell-selected-ollama-audit.jq
+36b0060bf44801a604a6b9564b71c3b40cf0cbc452bcf7eda236fc09dc5326f7  docs/experiments/2026-10-25-maxwell-selected-tool-tests.log.gz
+53d81b1488a72e805dc8dfbbc7f80d6822f82c8698c5d920e08a4c959fd7a1b5  docs/experiments/2026-10-25-maxwell-selected-tool-clippy.log.gz
+9c5e3b35e88c9fbceef7dd681b958ba77d18d24490f09affcf6c32e8a3d8e9b0  docs/experiments/2026-10-25-maxwell-selected-tool-noncuda.log.gz
+f0c747d7b26b36fc9560fe41f39d01b82be3b466f58873bbb82f9f775b587fff  docs/experiments/2026-10-25-maxwell-combined-ollama.log.gz

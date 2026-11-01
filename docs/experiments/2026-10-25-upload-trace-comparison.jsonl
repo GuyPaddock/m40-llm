@@ -1,0 +1,1 @@
+{"kind":"prior_trace_comparison","reference":"2026-10-25-qwen-exact-checkpoint.jsonl","current":"2026-10-25-upload-order-checkpoint.jsonl","prompt_tokens":65,"generated_tokens":512,"prompt_ids_match":true,"generated_ids_match":true,"output_match":true,"companion_matches_measured_output":true}

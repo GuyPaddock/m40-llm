@@ -1,0 +1,20 @@
+{
+  "kind": "independent_v2_candidate_consistency_audit",
+  "is_complete_training_admission": false,
+  "mbpp_rows": 964,
+  "dolly_rows": 15011,
+  "mbpp_ids_match": true,
+  "dolly_lines_match": true,
+  "group_memberships_match": true,
+  "no_selected_rows": true,
+  "all_cross_partition_groups_quarantined": true,
+  "edge_components_consistent": true,
+  "capacities_recomputed": {
+    "train": 334,
+    "calibration": 76,
+    "held_out": 449
+  },
+  "capacities_match": true,
+  "source_partitions_preserved": true,
+  "grounded_contexts_quarantined": true
+}

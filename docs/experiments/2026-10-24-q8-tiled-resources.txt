@@ -1,0 +1,198 @@
+
+Fatbin ptx code:
+================
+arch = sm_52
+code version = [8,7]
+host = linux
+compile_size = 64bit
+compressed
+ptxasOptions =
+
+Fatbin elf code:
+================
+arch = sm_52
+code version = [1,7]
+host = linux
+compile_size = 64bit
+
+Resource usage:
+ Common:
+  GLOBAL:24 CONSTANT[4]:8
+ Function _Z27q8_input_tiled_lanes_kernelILi16EEvPKfPKhPfii:
+  REG:48 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z32q8_input_tiled_projection_kernelILi16EEvPKfPKhPfii:
+  REG:48 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z27q8_input_tiled_lanes_kernelILi8EEvPKfPKhPfii:
+  REG:47 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z32q8_input_tiled_projection_kernelILi8EEvPKfPKhPfii:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z27q8_input_tiled_lanes_kernelILi4EEvPKfPKhPfii:
+  REG:38 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z32q8_input_tiled_projection_kernelILi4EEvPKfPKhPfii:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function persistent_decode_vec_kernel:
+  REG:22 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:328 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function rope_f32_inplace_position_dev_kernel:
+  REG:26 STACK:32 SHARED:0 LOCAL:0 CONSTANT[2]:92 CONSTANT[0]:364 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function rope_f32_inplace_kernel:
+  REG:26 STACK:32 SHARED:0 LOCAL:0 CONSTANT[2]:92 CONSTANT[0]:356 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function rope_f32_kernel:
+  REG:26 STACK:32 SHARED:0 LOCAL:0 CONSTANT[2]:92 CONSTANT[0]:364 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function build_compressed_representatives_from_dense_kernel:
+  REG:29 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:408 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function build_compressed_summaries_from_dense_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:12 CONSTANT[0]:416 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function build_compressed_recent_from_dense_kernel:
+  REG:21 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:392 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function compressed_rope_k_append_f32_to_f16_kernel:
+  REG:30 STACK:32 SHARED:0 LOCAL:0 CONSTANT[2]:92 CONSTANT[0]:480 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function rope_k_append_f32_to_f16_h2_at_kernel:
+  REG:28 STACK:32 SHARED:0 LOCAL:0 CONSTANT[2]:92 CONSTANT[0]:416 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function rope_k_append_f32_to_f16_h2_kernel:
+  REG:25 STACK:32 SHARED:0 LOCAL:0 CONSTANT[2]:92 CONSTANT[0]:384 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function cast_store_f32_to_f16_kernel_h2:
+  REG:8 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:344 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function cast_store_f32_to_f16_kernel:
+  REG:7 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:344 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function materialize_gguf_f16_to_f32_colmajor_nt_kernel:
+  REG:10 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:344 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function qkv_f32xq4_0_gguf_decode_kernel:
+  REG:40 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:4 CONSTANT[0]:416 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function mlp_gate_up_swiglu_f32xq4_0_gguf_decode_kernel:
+  REG:56 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:32 CONSTANT[0]:360 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function qkv_f32xq8_0_gguf_decode_split4_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:416 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function qkv_f32xq8_0_gguf_decode_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:416 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function mlp_gate_up_swiglu_f32xq8_0_gguf_decode_split4_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:28 CONSTANT[0]:360 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function mlp_gate_up_swiglu_f32xq8_0_gguf_decode_kernel:
+  REG:56 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:28 CONSTANT[0]:360 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f32xq8_0_gguf_f32_decode_tiled2_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f32xq8_0_gguf_f32_decode_coltile4_split4_kernel:
+  REG:40 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f32xq8_0_gguf_f32_decode_split4_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f32xq8_0_gguf_f32_decode_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f32xq8_0_gguf_f32_shared_activation_kernel:
+  REG:32 STACK:0 SHARED:1024 LOCAL:0 CONSTANT[2]:4 CONSTANT[0]:356 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f32xq8_0_gguf_f32_blockloop_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:356 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f32xq6_k_gguf_f32_decode_kernel:
+  REG:126 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f32xq4_0_gguf_f32_decode_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:4 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f32xq4_0_gguf_f32_blockloop_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:4 CONSTANT[0]:356 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f32xq8_0_gguf_f32_kernel:
+  REG:27 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:356 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function qkv_f32xf16_gguf_decode_kernel:
+  REG:23 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:416 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function mlp_gate_up_swiglu_f32xf16_gguf_decode_kernel:
+  REG:23 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:28 CONSTANT[0]:360 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f32xf16_gguf_f32_decode_kernel:
+  REG:17 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f32xf16_gguf_f32_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:356 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f32xf16_f32_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:356 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f16xf16_f32_kernel:
+  REG:26 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:356 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gemm_f16_f32_kernel:
+  REG:26 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:356 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_prefill_gqa_varlen_kernel:
+  REG:25 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:28 CONSTANT[0]:400 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_batched_head64_ldg_kernel:
+  REG:36 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:392 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_head64_ldg_kernel:
+  REG:34 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:376 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_compressed_recent_only_head64_kernel:
+  REG:37 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:376 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_compressed_summary_head64_kernel:
+  REG:40 STACK:512 SHARED:0 LOCAL:0 CONSTANT[2]:28 CONSTANT[0]:440 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_block_summary_lossy_head64_kernel:
+  REG:40 STACK:512 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:384 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_block_select_exact_fp16_k_q4_v_direct_batched_kernel:
+  REG:47 STACK:768 SHARED:0 LOCAL:0 CONSTANT[2]:100 CONSTANT[0]:496 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_block_select_exact_fp16_k_q4_v_direct_kernel:
+  REG:40 STACK:768 SHARED:0 LOCAL:0 CONSTANT[2]:100 CONSTANT[0]:480 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_block_select_exact_q8_direct_head64_kernel:
+  REG:40 STACK:768 SHARED:0 LOCAL:0 CONSTANT[2]:96 CONSTANT[0]:496 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_staged_exact_head64_kernel:
+  REG:27 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:368 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gather_block_select_exact_q8_old_head64_kernel:
+  REG:40 STACK:512 SHARED:0 LOCAL:0 CONSTANT[2]:12 CONSTANT[0]:488 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function quantize_evicted_recent_v_to_q4_old_kernel:
+  REG:20 STACK:0 SHARED:512 LOCAL:0 CONSTANT[2]:16 CONSTANT[0]:368 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function copy_evicted_recent_k_to_fp16_old_kernel:
+  REG:22 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:360 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function quantize_evicted_recent_to_q8_old_head64_kernel:
+  REG:27 STACK:0 SHARED:512 LOCAL:0 CONSTANT[2]:16 CONSTANT[0]:388 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function build_q8_old_from_dense_head64_kernel:
+  REG:20 STACK:0 SHARED:512 LOCAL:0 CONSTANT[2]:16 CONSTANT[0]:388 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function gather_block_select_exact_head64_kernel:
+  REG:38 STACK:512 SHARED:0 LOCAL:0 CONSTANT[2]:12 CONSTANT[0]:416 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_block_select_exact_head64_kernel:
+  REG:40 STACK:512 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:392 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_batched_head128_kernel:
+  REG:36 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:392 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_batched_head64_kernel:
+  REG:36 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:392 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_dense_sink_recent_head128_fast_kernel:
+  REG:31 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:384 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_dense_recent_head128_fast_kernel:
+  REG:31 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:376 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_dense_recent_head64_kernel:
+  REG:36 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:376 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_head128_merge_partitions_kernel:
+  REG:32 STACK:0 SHARED:48 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:344 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_head128_parallel_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:384 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_head128_fast_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:376 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_head128_warp_kernel:
+  REG:33 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:376 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_head128_kernel:
+  REG:34 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:376 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_head64_kernel:
+  REG:34 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:376 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_seq_len_dev_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:36 CONSTANT[0]:384 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_gqa_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:36 CONSTANT[0]:384 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function attention_last_token_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:36 CONSTANT[0]:376 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z17swiglu_f32_kernelPKfS0_Pfm:
+  REG:14 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z23residual_add_f32_kernelPKfS0_Pfm:
+  REG:8 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z17kernel_q80_to_f32PKaPfm:
+  REG:10 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:344 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z17kernel_f16_to_f32PK6__halfPfm:
+  REG:7 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:344 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z34rms_norm_f32_weighted_parallel_ldgPKfPKvPfmmfj:
+  REG:16 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:12 CONSTANT[0]:368 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z30rms_norm_f32_weighted_parallelPKfPKvPfmmfj:
+  REG:15 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:12 CONSTANT[0]:368 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z21rms_norm_f32_parallelPKfPfmmf:
+  REG:16 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:12 CONSTANT[0]:356 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function rms_norm_f32_weighted:
+  REG:26 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:368 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function rms_norm_f32:
+  REG:21 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:24 CONSTANT[0]:356 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function f16_lm_head_argmax_partials_kernel:
+  REG:32 STACK:0 SHARED:64 LOCAL:0 CONSTANT[2]:4 CONSTANT[0]:360 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function q8_0_lm_head_argmax_reduce_kernel:
+  REG:11 STACK:0 SHARED:2048 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function q8_0_lm_head_argmax_shared_a_partials_kernel:
+  REG:35 STACK:0 SHARED:64 LOCAL:0 CONSTANT[0]:360 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function q8_0_lm_head_argmax_partials_kernel:
+  REG:32 STACK:0 SHARED:64 LOCAL:0 CONSTANT[0]:360 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function argmax_f32_kernel:
+  REG:9 STACK:0 SHARED:2048 LOCAL:0 CONSTANT[0]:344 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z29q8_separate_projection_kernelILi4EEvPKfPK6__halfPKaPfii:
+  REG:45 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:360 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z29q8_separate_projection_kernelILi1EEvPKfPK6__halfPKaPfii:
+  REG:28 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:360 TEXTURE:0 SURFACE:0 SAMPLER:0

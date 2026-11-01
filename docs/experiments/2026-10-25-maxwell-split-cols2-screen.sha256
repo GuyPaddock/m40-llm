@@ -1,0 +1,9 @@
+a23a8b5eed75a03409b389e345cf71c8f7e1eef8636d33183805031d08e7b746  docs/experiments/2026-10-25-maxwell-split-cols2-screen.md
+7b0d78b45a58972f527176f29d2fc58ee82a27b10d4c54a393921edfbcf77cdc  docs/experiments/2026-10-25-maxwell-split-cols2-screen.jsonl
+03e5315d95f9c2946f0660c81c2cc20dbe2ababac306d4f334117a24bf5ce663  docs/experiments/2026-10-25-maxwell-split-cols2-screen.log.gz
+958d7199ed81889c27cc749f0ee0bb40275e7360b3da58d91f9b90ff3e30f89a  docs/experiments/2026-10-25-maxwell-split-cols2-audit.jq
+5c396c9115885240fdd6c45bc2ef6d324fb5777dd511d29a137a8877836189ba  docs/experiments/2026-10-25-maxwell-split-cols2-audit.json
+511f7bc8648845bb56571537455a9c74567e08da7a5919f9151b06967b664cf3  docs/experiments/2026-10-25-maxwell-split-cols2-memory-audit.json
+d0966dde58e8d4eaa4e4ff8095d8698492ab0503b47a1a219b8f93683b7ee63d  docs/experiments/2026-10-25-maxwell-split-ffn-memory-audit.jq
+7207bf44a239ce7583e724db65e3cab52ccd708703b4a5da676af5fb89b57ff8  docs/experiments/2026-10-25-maxwell-split-cols2-resources.txt
+598f0a80c2393a7903fb7af35a959ccf5c507cbfa3c7da107405c620f353c2fe  docs/experiments/2026-10-25-maxwell-split-cols2-sass.txt.gz

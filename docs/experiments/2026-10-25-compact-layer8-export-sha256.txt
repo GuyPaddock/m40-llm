@@ -1,0 +1,2 @@
+4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d  /mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d
+7d04260214a3b57379310e963c4f6b4d39208be9b644d45c83aefa4430d03070  target/research-exports/qwen-q8-pruned-layer8.gguf

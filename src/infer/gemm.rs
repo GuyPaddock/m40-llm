@@ -229,8 +229,11 @@ impl LoadedModel {
     }
 
     /// # Safety
-    /// Optional single-token fused GGUF F16 gate/up projection plus SwiGLU.
-    /// Returns `Ok(false)` when the opt-in path is not applicable.
+    /// Single-token fused GGUF gate/up projection plus SwiGLU. Native opt-in
+    /// paths return `Ok(false)` when inapplicable; an explicit model-local
+    /// experimental selection errors instead of silently using another kernel.
+    /// Q8_1 requires disjoint, decode-owned scratch of the reported capacity;
+    /// input, output, weights and scratch must survive stream completion.
     pub unsafe fn try_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
         &self,
         d_x_f32: *const c_void,
@@ -240,9 +243,96 @@ impl LoadedModel {
         d_w_up_f16: *const c_void,
         h: i32,
         d_out_f32: *mut c_void,
+        q8_scratch: Option<super::Q8FfnScratch>,
     ) -> Result<bool> {
         #[cfg(feature = "cuda")]
         {
+            if !self.q8_ffn.is_native() {
+                anyhow::ensure!(m==1 && k>0 && k%32==0 && h>0,
+                    "experimental Q8 FFN requires one row and complete Q8_0 blocks; use M40LLM_Q8_FFN_KERNEL=native");
+                anyhow::ensure!(
+                    !d_x_f32.is_null() && !d_out_f32.is_null() && d_x_f32 != d_out_f32.cast_const(),
+                    "invalid/aliased experimental Q8 FFN buffers"
+                );
+                for source in [d_w_gate_f16, d_w_up_f16] {
+                    let tensor = self
+                        .device_tensors
+                        .values()
+                        .find(|tensor| std::ptr::eq(tensor.dptr.cast_const(), source))
+                        .context("missing experimental Q8 FFN weight")?;
+                    anyhow::ensure!(tensor.dtype==GgmlDType::Q8_0 && tensor.shape==[k as u64,h as u64],
+                        "experimental Q8 FFN requires matching Q8_0 gate/up weights; use M40LLM_Q8_FFN_KERNEL=native");
+                }
+                match self.q8_ffn.kernel() {
+                    super::Q8FfnKernel::JointSharedScales => {
+                        self.q8_execution
+                            .compound_pair([d_w_gate_f16, d_w_up_f16], h, k)?
+                            .enqueue_shared_scales_async(d_x_f32, d_out_f32, 1, None)?;
+                    }
+                    super::Q8FfnKernel::SplitF32x4 => {
+                        self.q8_execution.project_ffn(
+                            &self.cuda,
+                            d_x_f32,
+                            [d_w_gate_f16, d_w_up_f16],
+                            d_out_f32,
+                            h,
+                            k,
+                        )?;
+                    }
+                    super::Q8FfnKernel::PackedF32 => {
+                        let variant = if self.q8_ffn.threads() == Some(128) {
+                            crate::cuda::Q8FfnFp32Variant::PackedWarp128
+                        } else {
+                            crate::cuda::Q8FfnFp32Variant::PackedWarp256
+                        };
+                        self.cuda.ffn_q8_f32_ablation_async(
+                            d_x_f32,
+                            d_w_gate_f16,
+                            d_w_up_f16,
+                            d_out_f32,
+                            1,
+                            h,
+                            k,
+                            variant,
+                        )?;
+                    }
+                    super::Q8FfnKernel::Q81 => {
+                        let scratch = q8_scratch
+                            .context("experimental Q8_1 FFN requires owned workspace scratch")?;
+                        let shape = super::q8_activation::Q8ActivationShape::new(
+                            1, k as usize, k as usize,
+                        )?;
+                        anyhow::ensure!(
+                            !scratch.pointer.is_null() && scratch.bytes >= shape.bytes()
+                                && (scratch.pointer as usize).is_multiple_of(4)
+                                && scratch.pointer.cast_const()!=d_x_f32
+                                && scratch.pointer!=d_out_f32
+                                && scratch.pointer.cast_const()!=d_w_gate_f16
+                                && scratch.pointer.cast_const()!=d_w_up_f16,
+                            "experimental Q8_1 FFN workspace scratch is invalid, aliased or too small"
+                        );
+                        let launch = if self.q8_ffn.threads() == Some(128) {
+                            crate::cuda::Q8FfnQ81Launch::Threads128
+                        } else {
+                            crate::cuda::Q8FfnQ81Launch::Threads256
+                        };
+                        self.cuda
+                            .quantize_q8_1_async(d_x_f32, scratch.pointer, shape)?;
+                        self.cuda.ffn_q8_1_async(
+                            scratch.pointer,
+                            d_w_gate_f16,
+                            d_w_up_f16,
+                            d_out_f32,
+                            None,
+                            h,
+                            shape,
+                            launch,
+                        )?;
+                    }
+                    super::Q8FfnKernel::Native => unreachable!("native was handled above"),
+                }
+                return Ok(true);
+            }
             if m == 1
                 && k > 0
                 && h > 0
@@ -271,6 +361,21 @@ impl LoadedModel {
                 && self.gguf_weight_dtype(d_w_gate_f16) == GgmlDType::Q8_0
                 && self.gguf_weight_dtype(d_w_up_f16) == GgmlDType::Q8_0
             {
+                anyhow::ensure!(
+                    !d_x_f32.is_null() && !d_out_f32.is_null() && d_x_f32 != d_out_f32.cast_const(),
+                    "invalid/aliased fused Q8 MLP buffers"
+                );
+                for source in [d_w_gate_f16, d_w_up_f16] {
+                    let tensor = self
+                        .device_tensors
+                        .values()
+                        .find(|tensor| std::ptr::eq(tensor.dptr.cast_const(), source))
+                        .context("missing fused Q8 MLP weight")?;
+                    anyhow::ensure!(
+                        tensor.shape == [k as u64, h as u64],
+                        "fused Q8 MLP weight shape mismatch"
+                    );
+                }
                 self.cuda
                     .mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async(
                         d_x_f32,
@@ -307,7 +412,16 @@ impl LoadedModel {
                 return Ok(true);
             }
         }
-        let _ = (d_x_f32, m, k, d_w_gate_f16, d_w_up_f16, h, d_out_f32);
+        let _ = (
+            d_x_f32,
+            m,
+            k,
+            d_w_gate_f16,
+            d_w_up_f16,
+            h,
+            d_out_f32,
+            q8_scratch,
+        );
         Ok(false)
     }
 
@@ -412,6 +526,17 @@ impl LoadedModel {
         #[cfg(feature = "cuda")]
         {
             if self.gguf_weight_dtype(d_b_f16) == GgmlDType::Q8_0 {
+                let stream = if m == 1 && q8_decode_kernel_decode_stream_enabled() {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                };
+                if self
+                    .q8_execution
+                    .try_project(d_b_f16, d_a_f32, d_c_f32, m, n, k, stream)?
+                {
+                    return self.cuda.synchronize_stream(stream);
+                }
                 return self
                     .cuda
                     .gemm_f32xq8_0_gguf_f32(d_a_f32, d_b_f16, d_c_f32, m, n, k);
@@ -476,6 +601,17 @@ impl LoadedModel {
         #[cfg(feature = "cuda")]
         {
             if self.gguf_weight_dtype(d_b_f16) == GgmlDType::Q8_0 {
+                let stream = if m == 1 && q8_decode_kernel_decode_stream_enabled() {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                };
+                if self
+                    .q8_execution
+                    .try_project(d_b_f16, d_a_f32, d_c_f32, m, n, k, stream)?
+                {
+                    return Ok(());
+                }
                 return self
                     .cuda
                     .gemm_f32xq8_0_gguf_f32_async(d_a_f32, d_b_f16, d_c_f32, m, n, k);
@@ -652,7 +788,8 @@ impl LoadedModel {
             * self.model_config.attention_key_length) as usize;
         let hidden_dim = self.model_config.feed_forward_length as usize;
         let workspace_bytes =
-            ForwardWorkspace::estimated_bytes(d_model, kv_dim, hidden_dim, 1).unwrap_or(0);
+            ForwardWorkspace::estimated_bytes(d_model, kv_dim, hidden_dim, 1, self.q8_ffn, 0)
+                .unwrap_or(0);
         let kv_bytes = self
             .kv_cache
             .as_ref()
@@ -872,6 +1009,31 @@ impl LoadedModel {
     ) -> Result<bool> {
         #[cfg(feature = "cuda")]
         {
+            if m == 1 && !self.q8_attention_projection.backend().is_native() {
+                self.q8_attention_projection.validate_qkv(
+                    [d_wq_f16, d_wk_f16, d_wv_f16],
+                    [d_bq_f32, d_bk_f32, d_bv_f32],
+                    [n_q, n_k, n_v],
+                    k,
+                )?;
+                let enqueue = match self.q8_attention_projection.backend() {
+                    super::Q8AttentionProjectionBackend::PackedWarp256 => {
+                        crate::cuda::CudaContext::qkv_f32xq8_0_gguf_packed_warp_async
+                    }
+                    _ => crate::cuda::CudaContext::qkv_f32xq8_0_gguf_warp_async,
+                };
+                enqueue(
+                    &self.cuda,
+                    d_x_f32,
+                    [d_wq_f16, d_wk_f16, d_wv_f16],
+                    [d_bq_f32, d_bk_f32, d_bv_f32],
+                    [d_q_out_f32, d_k_out_f32, d_v_out_f32],
+                    [n_q, n_k, n_v],
+                    k,
+                    CudaStream::Decode,
+                )?;
+                return Ok(true);
+            }
             if m == 1
                 && k > 0
                 && n_q > 0
@@ -916,6 +1078,23 @@ impl LoadedModel {
                 && self.gguf_weight_dtype(d_wk_f16) == GgmlDType::Q8_0
                 && self.gguf_weight_dtype(d_wv_f16) == GgmlDType::Q8_0
             {
+                let stream = if q8_decode_kernel_decode_stream_enabled() {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                };
+                if self.q8_execution.try_project_qkv(
+                    &self.cuda,
+                    d_x_f32,
+                    [d_wq_f16, d_wk_f16, d_wv_f16],
+                    [d_bq_f32, d_bk_f32, d_bv_f32],
+                    [d_q_out_f32, d_k_out_f32, d_v_out_f32],
+                    [n_q, n_k, n_v],
+                    k,
+                    stream,
+                )? {
+                    return Ok(true);
+                }
                 self.cuda
                     .qkv_f32xq8_0_gguf_decode_async(
                         d_x_f32,
@@ -1027,6 +1206,11 @@ impl LoadedModel {
         if m <= 0 || n <= 0 || k <= 0 {
             anyhow::bail!("out_proj: invalid dims");
         }
+        #[cfg(feature = "cuda")]
+        if m == 1 && !self.q8_attention_projection.backend().is_native() {
+            self.out_proj_f32xf16_gguf_f32_async(d_in_f32, d_w_out_f16, d_out_f32, m, n, k)?;
+            return self.cuda.synchronize_stream(CudaStream::Decode);
+        }
         self.matmul_f32xf16_gguf_f32(d_in_f32, d_w_out_f16, d_out_f32, m, n, k)
             .with_context(|| {
                 format!("attention output projection GGUF GEMM failed: m={m} n={n} k={k}")
@@ -1046,6 +1230,26 @@ impl LoadedModel {
     ) -> Result<()> {
         if m <= 0 || n <= 0 || k <= 0 {
             anyhow::bail!("out_proj: invalid dims");
+        }
+        #[cfg(feature = "cuda")]
+        if m == 1 && !self.q8_attention_projection.backend().is_native() {
+            self.q8_attention_projection
+                .validate_output(d_w_out_f16, n, k)?;
+            let enqueue = match self.q8_attention_projection.backend() {
+                super::Q8AttentionProjectionBackend::PackedWarp256 => {
+                    crate::cuda::CudaContext::gemm_f32xq8_0_gguf_coltile4_packed_warp_async
+                }
+                _ => crate::cuda::CudaContext::gemm_f32xq8_0_gguf_coltile4_warp_async,
+            };
+            return enqueue(
+                &self.cuda,
+                d_in_f32,
+                d_w_out_f16,
+                d_out_f32,
+                n,
+                k,
+                CudaStream::Decode,
+            );
         }
         self.matmul_f32xf16_gguf_f32_async(d_in_f32, d_w_out_f16, d_out_f32, m, n, k)
             .with_context(|| {

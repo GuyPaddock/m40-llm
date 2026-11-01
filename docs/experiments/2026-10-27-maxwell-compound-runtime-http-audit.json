@@ -1,0 +1,75 @@
+{
+  "passes_audit": true,
+  "mode": "incremental",
+  "source": "63240c52b64e06870922c8b6c0cbae8b0fe2e6f4",
+  "primary_pairs": 20,
+  "screen_requests": 10,
+  "fresh_confirmation_requests": 40,
+  "gpu_boundaries": 100,
+  "clocks": [
+    {
+      "pstate": "P0",
+      "sm_mhz": 1113,
+      "memory_mhz": 3004
+    }
+  ],
+  "compute_processes": [
+    {
+      "uuid": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852",
+      "pid": "571311",
+      "name": "target/release/examples/compare_ollama"
+    },
+    {
+      "uuid": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852",
+      "pid": "572079",
+      "name": "/tmp/m40-llm-tools/ollama-0.40.11/lib/ollama/llama-server"
+    }
+  ],
+  "comparison": {
+    "bootstrap_gain_ci95": [
+      0.031564592948167824,
+      0.03303192654482401
+    ],
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 0,
+    "candidate": {
+      "mad_over_median": 0.0006161692642405118,
+      "max": 50.89334650726958,
+      "median": 50.798729955693645,
+      "min": 50.54771547242839
+    },
+    "control": {
+      "mad_over_median": 0.000556577559456003,
+      "max": 49.28716750340852,
+      "median": 49.22140181785059,
+      "min": 49.019813462782196
+    },
+    "gain": 0.03204557529019869,
+    "needs_fresh_confirmation": true,
+    "needs_variation_extension": false,
+    "pairs": 20,
+    "passes_promotion_gate": true,
+    "promotion_threshold": 0.03
+  },
+  "actual512_ids_bound": true,
+  "original_prepared_identities": 109,
+  "extra_candidate_joint_bytes": 1724645376,
+  "candidate_weight_payload_bytes": 7921745920,
+  "phase_medians": [
+    {
+      "label": "control",
+      "http_ms": 10401.9792575,
+      "prefill_ms": 505.1466925,
+      "decode_ms": 9854.018854
+    },
+    {
+      "label": "prepared",
+      "http_ms": 10078.992385,
+      "prefill_ms": 498.0523105,
+      "decode_ms": 9533.149554
+    }
+  ],
+  "original_absolute_target": 53.06,
+  "original_relative_target": null,
+  "changes_runtime_defaults": false
+}

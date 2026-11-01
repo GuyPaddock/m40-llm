@@ -170,6 +170,7 @@ fn gguf_device_views_reject_empty_shape() {
     let _ = std::fs::remove_file(&path);
 }
 
+/// Reject tensor shapes containing a zero-length dimension.
 #[test]
 fn gguf_device_views_reject_zero_dim() {
     let mut path = std::env::temp_dir();
@@ -193,7 +194,7 @@ fn gguf_device_views_reject_zero_dim() {
         write_le_u32(&mut f, 1); // dtype f16
         write_le_u64(&mut f, 0);
 
-        f.write_all(&vec![0u8; 8]).unwrap();
+        f.write_all(&[0u8; 8]).unwrap();
         f.flush().unwrap();
     }
 

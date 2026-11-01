@@ -1,0 +1,49 @@
+[cuda] upload_weights: 3279519744 bytes (total=3279519744) tag=weights
+[cuda] upload_weights: 3279519744 bytes (total=6559039488) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=37 layouts=37 prepared_bytes=1192935424 source_bytes=3279519744 total_weight_payload_bytes=4472455168 budget_bytes=6442450944 peak_setup_host_payload_bytes=6895608736 preparation_ms=9499.437
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[Q8 screen pair 0] native=32.041 prepared=35.767 HTTP E2E tok/s, same_output=true
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[Q8 screen pair 1] native=31.986 prepared=35.752 HTTP E2E tok/s, same_output=true
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[Q8 screen pair 2] native=31.962 prepared=35.714 HTTP E2E tok/s, same_output=true
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[Q8 screen pair 3] native=31.935 prepared=35.725 HTTP E2E tok/s, same_output=true
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[Q8 screen pair 4] native=31.933 prepared=35.705 HTTP E2E tok/s, same_output=true
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+Q8 comparison: native=31.962, prepared=35.725 HTTP E2E tok/s; gain=11.771%, timing_gate=true, token_ids_equal=true

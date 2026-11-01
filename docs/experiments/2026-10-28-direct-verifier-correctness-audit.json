@@ -1,0 +1,15 @@
+{
+   "actual_ids" : 512,
+   "device_bytes_after" : 0,
+   "executable_sha256" : "7e922a3e4e95613254b6520d6bbf38c33880ee12d03b33c7fad6b3d83dae7de4",
+   "frozen_task_pairs" : 12,
+   "full_vocabulary_comparisons" : 511,
+   "is_passed" : true,
+   "joint_hashes" : 36,
+   "prepared_hashes" : 37,
+   "records" : 36,
+   "rejected_corruptions" : 12,
+   "revision" : "83c59a831542617bf613b70060fb76f7fc171cc0",
+   "transaction_cases" : 8,
+   "valid_kv_words" : 10616832
+}

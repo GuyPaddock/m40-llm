@@ -102,3 +102,30 @@ fn qwen2_special_token_roundtrip_uses_real_ids() {
     assert_eq!(ids.last().copied(), Some(151_645));
     assert_eq!(tokenizer.decode(&ids).expect("decode"), text);
 }
+
+/// Preserve caller-supplied Qwen ChatML without adding a hidden BOS, even when
+/// the model declares a BOS ID or the caller already included that token.
+#[test]
+fn test_preformatted_qwen_prompt_preserves_token_ids() {
+    let mut metadata = qwen2_meta();
+    metadata.insert(
+        "tokenizer.ggml.bos_token_id".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(151_643)),
+    );
+    let tokenizer = Tokenizer::from_gguf_metadata(&metadata).expect("tokenizer");
+    let chat = "<|im_start|>system\nYou are Qwen.<|im_end|>\n<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\n";
+    for preformatted in [chat.to_string(), format!("<|endoftext|>{chat}")] {
+        let expected = tokenizer
+            .encode_allowing_specials(&preformatted)
+            .expect("encode original");
+        for prompt_format in [PromptFormat::Raw, PromptFormat::Auto] {
+            let (prepared, add_bos) = prepare_prompt(&tokenizer, &preformatted, prompt_format);
+            assert!(!add_bos);
+            assert_eq!(prepared, preformatted);
+            let actual = tokenizer
+                .encode_with_specials(&prepared, add_bos, false)
+                .expect("encode prepared");
+            assert_eq!(actual, expected);
+        }
+    }
+}

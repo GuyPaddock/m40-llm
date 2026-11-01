@@ -1,0 +1,845 @@
+{
+  "schema_version": 1,
+  "source_revision": "29dee55df0f757165cdf41d5dad625f71ac3ab23",
+  "executable_sha256": "b219e5aff2c51e40c8b44cdfe60af11128942e76e0a2b1eadab595bbf9b56dd9",
+  "fixture_sha256": "eb51828ef778189567ae01fdd910659025c92ae6f5b2d76c989c314e650d0687",
+  "checks": {
+    "clean_release": true,
+    "complete": true,
+    "expected_counts": true,
+    "captured_bits_match": true,
+    "guards_preserved": true,
+    "no_enqueue_alloc_copy_sync": true,
+    "no_overlapping_timed_intervals": true,
+    "bounded_warmup": true,
+    "all_primary_clock_samples_1113mhz": true,
+    "cleanup": true
+  },
+  "cases": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "stages": {
+        "gate_up_swiglu": {
+          "trials": 5,
+          "median_gpu_ms": 0.32792959213256834,
+          "min_gpu_ms": 0.32607359886169435,
+          "max_gpu_ms": 0.32888638973236084,
+          "mad_percent": 0.2917692159375812,
+          "median_host_ms": 0.3287053,
+          "all_gpu_ms": [
+            0.3268192052841187,
+            0.32792959213256834,
+            0.32888638973236084,
+            0.32607359886169435,
+            0.3284607887268066
+          ]
+        },
+        "isolated_down": {
+          "trials": 5,
+          "median_gpu_ms": 0.1315392017364502,
+          "min_gpu_ms": 0.13124159574508668,
+          "max_gpu_ms": 0.131769597530365,
+          "mad_percent": 0.09244802664563044,
+          "median_host_ms": 0.1325849,
+          "all_gpu_ms": [
+            0.13124159574508668,
+            0.13157119750976562,
+            0.131769597530365,
+            0.13141759634017944,
+            0.1315392017364502
+          ]
+        },
+        "complete": {
+          "trials": 5,
+          "median_gpu_ms": 0.4568640232086182,
+          "min_gpu_ms": 0.45633602142333984,
+          "max_gpu_ms": 0.4591839790344238,
+          "mad_percent": 0.11557088290080583,
+          "median_host_ms": 0.45955889999999994,
+          "all_gpu_ms": [
+            0.4568640232086182,
+            0.4584512233734131,
+            0.45633602142333984,
+            0.4591839790344238,
+            0.4566783905029297
+          ]
+        }
+      },
+      "warmup": {
+        "gpu_after": {
+          "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 81 %",
+          "processes": "586403, target/release/examples/q8_execution_bench, 4378 MiB"
+        },
+        "kind": "ffn_baseline_warmup",
+        "layer_id": 0,
+        "rows": 1,
+        "warmup": {
+          "batches": 67,
+          "elapsed_gpu_ms": 1005.7083530426025,
+          "iterations_per_batch": 32,
+          "maximum_batches": 256,
+          "minimum_gpu_ms": 1000,
+          "scope": "untimed warmup; not pooled with primary trials; no clock settings modified",
+          "wall_ms": 1006.875755
+        }
+      },
+      "gpu_boundary_samples": [
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 81 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 81 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 81 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 11 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 11 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 11 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 33, 1113 MHz, 3004 MHz, 4384 MiB, 11 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 33, 1113 MHz, 3004 MHz, 4384 MiB, 8 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 8 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 33, 1113 MHz, 3004 MHz, 4384 MiB, 8 %"
+        }
+      ]
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "stages": {
+        "gate_up_swiglu": {
+          "trials": 5,
+          "median_gpu_ms": 4.159036636352539,
+          "min_gpu_ms": 4.137913513183594,
+          "max_gpu_ms": 4.176105499267578,
+          "mad_percent": 0.30315523773315545,
+          "median_host_ms": 4.161060099999999,
+          "all_gpu_ms": [
+            4.176105499267578,
+            4.150236892700195,
+            4.137913513183594,
+            4.171644973754883,
+            4.159036636352539
+          ]
+        },
+        "isolated_down": {
+          "trials": 5,
+          "median_gpu_ms": 0.5518847942352295,
+          "min_gpu_ms": 0.5469151973724365,
+          "max_gpu_ms": 0.5649824142456055,
+          "mad_percent": 0.9004772218229989,
+          "median_host_ms": 0.552981,
+          "all_gpu_ms": [
+            0.5469151973724365,
+            0.5518847942352295,
+            0.5504608154296875,
+            0.5649824142456055,
+            0.5597599983215332
+          ]
+        },
+        "complete": {
+          "trials": 5,
+          "median_gpu_ms": 4.7205249786376955,
+          "min_gpu_ms": 4.700799942016602,
+          "max_gpu_ms": 4.752569580078125,
+          "mad_percent": 0.4178568424138794,
+          "median_host_ms": 4.721719500000001,
+          "all_gpu_ms": [
+            4.708217620849609,
+            4.700799942016602,
+            4.74376335144043,
+            4.752569580078125,
+            4.7205249786376955
+          ]
+        }
+      },
+      "warmup": {
+        "gpu_after": {
+          "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 95 %",
+          "processes": "586403, target/release/examples/q8_execution_bench, 4378 MiB"
+        },
+        "kind": "ffn_baseline_warmup",
+        "layer_id": 0,
+        "rows": 4,
+        "warmup": {
+          "batches": 7,
+          "elapsed_gpu_ms": 1060.8102264404297,
+          "iterations_per_batch": 32,
+          "maximum_batches": 256,
+          "minimum_gpu_ms": 1000,
+          "scope": "untimed warmup; not pooled with primary trials; no clock settings modified",
+          "wall_ms": 1061.120711
+        }
+      },
+      "gpu_boundary_samples": [
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 68 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 54 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 54 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 54 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 54 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 54 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 54 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 54 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 54 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 34, 1113 MHz, 3004 MHz, 4384 MiB, 52 %"
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "stages": {
+        "gate_up_swiglu": {
+          "trials": 5,
+          "median_gpu_ms": 0.3274431943893433,
+          "min_gpu_ms": 0.3264512062072754,
+          "max_gpu_ms": 0.3290816068649292,
+          "mad_percent": 0.30294970213622635,
+          "median_host_ms": 0.3287798,
+          "all_gpu_ms": [
+            0.3290816068649292,
+            0.3264960050582886,
+            0.3274431943893433,
+            0.3264512062072754,
+            0.32895359992980955
+          ]
+        },
+        "isolated_down": {
+          "trials": 5,
+          "median_gpu_ms": 0.1315232038497925,
+          "min_gpu_ms": 0.13124159574508668,
+          "max_gpu_ms": 0.1316447973251343,
+          "mad_percent": 0.012172610701423947,
+          "median_host_ms": 0.1323342,
+          "all_gpu_ms": [
+            0.1315232038497925,
+            0.13153599500656127,
+            0.1316447973251343,
+            0.13124159574508668,
+            0.13150719404220582
+          ]
+        },
+        "complete": {
+          "trials": 5,
+          "median_gpu_ms": 0.45751361846923827,
+          "min_gpu_ms": 0.45688958168029786,
+          "max_gpu_ms": 0.46291518211364746,
+          "mad_percent": 0.13639742375939037,
+          "median_host_ms": 0.45826959999999994,
+          "all_gpu_ms": [
+            0.45751361846923827,
+            0.46291518211364746,
+            0.45688958168029786,
+            0.4598400115966797,
+            0.45729598999023435
+          ]
+        }
+      },
+      "warmup": {
+        "gpu_after": {
+          "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 37, 1113 MHz, 3004 MHz, 4384 MiB, 100 %",
+          "processes": "586403, target/release/examples/q8_execution_bench, 4378 MiB"
+        },
+        "kind": "ffn_baseline_warmup",
+        "layer_id": 17,
+        "rows": 1,
+        "warmup": {
+          "batches": 69,
+          "elapsed_gpu_ms": 1008.6888637542725,
+          "iterations_per_batch": 32,
+          "maximum_batches": 256,
+          "minimum_gpu_ms": 1000,
+          "scope": "untimed warmup; not pooled with primary trials; no clock settings modified",
+          "wall_ms": 1010.0317430000001
+        }
+      },
+      "gpu_boundary_samples": [
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 100 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 100 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 25 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 25 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 25 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 11 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 11 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 11 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 11 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 11 %"
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "stages": {
+        "gate_up_swiglu": {
+          "trials": 5,
+          "median_gpu_ms": 4.146895980834961,
+          "min_gpu_ms": 4.118710327148437,
+          "max_gpu_ms": 4.160249710083008,
+          "mad_percent": 0.1317193640711761,
+          "median_host_ms": 4.149052899999999,
+          "all_gpu_ms": [
+            4.146895980834961,
+            4.1523582458496096,
+            4.141455841064453,
+            4.160249710083008,
+            4.118710327148437
+          ]
+        },
+        "isolated_down": {
+          "trials": 5,
+          "median_gpu_ms": 0.5543039798736572,
+          "min_gpu_ms": 0.520195198059082,
+          "max_gpu_ms": 0.5663648128509522,
+          "mad_percent": 1.8023334486348337,
+          "median_host_ms": 0.5557534000000001,
+          "all_gpu_ms": [
+            0.5663648128509522,
+            0.548473596572876,
+            0.5543039798736572,
+            0.5642943859100342,
+            0.520195198059082
+          ]
+        },
+        "complete": {
+          "trials": 5,
+          "median_gpu_ms": 4.709558486938477,
+          "min_gpu_ms": 4.6744384765625,
+          "max_gpu_ms": 4.7111328125,
+          "mad_percent": 0.03342830471029303,
+          "median_host_ms": 4.7104427,
+          "all_gpu_ms": [
+            4.709558486938477,
+            4.7111328125,
+            4.710684967041016,
+            4.707932662963867,
+            4.6744384765625
+          ]
+        }
+      },
+      "warmup": {
+        "gpu_after": {
+          "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 95 %",
+          "processes": "586403, target/release/examples/q8_execution_bench, 4378 MiB"
+        },
+        "kind": "ffn_baseline_warmup",
+        "layer_id": 17,
+        "rows": 4,
+        "warmup": {
+          "batches": 7,
+          "elapsed_gpu_ms": 1062.1024169921875,
+          "iterations_per_batch": 32,
+          "maximum_batches": 256,
+          "minimum_gpu_ms": 1000,
+          "scope": "untimed warmup; not pooled with primary trials; no clock settings modified",
+          "wall_ms": 1062.409549
+        }
+      },
+      "gpu_boundary_samples": [
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 95 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 48 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 48 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 47 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 47 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 48 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 48 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 50 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4384 MiB, 50 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 45 %"
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "stages": {
+        "gate_up_swiglu": {
+          "trials": 5,
+          "median_gpu_ms": 0.3266976118087769,
+          "min_gpu_ms": 0.32603518962860106,
+          "max_gpu_ms": 0.3271519899368286,
+          "mad_percent": 0.13908217006424603,
+          "median_host_ms": 0.327816,
+          "all_gpu_ms": [
+            0.3271519899368286,
+            0.32603518962860106,
+            0.3266976118087769,
+            0.3261215925216675,
+            0.3267904043197632
+          ]
+        },
+        "isolated_down": {
+          "trials": 5,
+          "median_gpu_ms": 0.13131200075149535,
+          "min_gpu_ms": 0.13112000226974488,
+          "max_gpu_ms": 0.13150080442428588,
+          "mad_percent": 0.09260798371420023,
+          "median_host_ms": 0.1321205,
+          "all_gpu_ms": [
+            0.13119039535522461,
+            0.13134080171585083,
+            0.13112000226974488,
+            0.13131200075149535,
+            0.13150080442428588
+          ]
+        },
+        "complete": {
+          "trials": 5,
+          "median_gpu_ms": 0.45657920837402344,
+          "min_gpu_ms": 0.45647358894348145,
+          "max_gpu_ms": 0.45932798385620116,
+          "mad_percent": 0.023132772716069498,
+          "median_host_ms": 0.4573943,
+          "all_gpu_ms": [
+            0.45657920837402344,
+            0.4576128005981445,
+            0.45647358894348145,
+            0.45932798385620116,
+            0.4565408229827881
+          ]
+        }
+      },
+      "warmup": {
+        "gpu_after": {
+          "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 38, 1113 MHz, 3004 MHz, 4384 MiB, 100 %",
+          "processes": "586403, target/release/examples/q8_execution_bench, 4378 MiB"
+        },
+        "kind": "ffn_baseline_warmup",
+        "layer_id": 35,
+        "rows": 1,
+        "warmup": {
+          "batches": 69,
+          "elapsed_gpu_ms": 1007.6386260986328,
+          "iterations_per_batch": 32,
+          "maximum_batches": 256,
+          "minimum_gpu_ms": 1000,
+          "scope": "untimed warmup; not pooled with primary trials; no clock settings modified",
+          "wall_ms": 1009.057965
+        }
+      },
+      "gpu_boundary_samples": [
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 38, 1113 MHz, 3004 MHz, 4384 MiB, 100 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 37, 1113 MHz, 3004 MHz, 4384 MiB, 54 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 37, 1113 MHz, 3004 MHz, 4384 MiB, 54 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 37, 1113 MHz, 3004 MHz, 4384 MiB, 54 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 37, 1113 MHz, 3004 MHz, 4384 MiB, 10 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 10 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 10 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 10 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 11 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 11 %"
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "stages": {
+        "gate_up_swiglu": {
+          "trials": 5,
+          "median_gpu_ms": 4.141532897949219,
+          "min_gpu_ms": 4.131439971923828,
+          "max_gpu_ms": 4.147123336791992,
+          "mad_percent": 0.13498477449114746,
+          "median_host_ms": 4.1435192,
+          "all_gpu_ms": [
+            4.13201904296875,
+            4.131439971923828,
+            4.141532897949219,
+            4.147123336791992,
+            4.144169616699219
+          ]
+        },
+        "isolated_down": {
+          "trials": 5,
+          "median_gpu_ms": 0.5378623962402344,
+          "min_gpu_ms": 0.5209695816040039,
+          "max_gpu_ms": 0.5543583869934082,
+          "mad_percent": 2.4035904208162706,
+          "median_host_ms": 0.53891,
+          "all_gpu_ms": [
+            0.5209695816040039,
+            0.5507904052734375,
+            0.5378623962402344,
+            0.5543583869934082,
+            0.5362400054931641
+          ]
+        },
+        "complete": {
+          "trials": 5,
+          "median_gpu_ms": 4.671059036254883,
+          "min_gpu_ms": 4.648262405395508,
+          "max_gpu_ms": 4.696617507934571,
+          "mad_percent": 0.4880398788034301,
+          "median_host_ms": 4.6740888,
+          "all_gpu_ms": [
+            4.652630233764649,
+            4.696617507934571,
+            4.648262405395508,
+            4.671059036254883,
+            4.695782470703125
+          ]
+        }
+      },
+      "warmup": {
+        "gpu_after": {
+          "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 37, 1113 MHz, 3004 MHz, 4384 MiB, 95 %",
+          "processes": "586403, target/release/examples/q8_execution_bench, 4378 MiB"
+        },
+        "kind": "ffn_baseline_warmup",
+        "layer_id": 35,
+        "rows": 4,
+        "warmup": {
+          "batches": 7,
+          "elapsed_gpu_ms": 1062.5505981445312,
+          "iterations_per_batch": 32,
+          "maximum_batches": 256,
+          "minimum_gpu_ms": 1000,
+          "scope": "untimed warmup; not pooled with primary trials; no clock settings modified",
+          "wall_ms": 1062.770319
+        }
+      },
+      "gpu_boundary_samples": [
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 95 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 37, 1113 MHz, 3004 MHz, 4384 MiB, 50 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 50 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 50 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 50 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 50 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 50 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 50 %"
+        },
+        {
+          "before": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 50 %",
+          "after": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4384 MiB, 50 %"
+        }
+      ]
+    }
+  ],
+  "validation": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "checks": {
+        "complete_down_vs_cpu_on_actual_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 2048,
+          "max_abs_diff": 1.415535168525217e-7,
+          "mean_abs_diff": 2.2800673448911605e-8
+        },
+        "cpu_reference": "scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
+        "gate_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 2.0957103785690379e-7,
+          "mean_abs_diff": 2.042241067296537e-8
+        },
+        "guards_and_immutable_inputs": true,
+        "isolated_down_vs_cpu_on_frozen_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 2048,
+          "max_abs_diff": 1.415535168525217e-7,
+          "mean_abs_diff": 2.2800673448911605e-8
+        },
+        "swiglu_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 2.0114313703523123e-7,
+          "mean_abs_diff": 3.0985465304767363e-9
+        },
+        "swiglu_vs_frozen_capture": {
+          "bitwise_equal": true,
+          "compared_values": 11008,
+          "max_abs_diff": 0,
+          "mean_abs_diff": 0
+        },
+        "tolerance": "absolute < 1e-3 + 2e-5 * abs(reference); M=1 captured SwiGLU additionally bit-identical",
+        "up_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 1.6685226622570326e-7,
+          "mean_abs_diff": 1.6140271664738495e-8
+        }
+      },
+      "scratch_capacity_bytes": 201152
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "checks": {
+        "complete_down_vs_cpu_on_actual_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 8192,
+          "max_abs_diff": 2.3607236754319416e-7,
+          "mean_abs_diff": 2.766198306093955e-8
+        },
+        "cpu_reference": "scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
+        "gate_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.000007011989966443366,
+          "mean_abs_diff": 1.773559243045997e-7
+        },
+        "guards_and_immutable_inputs": true,
+        "isolated_down_vs_cpu_on_frozen_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 8192,
+          "max_abs_diff": 2.8159688381101944e-7,
+          "mean_abs_diff": 2.782155816795621e-8
+        },
+        "swiglu_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0000031537512121815325,
+          "mean_abs_diff": 2.194925234876368e-8
+        },
+        "swiglu_vs_frozen_capture": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.000003337860107421875,
+          "mean_abs_diff": 2.2226036914152157e-8
+        },
+        "tolerance": "absolute < 1e-3 + 2e-5 * abs(reference); M=1 captured SwiGLU additionally bit-identical",
+        "up_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0000033784028166117253,
+          "mean_abs_diff": 1.3051616500686646e-7
+        }
+      },
+      "scratch_capacity_bytes": 803264
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "checks": {
+        "complete_down_vs_cpu_on_actual_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 2048,
+          "max_abs_diff": 1.9904368064871392e-7,
+          "mean_abs_diff": 4.199777306357411e-8
+        },
+        "cpu_reference": "scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
+        "gate_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 4.489019413966844e-7,
+          "mean_abs_diff": 4.336919949057306e-8
+        },
+        "guards_and_immutable_inputs": true,
+        "isolated_down_vs_cpu_on_frozen_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 2048,
+          "max_abs_diff": 1.9904368064871392e-7,
+          "mean_abs_diff": 4.199777306357411e-8
+        },
+        "swiglu_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 2.957017695148778e-7,
+          "mean_abs_diff": 1.1582671753808072e-8
+        },
+        "swiglu_vs_frozen_capture": {
+          "bitwise_equal": true,
+          "compared_values": 11008,
+          "max_abs_diff": 0,
+          "mean_abs_diff": 0
+        },
+        "tolerance": "absolute < 1e-3 + 2e-5 * abs(reference); M=1 captured SwiGLU additionally bit-identical",
+        "up_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 3.326884039367428e-7,
+          "mean_abs_diff": 3.8121616504009736e-8
+        }
+      },
+      "scratch_capacity_bytes": 201152
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "checks": {
+        "complete_down_vs_cpu_on_actual_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 8192,
+          "max_abs_diff": 3.5092070360676075e-7,
+          "mean_abs_diff": 5.718907653224314e-8
+        },
+        "cpu_reference": "scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
+        "gate_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.000006428271457359358,
+          "mean_abs_diff": 4.015873458349412e-7
+        },
+        "guards_and_immutable_inputs": true,
+        "isolated_down_vs_cpu_on_frozen_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 8192,
+          "max_abs_diff": 6.550030406948792e-7,
+          "mean_abs_diff": 5.668995719702274e-8
+        },
+        "swiglu_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0000052777478494192565,
+          "mean_abs_diff": 8.559408690933586e-8
+        },
+        "swiglu_vs_frozen_capture": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0000050067901611328125,
+          "mean_abs_diff": 8.644269168296983e-8
+        },
+        "tolerance": "absolute < 1e-3 + 2e-5 * abs(reference); M=1 captured SwiGLU additionally bit-identical",
+        "up_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.00000518602277788105,
+          "mean_abs_diff": 3.1006721296329025e-7
+        }
+      },
+      "scratch_capacity_bytes": 803264
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "checks": {
+        "complete_down_vs_cpu_on_actual_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 2048,
+          "max_abs_diff": 0.000004752742938762822,
+          "mean_abs_diff": 2.6567407240693985e-7
+        },
+        "cpu_reference": "scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
+        "gate_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 0.0000010865137767268607,
+          "mean_abs_diff": 1.1795719530380475e-7
+        },
+        "guards_and_immutable_inputs": true,
+        "isolated_down_vs_cpu_on_frozen_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 2048,
+          "max_abs_diff": 0.000004752742938762822,
+          "mean_abs_diff": 2.6567407240693985e-7
+        },
+        "swiglu_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 0.00001442022120556885,
+          "mean_abs_diff": 6.325610380669005e-8
+        },
+        "swiglu_vs_frozen_capture": {
+          "bitwise_equal": true,
+          "compared_values": 11008,
+          "max_abs_diff": 0,
+          "mean_abs_diff": 0
+        },
+        "tolerance": "absolute < 1e-3 + 2e-5 * abs(reference); M=1 captured SwiGLU additionally bit-identical",
+        "up_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 0.0000034087752425193685,
+          "mean_abs_diff": 1.140439406142283e-7
+        }
+      },
+      "scratch_capacity_bytes": 201152
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "checks": {
+        "complete_down_vs_cpu_on_actual_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 8192,
+          "max_abs_diff": 0.0000416970908077019,
+          "mean_abs_diff": 3.296462991304089e-7
+        },
+        "cpu_reference": "scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
+        "gate_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.000025467467311912628,
+          "mean_abs_diff": 9.826766531423615e-7
+        },
+        "guards_and_immutable_inputs": true,
+        "isolated_down_vs_cpu_on_frozen_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 8192,
+          "max_abs_diff": 0.000046605881010464145,
+          "mean_abs_diff": 3.3006958146608084e-7
+        },
+        "swiglu_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0002956784352647901,
+          "mean_abs_diff": 3.914282698033187e-7
+        },
+        "swiglu_vs_frozen_capture": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.00032806396484375,
+          "mean_abs_diff": 3.9564550936746813e-7
+        },
+        "tolerance": "absolute < 1e-3 + 2e-5 * abs(reference); M=1 captured SwiGLU additionally bit-identical",
+        "up_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.00009688809329588821,
+          "mean_abs_diff": 7.802668319078706e-7
+        }
+      },
+      "scratch_capacity_bytes": 803264
+    }
+  ],
+  "interpretation": "Bounded-warmup FFN baseline only, not an A/B or E2E speedup. Clock observations are boundary samples, not per-kernel counters."
+}

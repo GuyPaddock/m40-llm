@@ -1,0 +1,11 @@
+9b2e2b6891349b606ba933846aa4433a8afce66161b9107bf04441ee9821bde5  docs/experiments/2026-10-28-dataflow-audit.pl
+aabe39134a6e3ebcc5d2979b47dfe2d7fbb95e470143cc217c90654bc872c137  docs/experiments/2026-10-28-dataflow-compiled-audit.json
+f03d869026a5539fceb7cef63346bc725bf8634a1e8fd574662f04377483064a  docs/experiments/2026-10-28-dataflow-compiled-audit.pl
+2f30000316b7370a0dab7424b165b888bb655002b96f945d1a6bdd95ff9b9fc0  docs/experiments/2026-10-28-dataflow-events.jsonl
+b6a54d5685aaa7667343fbe765c813cc69ae2d65862a94c7f90d1a1723e9b15b  docs/experiments/2026-10-28-dataflow-findings.md
+fc0b82a7a5eb4ca1e7508aba485708c42e99dd1e7117d50f80f5512d6ac16797  docs/experiments/2026-10-28-dataflow-http.jsonl
+f4f1cd7f1e58a48272a56437469660328c5d1604f32e907dfbb8b10b48918044  docs/experiments/2026-10-28-dataflow-logs.tar.gz
+b235c9f871090217cc19421694001cadb284c643e7389c55196170e2925173a5  docs/experiments/2026-10-28-dataflow-quality.jsonl
+58af38c8d651a451514c7b30a3ae8dd7f43269e02fa42268651d492adfedb693  docs/experiments/2026-10-28-dataflow-summary.json
+ba57368bcefbe0ea5978800ead6b92d3e426a053a4c79fdc7d4232d20565935f  local-artifacts/qualified-references/dataflow-30290eb/joint_only
+e76c041b9a7fe6666cc4a96f6f2bb92f8ceb2c3cb1225e30a57b2de2e64a4bd3  local-artifacts/qualified-references/dataflow-30290eb/source.tar.gz

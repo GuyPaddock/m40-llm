@@ -1,3 +1,5 @@
+use super::q8_prefill::{Q8PrefillScratch, Q8_PREFILL_MAX_WEIGHT_BYTES};
+use super::{Q8FfnConfig, Q8FfnScratch};
 use crate::cuda::{CudaContext, DeviceBuffer};
 use anyhow::{Context, Result};
 use std::ffi::c_void;
@@ -8,6 +10,9 @@ pub struct ForwardWorkspace {
     kv_dim: usize,
     hidden_dim: usize,
     rows: usize,
+    ffn_config: Q8FfnConfig,
+    q8_activation: Option<DeviceBuffer>,
+    q8_prefill_weight: Option<DeviceBuffer>,
     dq: DeviceBuffer,
     dk: DeviceBuffer,
     dv: DeviceBuffer,
@@ -29,6 +34,8 @@ pub struct ForwardWorkspace {
 #[derive(Debug, Clone, Copy)]
 pub struct ForwardWorkspacePtrs {
     pub rows: usize,
+    pub q8_activation: Option<Q8FfnScratch>,
+    pub q8_prefill_weight: Option<Q8PrefillScratch>,
     pub dq: *mut c_void,
     pub dk: *mut c_void,
     pub dv: *mut c_void,
@@ -53,6 +60,8 @@ impl ForwardWorkspace {
         kv_dim: usize,
         hidden_dim: usize,
         rows: usize,
+        ffn: Q8FfnConfig,
+        prefill_weight_bytes: usize,
     ) -> Result<usize> {
         if d_model == 0 || kv_dim == 0 || hidden_dim == 0 {
             anyhow::bail!(
@@ -84,7 +93,7 @@ impl ForwardWorkspace {
             .checked_mul(u32_bytes)
             .context("workspace attention metadata bytes overflow")?;
 
-        bytes_d
+        let base = bytes_d
             .checked_mul(9)
             .context("workspace d_model aggregate bytes overflow")?
             .checked_add(
@@ -104,7 +113,14 @@ impl ForwardWorkspace {
                     .checked_mul(2)
                     .context("workspace metadata aggregate bytes overflow")?,
             )
-            .context("workspace aggregate bytes overflow")
+            .context("workspace aggregate bytes overflow")?;
+        anyhow::ensure!(
+            prefill_weight_bytes <= Q8_PREFILL_MAX_WEIGHT_BYTES,
+            "Q8 prefill workspace exceeds the 128 MiB temporary budget"
+        );
+        base.checked_add(ffn.activation_bytes(d_model)?)
+            .and_then(|bytes| bytes.checked_add(prefill_weight_bytes))
+            .context("workspace Q8 activation bytes overflow")
     }
 
     pub fn new(
@@ -112,8 +128,18 @@ impl ForwardWorkspace {
         d_model: usize,
         kv_dim: usize,
         hidden_dim: usize,
+        ffn: Q8FfnConfig,
+        prefill_weight_bytes: usize,
     ) -> Result<Self> {
-        Self::new_with_rows(ctx, d_model, kv_dim, hidden_dim, 1)
+        Self::new_with_rows(
+            ctx,
+            d_model,
+            kv_dim,
+            hidden_dim,
+            1,
+            ffn,
+            prefill_weight_bytes,
+        )
     }
 
     pub fn new_with_rows(
@@ -122,6 +148,8 @@ impl ForwardWorkspace {
         kv_dim: usize,
         hidden_dim: usize,
         rows: usize,
+        ffn: Q8FfnConfig,
+        prefill_weight_bytes: usize,
     ) -> Result<Self> {
         if d_model == 0 || kv_dim == 0 || hidden_dim == 0 {
             anyhow::bail!(
@@ -151,11 +179,35 @@ impl ForwardWorkspace {
             .checked_mul(std::mem::size_of::<u32>())
             .context("workspace attention metadata bytes overflow")?;
 
+        anyhow::ensure!(
+            prefill_weight_bytes <= Q8_PREFILL_MAX_WEIGHT_BYTES,
+            "Q8 prefill workspace exceeds the 128 MiB temporary budget"
+        );
+        let quantized_bytes = ffn.activation_bytes(d_model)?;
         Ok(Self {
             d_model,
             kv_dim,
             hidden_dim,
             rows,
+            ffn_config: ffn,
+            q8_prefill_weight: if prefill_weight_bytes > 0 {
+                Some(DeviceBuffer::new_tagged(
+                    ctx,
+                    prefill_weight_bytes,
+                    "fwd:q8_prefill_weight",
+                )?)
+            } else {
+                None
+            },
+            q8_activation: if quantized_bytes > 0 {
+                Some(DeviceBuffer::new_tagged(
+                    ctx,
+                    quantized_bytes,
+                    "fwd:ffn_q8_activation",
+                )?)
+            } else {
+                None
+            },
             dq: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd:dq_f32")?,
             dk: DeviceBuffer::new_tagged(ctx, bytes_kv, "fwd:dk_f32")?,
             dv: DeviceBuffer::new_tagged(ctx, bytes_kv, "fwd:dv_f32")?,
@@ -183,11 +235,25 @@ impl ForwardWorkspace {
         })
     }
 
-    pub fn matches(&self, d_model: usize, kv_dim: usize, hidden_dim: usize, rows: usize) -> bool {
+    pub fn matches(
+        &self,
+        d_model: usize,
+        kv_dim: usize,
+        hidden_dim: usize,
+        rows: usize,
+        ffn: Q8FfnConfig,
+        prefill_weight_bytes: usize,
+    ) -> bool {
         self.d_model == d_model
             && self.kv_dim == kv_dim
             && self.hidden_dim == hidden_dim
             && self.rows == rows
+            && self.ffn_config == ffn
+            && self
+                .q8_prefill_weight
+                .as_ref()
+                .map_or(0, DeviceBuffer::bytes)
+                == prefill_weight_bytes
     }
 
     pub fn rows(&self) -> usize {
@@ -197,6 +263,17 @@ impl ForwardWorkspace {
     pub fn ptrs(&self) -> ForwardWorkspacePtrs {
         ForwardWorkspacePtrs {
             rows: self.rows,
+            q8_activation: self.q8_activation.as_ref().map(|buffer| Q8FfnScratch {
+                pointer: buffer.as_mut_ptr(),
+                bytes: buffer.bytes(),
+            }),
+            q8_prefill_weight: self
+                .q8_prefill_weight
+                .as_ref()
+                .map(|buffer| Q8PrefillScratch {
+                    pointer: buffer.as_mut_ptr(),
+                    bytes: buffer.bytes(),
+                }),
             dq: self.dq.as_mut_ptr(),
             dk: self.dk.as_mut_ptr(),
             dv: self.dv.as_mut_ptr(),

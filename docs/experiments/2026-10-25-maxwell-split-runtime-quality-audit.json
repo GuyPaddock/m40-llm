@@ -1,0 +1,23 @@
+{
+  "passes_quality_audit": true,
+  "source": "cf8eba0621903fb5945948f5125b9ad6c0427318",
+  "scope": "actual full-model quality against current packed128/SGEMM; not HTTP timing",
+  "actual_browser_ids_equal": 512,
+  "task_outputs_equal": 12,
+  "dense_valid_tasks": 7,
+  "regressions": 0,
+  "prefix_logit_maximum": 0.004530906677246094,
+  "prefix_mean_diff_maximum": 0.00042444349854255586,
+  "top10_overlap_minimum": 10,
+  "additional_gate_up_device_bytes": 1724645376,
+  "source_plus_prepared_candidate_bytes": 6197100544,
+  "preparation_ms": [
+    10135.866669000001,
+    10513.314585000002
+  ],
+  "diagnostic_resident_generation_ms": [
+    12417.720845,
+    11323.224912000001
+  ],
+  "makes_http_or_default_claim": false
+}

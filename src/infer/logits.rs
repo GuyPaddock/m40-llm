@@ -11,6 +11,8 @@ use crate::cuda::DeviceBuffer;
 #[cfg(feature = "cuda")]
 use crate::gguf::GgmlDType;
 #[cfg(feature = "cuda")]
+use crate::gpu_profile::GpuStageSpan;
+#[cfg(feature = "cuda")]
 use crate::timing;
 #[cfg(feature = "cuda")]
 use anyhow::Context;
@@ -84,17 +86,11 @@ impl LoadedModel {
     ) -> Result<(usize, CudaStream)> {
         let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
         let d_w = self.tensor_device_ptr(&name, &lm)?;
-        let q8_logits_on_decode_stream = q8_decode_kernel_decode_stream_enabled()
-            && self.gguf_weight_dtype(d_w) == GgmlDType::Q8_0;
-        let q4_logits_on_decode_stream = q4_decode_kernel_decode_stream_enabled()
-            && self.gguf_weight_dtype(d_w) == GgmlDType::Q4_0;
-        let q6_logits_on_decode_stream = q4_decode_kernel_decode_stream_enabled()
-            && self.gguf_weight_dtype(d_w) == GgmlDType::Q6K;
-        let logits_on_decode_stream = decode_cublas_single_stream_enabled()
-            || f16_decode_kernel_decode_stream_enabled()
-            || q8_logits_on_decode_stream
-            || q4_logits_on_decode_stream
-            || q6_logits_on_decode_stream;
+        let logits_on_decode_stream = match self.gguf_weight_dtype(d_w) {
+            GgmlDType::Q8_0 => q8_decode_kernel_decode_stream_enabled(),
+            GgmlDType::Q4_0 | GgmlDType::Q6K => q4_decode_kernel_decode_stream_enabled(),
+            _ => decode_cublas_single_stream_enabled() || f16_decode_kernel_decode_stream_enabled(),
+        };
         let stream = if logits_on_decode_stream {
             CudaStream::Decode
         } else {
@@ -114,6 +110,7 @@ impl LoadedModel {
             let d_norm_w = self.tensor_device_ptr(&norm_name, &norm)?;
             let d_norm_hidden =
                 d_norm_hidden.context("missing d_norm_hidden scratch for output norm logits")?;
+            let gpu_stage = GpuStageSpan::begin("output_norm", CudaStream::Decode)?;
             if logits_on_decode_stream {
                 self.run_rms_norm_weighted_async(
                     d_hidden_f32,
@@ -135,12 +132,14 @@ impl LoadedModel {
                     self.model_config.layer_norm_epsilon,
                 )?;
             }
+            gpu_stage.finish()?;
             timing::log("logits.output_norm", norm_start.elapsed());
             d_norm_hidden as *const c_void
         } else {
             d_hidden_f32
         };
         let gemm_start = std::time::Instant::now();
+        let gpu_stage = GpuStageSpan::begin("lm_head", stream)?;
         self.matmul_f32xf16_gguf_f32_async(
             hidden_for_logits,
             d_w,
@@ -150,6 +149,7 @@ impl LoadedModel {
             d_model as i32,
         )
         .with_context(|| format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}"))?;
+        gpu_stage.finish()?;
         timing::log("logits.lm_head_gemm", gemm_start.elapsed());
         Ok((vocab, stream))
     }
@@ -192,7 +192,40 @@ impl LoadedModel {
         d_norm_hidden: Option<*mut c_void>,
         d_token_u32: *mut c_void,
     ) -> Result<u32> {
+        self.greedy_token_from_hidden_into_with_argmax_scratch(
+            d_hidden_f32,
+            d_logits,
+            d_norm_hidden,
+            d_token_u32,
+            None,
+        )
+    }
+
+    /// Same logits/greedy contract, with optional session-owned research scratch.
+    /// Missing scratch is an error when the partitioned consumer is selected.
+    ///
+    /// # Safety
+    /// All original hidden/logit/norm/token spans must be valid and disjoint.
+    /// Scratch, when selected, is a disjoint eight-byte-aligned device allocation
+    /// of the reported size, exclusive to this call until its stream completes.
+    #[cfg(feature = "cuda")]
+    pub unsafe fn greedy_token_from_hidden_into_with_argmax_scratch(
+        &self,
+        d_hidden_f32: *const c_void,
+        d_logits: *mut c_void,
+        d_norm_hidden: Option<*mut c_void>,
+        d_token_u32: *mut c_void,
+        argmax_scratch: Option<(*mut c_void, usize)>,
+    ) -> Result<u32> {
         let argmax_start = std::time::Instant::now();
+        let has_partitioned_argmax = self
+            .q8_execution
+            .portfolio_arm()
+            .is_some_and(|arm| arm.has_partitioned_argmax());
+        anyhow::ensure!(
+            !has_partitioned_argmax || argmax_scratch.is_some(),
+            "partitioned argmax requires session-owned scratch; no silent fallback"
+        );
         if f16_lm_head_argmax_enabled() {
             let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
             let d_w = self.tensor_device_ptr(&name, &lm)?;
@@ -216,6 +249,7 @@ impl LoadedModel {
                     let d_norm_w = self.tensor_device_ptr(&norm_name, &norm)?;
                     let d_norm_hidden = d_norm_hidden
                         .context("missing d_norm_hidden scratch for f16 lm_head argmax")?;
+                    let gpu_stage = GpuStageSpan::begin("output_norm", CudaStream::Decode)?;
                     if stream == CudaStream::Decode {
                         self.run_rms_norm_weighted_async(
                             d_hidden_f32,
@@ -237,6 +271,7 @@ impl LoadedModel {
                             self.model_config.layer_norm_epsilon,
                         )?;
                     }
+                    gpu_stage.finish()?;
                     timing::log("logits.output_norm", norm_start.elapsed());
                     d_norm_hidden as *const c_void
                 } else {
@@ -251,6 +286,7 @@ impl LoadedModel {
                     .checked_mul(std::mem::size_of::<f32>())
                     .context("logits byte size overflow")?;
                 if scratch_bytes <= logits_bytes {
+                    let gpu_stage = GpuStageSpan::begin("lm_head_argmax", stream)?;
                     self.cuda.f16_lm_head_argmax_async(
                         hidden_for_logits,
                         d_w,
@@ -260,6 +296,7 @@ impl LoadedModel {
                         d_model as i32,
                         stream,
                     )?;
+                    gpu_stage.finish()?;
                     self.cuda.synchronize_stream(stream)?;
                     let mut token = 0u32;
                     self.cuda.memcpy_d2h(
@@ -275,7 +312,7 @@ impl LoadedModel {
                 }
             }
         }
-        if q8_lm_head_argmax_enabled() {
+        if q8_lm_head_argmax_enabled() && !self.q8_execution.has_prepared_vocabulary() {
             let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
             let d_w = self.tensor_device_ptr(&name, &lm)?;
             if self.gguf_weight_dtype(d_w) == GgmlDType::Q8_0 {
@@ -296,6 +333,7 @@ impl LoadedModel {
                     let d_norm_w = self.tensor_device_ptr(&norm_name, &norm)?;
                     let d_norm_hidden = d_norm_hidden
                         .context("missing d_norm_hidden scratch for q8 lm_head argmax")?;
+                    let gpu_stage = GpuStageSpan::begin("output_norm", CudaStream::Decode)?;
                     if stream == CudaStream::Decode {
                         self.run_rms_norm_weighted_async(
                             d_hidden_f32,
@@ -317,6 +355,7 @@ impl LoadedModel {
                             self.model_config.layer_norm_epsilon,
                         )?;
                     }
+                    gpu_stage.finish()?;
                     timing::log("logits.output_norm", norm_start.elapsed());
                     d_norm_hidden as *const c_void
                 } else {
@@ -331,6 +370,7 @@ impl LoadedModel {
                     .checked_mul(std::mem::size_of::<f32>())
                     .context("logits byte size overflow")?;
                 if scratch_bytes <= logits_bytes {
+                    let gpu_stage = GpuStageSpan::begin("lm_head_argmax", stream)?;
                     self.cuda.q8_0_lm_head_argmax_async(
                         hidden_for_logits,
                         d_w,
@@ -340,6 +380,7 @@ impl LoadedModel {
                         d_model as i32,
                         stream,
                     )?;
+                    gpu_stage.finish()?;
                     self.cuda.synchronize_stream(stream)?;
                     let mut token = 0u32;
                     self.cuda.memcpy_d2h(
@@ -357,8 +398,26 @@ impl LoadedModel {
         }
         let (vocab, stream) =
             self.enqueue_logits_from_hidden_into(d_hidden_f32, d_logits, d_norm_hidden)?;
-        self.cuda
-            .argmax_f32_async(d_logits as *const c_void, vocab as u32, d_token_u32, stream)?;
+        let gpu_stage = GpuStageSpan::begin("greedy_argmax", stream)?;
+        if has_partitioned_argmax {
+            let (scratch, bytes) = argmax_scratch.context("missing partitioned argmax scratch")?;
+            self.cuda.argmax_f32_partitioned_async(
+                d_logits,
+                vocab as u32,
+                scratch,
+                bytes,
+                d_token_u32,
+                stream,
+            )?;
+        } else {
+            self.cuda.argmax_f32_async(
+                d_logits as *const c_void,
+                vocab as u32,
+                d_token_u32,
+                stream,
+            )?;
+        }
+        gpu_stage.finish()?;
         self.cuda.synchronize_stream(stream)?;
         let mut token = 0u32;
         self.cuda.memcpy_d2h(

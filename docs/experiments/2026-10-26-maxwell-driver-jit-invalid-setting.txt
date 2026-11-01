@@ -1,0 +1,1 @@
+CUDA module capture failed: M40LLM_CUDA_TRACE_MODULES must be 0 or 1

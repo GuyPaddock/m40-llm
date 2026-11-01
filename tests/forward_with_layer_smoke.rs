@@ -1821,16 +1821,14 @@ fn packed_then_compress_prefill_matches_sequential_block_select_lossy_stride_rep
     )
 }
 
+/// This dense fast-fits fixture requires capturable async cuBLAS projections;
+/// replay must match ordinary forward without relying on earlier KV tests.
+#[cfg(have_cublas)]
 #[test]
+#[ignore = "requires M40/cuBLAS; run with --include-ignored --test-threads=1"]
 fn cuda_graph_replays_forward_one_token_with_layer() -> Result<()> {
-    let ctx = match cuda_env::ctx_m40_or_skip() {
-        Some(ctx) => ctx,
-        None => return Ok(()),
-    };
-    if let Err(e) = cuda_env::require_sm52(&ctx) {
-        eprintln!("{}", e);
-        return Ok(());
-    }
+    let _runtime_guard = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
+    let _hardware_context = m40_llm::cuda::CudaContext::new_m40()?;
 
     let cfg = tiny_gguf::TinyGgufConfig {
         vocab: 32,
@@ -1899,8 +1897,13 @@ fn cuda_graph_replays_forward_one_token_with_layer() -> Result<()> {
     Ok(())
 }
 
+/// A dense one-layer session must replay its async-cuBLAS graph; an explicit
+/// hardware request must not succeed by skipping a missing device.
+#[cfg(have_cublas)]
 #[test]
+#[ignore = "requires M40/cuBLAS; run with --include-ignored --test-threads=1"]
 fn decode_session_uses_one_layer_graph_when_enabled() -> Result<()> {
+    let _runtime_guard = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
     struct EnvGuard;
     impl Drop for EnvGuard {
         fn drop(&mut self) {
@@ -1912,15 +1915,7 @@ fn decode_session_uses_one_layer_graph_when_enabled() -> Result<()> {
     let _guard = EnvGuard;
     profile::reset();
 
-    let ctx = match cuda_env::ctx_m40_or_skip() {
-        Some(ctx) => ctx,
-        None => return Ok(()),
-    };
-    if let Err(e) = cuda_env::require_sm52(&ctx) {
-        eprintln!("{}", e);
-        return Ok(());
-    }
-
+    let _hardware_context = m40_llm::cuda::CudaContext::new_m40()?;
     let cfg = tiny_gguf::TinyGgufConfig {
         vocab: 32,
         d_model: 8,
@@ -1960,8 +1955,13 @@ fn decode_session_uses_one_layer_graph_when_enabled() -> Result<()> {
     Ok(())
 }
 
+/// Dense multilayer replay must retain the async-cuBLAS capture dependency
+/// and must select its reference KV semantics independently of test order.
+#[cfg(have_cublas)]
 #[test]
+#[ignore = "requires M40/cuBLAS; run with --include-ignored --test-threads=1"]
 fn decode_session_uses_multilayer_graph_when_enabled() -> Result<()> {
+    let _runtime_guard = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
     struct EnvGuard;
     impl Drop for EnvGuard {
         fn drop(&mut self) {
@@ -1973,15 +1973,7 @@ fn decode_session_uses_multilayer_graph_when_enabled() -> Result<()> {
     let _guard = EnvGuard;
     profile::reset();
 
-    let ctx = match cuda_env::ctx_m40_or_skip() {
-        Some(ctx) => ctx,
-        None => return Ok(()),
-    };
-    if let Err(e) = cuda_env::require_sm52(&ctx) {
-        eprintln!("{}", e);
-        return Ok(());
-    }
-
+    let _hardware_context = m40_llm::cuda::CudaContext::new_m40()?;
     let cfg = tiny_gguf::TinyGgufConfig {
         vocab: 32,
         d_model: 8,
@@ -2021,8 +2013,13 @@ fn decode_session_uses_multilayer_graph_when_enabled() -> Result<()> {
     Ok(())
 }
 
+/// Timed dense graph replay must record GPU completion and the logits wait
+/// with the fixture's capturable async-cuBLAS projection backend.
+#[cfg(have_cublas)]
 #[test]
+#[ignore = "requires M40/cuBLAS; run with --include-ignored --test-threads=1"]
 fn decode_session_graph_diagnostic_sync_records_timed_replay() -> Result<()> {
+    let _runtime_guard = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
     struct EnvGuard;
     impl Drop for EnvGuard {
         fn drop(&mut self) {
@@ -2037,15 +2034,7 @@ fn decode_session_graph_diagnostic_sync_records_timed_replay() -> Result<()> {
     let _guard = EnvGuard;
     profile::reset();
 
-    let ctx = match cuda_env::ctx_m40_or_skip() {
-        Some(ctx) => ctx,
-        None => return Ok(()),
-    };
-    if let Err(e) = cuda_env::require_sm52(&ctx) {
-        eprintln!("{}", e);
-        return Ok(());
-    }
-
+    let _hardware_context = m40_llm::cuda::CudaContext::new_m40()?;
     let cfg = tiny_gguf::TinyGgufConfig {
         vocab: 32,
         d_model: 8,

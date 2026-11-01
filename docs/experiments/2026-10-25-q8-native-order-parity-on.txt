@@ -1,0 +1,15 @@
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running tests/q8_separate_projection.rs (target/debug/deps/q8_separate_projection-0b49508a77244622)
+
+running 2 tests
+test test_separate_256_preserves_native_decode_accumulation_bits ... native-order K=2048 N=33 threads=128 different=30/33 max=1.9073486328125e-6 mean=6.556510925292969e-7
+native-order K=2048 N=33 threads=256 different=0/33 max=0e0 mean=0e0
+native-order K=11008 N=2048 threads=128 different=1893/2048 max=2.47955322265625e-5 mean=4.931003786623478e-6
+native-order K=11008 N=2048 threads=256 different=0/2048 max=0e0 mean=0e0
+ok
+test test_separate_projection_matches_source_and_rejects_invalid_buffers ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.64s
+

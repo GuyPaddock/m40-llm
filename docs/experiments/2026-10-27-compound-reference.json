@@ -1,0 +1,309 @@
+{
+  "schema_version": 1,
+  "kind": "qualified_runtime_reference",
+  "reference_id": "compound-runtime-63240c5-v1",
+  "recorded_date": "2026-10-27",
+  "source": {
+    "revision": "63240c52b64e06870922c8b6c0cbae8b0fe2e6f4",
+    "tree": "b5d09d66af0477d4ecbfc16af337e79291d055a7",
+    "measured_worktree": "",
+    "local_archive": "local-artifacts/qualified-references/compound-63240c5/source.tar.gz",
+    "archive_sha256": "90c171a7d22a807531529b63e088dcfa36bfc9be94557ea7513365cf3213891d"
+  },
+  "model": {
+    "name": "Qwen2.5-3B Q8_0",
+    "path": "/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+    "sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+    "is_copied": false,
+    "storage": "original content-addressed Ollama blob; retain independently of this Git repository"
+  },
+  "executables": [
+    {
+      "original_path": "target/release/examples/model_quality",
+      "preserved_path": "local-artifacts/qualified-references/compound-63240c5/bin/model_quality",
+      "sha256": "9a659afbdfbf02249588b9669b42f14e18cc86266ef24227b4f05ad0de1738d3"
+    },
+    {
+      "original_path": "target/release/examples/compare_ollama",
+      "preserved_path": "local-artifacts/qualified-references/compound-63240c5/bin/compare_ollama",
+      "sha256": "eb6dc69f94a2e67ecd62bc07a02a12e47c26067236ac6f7df40e2c4f78b5b86f"
+    },
+    {
+      "original_path": "/tmp/m40-llm-tools/ollama-0.40.11/bin/ollama",
+      "preserved_path": "local-artifacts/qualified-references/compound-63240c5/bin/ollama",
+      "sha256": "b0a4becfaf872e3ad5d2e9051244e0dfe55409f03d6e2cd9bd9c34400e201b4c"
+    },
+    {
+      "original_path": "/tmp/m40-llm-tools/ollama-0.40.11/lib/ollama/llama-server",
+      "preserved_path": "local-artifacts/qualified-references/compound-63240c5/bin/llama-server",
+      "sha256": "234b05b2138264f8fb263c3205e85f4c290e8afe5067e280a4f6f90cdac5696b"
+    },
+    {
+      "original_path": "/tmp/m40-llm-tools/ollama-0.40.11/lib/ollama/cuda_v12/libggml-cuda.so",
+      "preserved_path": "local-artifacts/qualified-references/compound-63240c5/lib/libggml-cuda.so",
+      "sha256": "7a7b6696ffb43ca00f78504a0b2e76db0c6554320ed64e405559e3433580d9b3"
+    }
+  ],
+  "configuration": {
+    "environment": {
+      "CUDA_VISIBLE_DEVICES": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852",
+      "M40LLM_ATTN_HEAD128_KERNEL": "parallel",
+      "M40LLM_ATTN_HEAD128_PARTITIONS": "8",
+      "M40LLM_ATTN_HEAD128_THREADS": "256",
+      "M40LLM_CUDA_GREEDY_ARGMAX": "1",
+      "M40LLM_DECODE_GRAPH": "0",
+      "M40LLM_ENABLE_CUBLAS": "1",
+      "M40LLM_ENABLE_NVCC": "1",
+      "M40LLM_FUSED_Q8_MLP_SWIGLU": "1",
+      "M40LLM_FUSED_Q8_QKV": "1",
+      "M40LLM_MATERIALIZE_F32_WEIGHTS": "0",
+      "M40LLM_PROJECTION_BACKEND": "large-model",
+      "M40LLM_Q8_DECODE_COL_TILE": "4",
+      "M40LLM_Q8_DECODE_SPLIT_QBLOCK": "4",
+      "M40LLM_Q8_DECODE_STREAM": "decode",
+      "M40LLM_Q8_EXECUTION_WEIGHTS": "off",
+      "M40LLM_Q8_LM_HEAD_ARGMAX": "1",
+      "M40LLM_Q8_LM_HEAD_ARGMAX_SHARED_A": "1",
+      "M40LLM_Q8_MLP_GATE_UP_SPLIT_QBLOCK": "4",
+      "M40LLM_SYSROOT": "/mnt/array-fastest/home/guyep/.local/share/mamba/envs/m40-rustfmt/x86_64-conda-linux-gnu/sysroot"
+    },
+    "candidate_config": {
+      "attention_projection": "packed-warp-256",
+      "ffn": "joint-shared-scales-128",
+      "prefill": "dequant-sgemm"
+    },
+    "control_config": {
+      "attention_projection": "packed-warp-256",
+      "ffn": "split-f32x4-128",
+      "prefill": "dequant-sgemm"
+    },
+    "cuda_flags": "build.rs -O3 -std=c++17 -cudart=shared -fPIC -gencode=arch=compute_52,code=sm_52 -gencode=arch=compute_52,code=compute_52 -allow-unsupported-compiler; no --use_fast_math; host header defines in build.rs",
+    "prepared_candidate": {
+      "mode": "split",
+      "families": [
+        "gate-up",
+        "down",
+        "vocabulary"
+      ],
+      "budget_bytes": 6442450944,
+      "resident_bytes": 2917580800,
+      "single_row_down_split_launch": {
+        "columns": 4,
+        "threads": 256
+      }
+    },
+    "joint_candidate": {
+      "pair_count": 36,
+      "resident_bytes": 1724645376,
+      "combined_prepared_bytes": 4642226176,
+      "peak_temporary_host_pair_bytes": 47906816,
+      "retained_host_pair_bytes": 0
+    },
+    "browser_prompt": "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain everything that happens between the time a user types a web address into their browser and the time the page is fully loaded and displayed on their screen in as much detail as possible<|im_end|>\n<|im_start|>assistant\n",
+    "browser_prompt_ids": [
+      151644,
+      8948,
+      198,
+      2610,
+      525,
+      1207,
+      16948,
+      11,
+      3465,
+      553,
+      54364,
+      14817,
+      13,
+      1446,
+      525,
+      264,
+      10950,
+      17847,
+      13,
+      151645,
+      198,
+      151644,
+      872,
+      198,
+      840,
+      20772,
+      4297,
+      429,
+      8573,
+      1948,
+      279,
+      882,
+      264,
+      1196,
+      4494,
+      264,
+      3482,
+      2621,
+      1119,
+      862,
+      6929,
+      323,
+      279,
+      882,
+      279,
+      2150,
+      374,
+      7225,
+      6661,
+      323,
+      12596,
+      389,
+      862,
+      4171,
+      304,
+      438,
+      1753,
+      7716,
+      438,
+      3204,
+      151645,
+      198,
+      151644,
+      77091,
+      198
+    ],
+    "build_profile": "release",
+    "features": [
+      "cuda",
+      "server"
+    ],
+    "nvcc": "12.8.93",
+    "kv_mode": "off",
+    "context_tokens": 1024,
+    "generated_tokens": 512,
+    "stop_reason": "length",
+    "sampling": "greedy top_k=1; no forced continuation",
+    "prefill_execution_contract": "prefix-decode-completed-v1",
+    "effective_preparation_note": "Named benchmark loader installs split preparation from candidate settings; environment M40LLM_Q8_EXECUTION_WEIGHTS=off is intentional and is not the effective prepared model state."
+  },
+  "performance": {
+    "scope": "buffered client HTTP end-to-end; warm, model resident; actual 512 generated tokens",
+    "official_version": "0.40.11",
+    "official_comparison": {
+      "bootstrap_gain_ci95": [
+        0.1763936466111784,
+        0.18030232166991667
+      ],
+      "bootstrap_resamples": 10000,
+      "bootstrap_seed": 0,
+      "candidate": {
+        "mad_over_median": 0.0008739196705158037,
+        "max": 50.98284012198561,
+        "median": 50.91042598728391,
+        "min": 50.78254159376825
+      },
+      "control": {
+        "mad_over_median": 0.0004982123490337374,
+        "max": 43.267029530257645,
+        "median": 43.1947300161657,
+        "min": 43.167983557253
+      },
+      "gain": 0.17862586404014102,
+      "needs_fresh_confirmation": false,
+      "needs_variation_extension": false,
+      "pairs": 5,
+      "passes_promotion_gate": true,
+      "promotion_threshold": 0.03,
+      "reaches_original_target": false
+    },
+    "incremental_comparison": {
+      "bootstrap_gain_ci95": [
+        0.031564592948167824,
+        0.03303192654482401
+      ],
+      "bootstrap_resamples": 10000,
+      "bootstrap_seed": 0,
+      "candidate": {
+        "mad_over_median": 0.0006161692642405118,
+        "max": 50.89334650726958,
+        "median": 50.798729955693645,
+        "min": 50.54771547242839
+      },
+      "control": {
+        "mad_over_median": 0.000556577559456003,
+        "max": 49.28716750340852,
+        "median": 49.22140181785059,
+        "min": 49.019813462782196
+      },
+      "gain": 0.03204557529019869,
+      "needs_fresh_confirmation": true,
+      "needs_variation_extension": false,
+      "pairs": 20,
+      "passes_promotion_gate": true,
+      "promotion_threshold": 0.03
+    },
+    "absolute_target_tok_per_sec": 53.06,
+    "relative_target_tok_per_sec": 56.15314902101541,
+    "remaining_request_saving_ms": 938.9577026153838,
+    "is_original_goal_met": false
+  },
+  "correctness": {
+    "actual_512_ids_equal": true,
+    "frozen_task_count": 12,
+    "dense_valid_task_count": 7,
+    "dense_valid_regressions": 0,
+    "inconclusive_task_count": 5,
+    "logit_steps": [
+      0,
+      1,
+      8,
+      32,
+      128,
+      256,
+      511
+    ],
+    "max_abs_logit_diff": 0,
+    "mean_abs_logit_diff": 0,
+    "top10_overlap": 10,
+    "original_prepared_tensor_count": 109,
+    "additional_joint_pair_count": 36,
+    "unchanged_prior_compiled_entry_count": 137
+  },
+  "requested_memory_bytes": {
+    "uploaded_gguf": 3279519744,
+    "split_prepared": 2917580800,
+    "joint_pairs": 1724645376,
+    "combined_prepared": 4642226176,
+    "preparation_budget": 6442450944,
+    "source_and_prepared_weights": 7921745920,
+    "dense_kv": 37748736,
+    "prefix_conversion_capacity": 90177536,
+    "peak_temporary_host_joint_pair": 47906816
+  },
+  "artifact_sha256": {
+    "docs/experiments/2026-10-27-maxwell-compound-runtime.md": "94ab4ce416374f03a1a09222b6198eb07e75fb278be5b69832da57ece6ab58f3",
+    "docs/experiments/2026-10-27-maxwell-compound-runtime-http-audit.jq": "2904fa1f92e27ffc81c915db617e4d3b6c80be78c907d850a47429792c3f04d9",
+    "docs/experiments/2026-10-27-maxwell-compound-runtime-http-audit.json": "a35a54b7772a195fb36433238face186baf16ecc61b40587119cd837a180348d",
+    "docs/experiments/2026-10-27-maxwell-compound-runtime-http.jsonl": "396781f327afab995f0efe8d646d96737ed32503ea9cf2377826556589171028",
+    "docs/experiments/2026-10-27-maxwell-compound-runtime-negative-controls.sh": "0c70ca7eb42fdcadf94069af09bce71771f57e254ad638700881991cdd1a640b",
+    "docs/experiments/2026-10-27-maxwell-compound-runtime-ollama-http-audit.json": "482be19117eb4af7bc1aca4b43edd50d5240ccdde94a2709d3fc486e795e6e27",
+    "docs/experiments/2026-10-27-maxwell-compound-runtime-ollama-http.jsonl": "60a4ef09cd2c9fb118e6f32f913fd8c353c277779537926c3be5be4d3e91ed77",
+    "docs/experiments/2026-10-27-maxwell-compound-runtime-orchestration.tar.gz": "36e16947020796d68a2bdbe600ed49e0b923493fe0907954aca6550899e32dff",
+    "docs/experiments/2026-10-27-maxwell-compound-runtime-plan.md": "467a1093487dc9c81a87f62fea92d103d3d49d1d7e27bdc6cb58a043f0c451e1",
+    "docs/experiments/2026-10-27-maxwell-compound-runtime-quality-audit.jq": "c0c5367677c98ccf2662ea928bd8b0c34ffd8ad916c8bd9575942337cf1eca85",
+    "docs/experiments/2026-10-27-maxwell-compound-runtime-quality-audit.json": "1fc53bd6399ee708f9c8d025f5ac485dd0da33f16b4a3498927ed66160be1039",
+    "docs/experiments/2026-10-27-maxwell-compound-runtime-quality.jsonl": "adf09f0077f7ec24e7ca61f1a846f8b4e97db4b631fa82c86a6af0201b5e4f24",
+    "docs/experiments/2026-10-27-maxwell-compound-runtime-sass-audit.json": "9a6f031af9582f8a39c920cc846b03c2618a7be3f12684f0b6d93f4cdae87cde",
+    "docs/experiments/2026-10-27-maxwell-compound-stage-audit.jq": "5067e91b7e001d9faa8920a718c8abfbc156952a2bb96dc49b3af5bc539816e2",
+    "docs/experiments/2026-10-27-maxwell-compound-stage-audit.json": "09a9bb47f22e5a895c4764832cfec0cafd1d54f1bcc1857984f763dadc141d5e",
+    "docs/experiments/2026-10-27-maxwell-compound-stage-events.jsonl": "f34aa100ce571e8642b414d1cfc3cb31d7f0087a65eb9302e85bfac3bbfe7d2e",
+    "docs/experiments/2026-10-27-maxwell-compound-stage-http.jsonl": "d3ee68514dce3a80e1a190e63495d44271851aa618300d7edd25f7ae11218d78",
+    "docs/experiments/2026-10-27-maxwell-compound-stage-negative-controls.sh": "7944b01ecd40496f064638f2a557b2c40aea7632e0b7a9e5da3e4b82f5c81d94",
+    "docs/experiments/2026-10-27-maxwell-compound-stage-orchestration.tar.gz": "3d533a6db19f306e3f2011a39c2781ce7d0ed2f9e8149922d91add9e16d66398",
+    "docs/experiments/2026-10-27-maxwell-compound-stage-profile.md": "4eec5d69351c3d6c80846bcadea589e1ee848183b5dc2c094b50a3e1a29e5a70",
+    "docs/experiments/2026-10-27-maxwell-compound-stage-scope.jq": "d0a61018e8abe58cd52a56c01439074bb4b85d33ae62a52706db130cc647e303",
+    "docs/experiments/2026-10-27-maxwell-compound-stage-scope.json": "5d9d013711e74e7c39bd84f92fdda4353c2f1967743ca98d8920bf949cf0c7c4",
+    "docs/experiments/2026-10-27-maxwell-compound-stage-stages.json": "ad9f59e271f6ae8ed875d141b53ce5ca80fdecbe1f2c96b46d369e08e78dc709",
+    "docs/experiments/2026-10-27-maxwell-compound-profile-plan.md": "a2d0363f511a62cc0d7a7b2b2d7560f992606de2870d6678afba222cd20f2506",
+    "docs/experiments/2026-10-27-maxwell-compound-runtime.sha256": "77522e4b1969f9d5a544170d93d11b19797fad2891906e8ff2a38f4d897b7e7e",
+    "docs/experiments/2026-10-27-maxwell-compound-stage.sha256": "56d5e70b39330fa30282e076439fe03aa0442e9883576461bb8b2cf661248d4b",
+    "docs/experiments/2026-10-25-maxwell-packed-projection-runtime-quality.jsonl": "8b499787179f484aeb32e37caf837208e0994da4995918e18e34ba922d3d949e"
+  },
+  "preservation_scope": "Tracked reports/checksums plus ignored source archive and five independently copied measured binaries outside target/. Local binaries are not a self-contained CUDA/Ollama redistribution; retain original shared libraries, toolchain and model. No new inference or qualification occurred.",
+  "immutability": "Do not rewrite this manifest or historical evidence to describe a new candidate. Create separately named artifacts that reference this reference_id. No runtime default or acceptance threshold changes."
+}

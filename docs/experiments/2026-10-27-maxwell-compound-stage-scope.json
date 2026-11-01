@@ -1,0 +1,133 @@
+{
+  "scope": "optimistic equivalent per-token budget using sampled instrumented middle stages; not a speedup forecast or unprofiled critical-path proof",
+  "qualified_http_tps": 50.91042598728391,
+  "official_http_tps": 43.1947300161657,
+  "sampled_middle_stage_sum_ms": 18.958815943449736,
+  "sampled_middle_token_wall_ms": 19.795424,
+  "targets": [
+    {
+      "required_http_tps": 53.06,
+      "required_throughput_gain": 0.04222266797085927,
+      "required_request_time_saved_ms": 407.425669074255,
+      "required_request_latency_reduction": 0.04051213744282123,
+      "equivalent_saved_ms_per_generated_token": 0.7957532599106543,
+      "sampled_stage_scope": [
+        {
+          "stage": "gate_up_swiglu",
+          "sampled_gpu_ms": 7.421472000000001,
+          "required_latency_reduction_if_only_this_stage": 0.10722310343698044,
+          "eliminating_entire_sampled_stage_insufficient": false,
+          "required_stage_throughput_gain": 0.12010066999914981
+        },
+        {
+          "stage": "down",
+          "sampled_gpu_ms": 4.76144,
+          "required_latency_reduction_if_only_this_stage": 0.16712449593204035,
+          "eliminating_entire_sampled_stage_insufficient": false,
+          "required_stage_throughput_gain": 0.20065963654323493
+        },
+        {
+          "stage": "complete_ffn",
+          "sampled_gpu_ms": 12.182912000000002,
+          "required_latency_reduction_if_only_this_stage": 0.06531716390224719,
+          "eliminating_entire_sampled_stage_insufficient": false,
+          "required_stage_throughput_gain": 0.06988163404705561
+        },
+        {
+          "stage": "qkv_and_output",
+          "sampled_gpu_ms": 2.4082559999999993,
+          "required_latency_reduction_if_only_this_stage": 0.3304271887667484,
+          "eliminating_entire_sampled_stage_insufficient": false,
+          "required_stage_throughput_gain": 0.49348955516600457
+        },
+        {
+          "stage": "vocabulary",
+          "sampled_gpu_ms": 1.563776,
+          "required_latency_reduction_if_only_this_stage": 0.5088665255833663,
+          "eliminating_entire_sampled_stage_insufficient": false,
+          "required_stage_throughput_gain": 1.0361063785924913
+        },
+        {
+          "stage": "attention",
+          "sampled_gpu_ms": 0.780224,
+          "required_latency_reduction_if_only_this_stage": 1.0199035916745118,
+          "eliminating_entire_sampled_stage_insufficient": true,
+          "required_stage_throughput_gain": null
+        }
+      ]
+    },
+    {
+      "required_http_tps": 56.15314902101541,
+      "required_throughput_gain": 0.10297935898318733,
+      "required_request_time_saved_ms": 938.9577026153838,
+      "required_request_latency_reduction": 0.09336471996912232,
+      "equivalent_saved_ms_per_generated_token": 1.8339017629206715,
+      "sampled_stage_scope": [
+        {
+          "stage": "gate_up_swiglu",
+          "sampled_gpu_ms": 7.421472000000001,
+          "required_latency_reduction_if_only_this_stage": 0.24710754994705514,
+          "eliminating_entire_sampled_stage_insufficient": false,
+          "required_stage_throughput_gain": 0.32821095487101526
+        },
+        {
+          "stage": "down",
+          "sampled_gpu_ms": 4.76144,
+          "required_latency_reduction_if_only_this_stage": 0.3851569615327866,
+          "eliminating_entire_sampled_stage_insufficient": false,
+          "required_stage_throughput_gain": 0.626431361234848
+        },
+        {
+          "stage": "complete_ffn",
+          "sampled_gpu_ms": 12.182912000000002,
+          "required_latency_reduction_if_only_this_stage": 0.15053065826303852,
+          "eliminating_entire_sampled_stage_insufficient": false,
+          "required_stage_throughput_gain": 0.17720552216191754
+        },
+        {
+          "stage": "qkv_and_output",
+          "sampled_gpu_ms": 2.4082559999999993,
+          "required_latency_reduction_if_only_this_stage": 0.7615061533826437,
+          "eliminating_entire_sampled_stage_insufficient": false,
+          "required_stage_throughput_gain": 3.19298029774503
+        },
+        {
+          "stage": "vocabulary",
+          "sampled_gpu_ms": 1.563776,
+          "required_latency_reduction_if_only_this_stage": 1.172739422347364,
+          "eliminating_entire_sampled_stage_insufficient": true,
+          "required_stage_throughput_gain": null
+        },
+        {
+          "stage": "attention",
+          "sampled_gpu_ms": 0.780224,
+          "required_latency_reduction_if_only_this_stage": 2.3504810963526777,
+          "eliminating_entire_sampled_stage_insufficient": true,
+          "required_stage_throughput_gain": null
+        }
+      ]
+    }
+  ],
+  "interval_medians": [
+    {
+      "step": 0,
+      "gpu_union_ms": 18.86638544406742,
+      "gpu_timeline_ms": 27.227359834127128,
+      "wall_minus_gpu_union_ms": 8.39137955593258
+    },
+    {
+      "step": 255,
+      "gpu_union_ms": 18.958813471719623,
+      "gpu_timeline_ms": 19.76800004951656,
+      "wall_minus_gpu_union_ms": 0.8324026650174865
+    },
+    {
+      "step": 511,
+      "gpu_union_ms": 19.131297461222857,
+      "gpu_timeline_ms": 19.937792451586574,
+      "wall_minus_gpu_union_ms": 0.8236158514689222
+    }
+  ],
+  "does_not_admit_new_kernel": true,
+  "hardware_ceiling_claim": false
+}

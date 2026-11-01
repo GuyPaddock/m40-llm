@@ -1,0 +1,13 @@
+94ab4ce416374f03a1a09222b6198eb07e75fb278be5b69832da57ece6ab58f3  docs/experiments/2026-10-27-maxwell-compound-runtime.md
+2904fa1f92e27ffc81c915db617e4d3b6c80be78c907d850a47429792c3f04d9  docs/experiments/2026-10-27-maxwell-compound-runtime-http-audit.jq
+a35a54b7772a195fb36433238face186baf16ecc61b40587119cd837a180348d  docs/experiments/2026-10-27-maxwell-compound-runtime-http-audit.json
+396781f327afab995f0efe8d646d96737ed32503ea9cf2377826556589171028  docs/experiments/2026-10-27-maxwell-compound-runtime-http.jsonl
+0c70ca7eb42fdcadf94069af09bce71771f57e254ad638700881991cdd1a640b  docs/experiments/2026-10-27-maxwell-compound-runtime-negative-controls.sh
+482be19117eb4af7bc1aca4b43edd50d5240ccdde94a2709d3fc486e795e6e27  docs/experiments/2026-10-27-maxwell-compound-runtime-ollama-http-audit.json
+60a4ef09cd2c9fb118e6f32f913fd8c353c277779537926c3be5be4d3e91ed77  docs/experiments/2026-10-27-maxwell-compound-runtime-ollama-http.jsonl
+36e16947020796d68a2bdbe600ed49e0b923493fe0907954aca6550899e32dff  docs/experiments/2026-10-27-maxwell-compound-runtime-orchestration.tar.gz
+467a1093487dc9c81a87f62fea92d103d3d49d1d7e27bdc6cb58a043f0c451e1  docs/experiments/2026-10-27-maxwell-compound-runtime-plan.md
+c0c5367677c98ccf2662ea928bd8b0c34ffd8ad916c8bd9575942337cf1eca85  docs/experiments/2026-10-27-maxwell-compound-runtime-quality-audit.jq
+1fc53bd6399ee708f9c8d025f5ac485dd0da33f16b4a3498927ed66160be1039  docs/experiments/2026-10-27-maxwell-compound-runtime-quality-audit.json
+adf09f0077f7ec24e7ca61f1a846f8b4e97db4b631fa82c86a6af0201b5e4f24  docs/experiments/2026-10-27-maxwell-compound-runtime-quality.jsonl
+9a6f031af9582f8a39c920cc846b03c2618a7be3f12684f0b6d93f4cdae87cde  docs/experiments/2026-10-27-maxwell-compound-runtime-sass-audit.json

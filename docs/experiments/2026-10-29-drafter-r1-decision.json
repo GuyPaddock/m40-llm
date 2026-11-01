@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "kind": "compact_drafter_conditional_admission_decision",
+  "date": "2026-10-29",
+  "implementation_commit": "911bc48",
+  "authorization_sha256": "c20c34291185e194facc1e87c5d7b63b7973ae071399f4684fc4244f59b948c4",
+  "authorization_scope": "R0 authorized; R1 conditional on every admission check; R2 not authorized",
+  "status": "stopped_failed_source_capacity",
+  "is_r1_admitted": false,
+  "has_realized_training_manifest": false,
+  "spec_sha256": "6ba7fc6606525bb142de110c7a7cd78cbe26d01a6f1edb8f03646871095d4bcd",
+  "plan_sha256": "42ea10028a648533111a56b9adc2140f6deec4336aa485ae14577bb4aeb3d516",
+  "capacity_report": "docs/experiments/2026-10-29-drafter-capacity.json",
+  "capacity_report_sha256": "82b888c1d621e05a578f2b03243f4cb9b5e7ae4b4e044b1e71cf5be37229aac6",
+  "local_row_ledger": "local-artifacts/2026-10-29-drafter-data/row-ledger.json",
+  "local_row_ledger_sha256": "c6c16a3e2ed778bb2564959ad4797adb69097d3ec37fa3a34fc2c4e1bab5d721",
+  "failure": {
+    "prerequisite": "MBPP text-only ChatML prompt length and per-split quota",
+    "frozen_prompt_token_range": [65, 447],
+    "rows_checked": 964,
+    "rows_length_eligible": 0,
+    "partition_upper_bounds": [
+      {"split": "train", "source_rows": 374, "minimum_tokens": 16, "maximum_tokens": 58, "eligible": 0, "required": 256},
+      {"split": "calibration", "source_rows": 90, "minimum_tokens": 17, "maximum_tokens": 36, "eligible": 0, "required": 48},
+      {"split": "held_out", "source_rows": 500, "minimum_tokens": 16, "maximum_tokens": 55, "eligible": 0, "required": 96}
+    ],
+    "interpretation": "Grouping and exclusions can only reduce these counts; frozen quotas are impossible. This is not a trained-drafter failure."
+  },
+  "checks": {
+    "pinned_metadata_hashes": "passed",
+    "source_payloads_acquired_and_hashed": "passed",
+    "source_partition_id_sets": "passed",
+    "target_gguf_identity": "passed",
+    "runtime_qwen_chatml_tokenizer_roundtrip_and_range": "passed_all_964",
+    "source_capacity": "failed",
+    "document_and_template_groups": "not_run_after_stop",
+    "expanded_benchmark_exclusion_audit": "not_run_after_stop",
+    "complete_row_level_split_manifest": "not_created",
+    "combined_license_and_document_provenance_clearance": "not_completed",
+    "training_toolchain_and_trainer_freeze": "not_run_after_stop",
+    "causal_feature_export_implementation_and_validation": "not_run_after_stop"
+  },
+  "source_payloads": [
+    {"repository": "databricks/databricks-dolly-15k", "revision": "bdd27f4d94b9c1f951818a7da7fd7aeea5dbff1a", "filename": "databricks-dolly-15k.jsonl", "sha256": "2df9083338b4abd6bceb5635764dab5d833b393b55759dffb0959b6fcbf794ec"},
+    {"repository": "google-research-datasets/mbpp", "revision": "4bb6404fdc6cacfda99d4ac4205087b89d32030c", "filename": "full/train-00000-of-00001.parquet", "sha256": "09d125ca31edacb7800be8c67c45abff618faf0214ff551291817d06bdb914ae"},
+    {"repository": "google-research-datasets/mbpp", "revision": "4bb6404fdc6cacfda99d4ac4205087b89d32030c", "filename": "full/validation-00000-of-00001.parquet", "sha256": "3f0ec060987432d99fe8fb409d31e6c67445b208a01741c5583517c80a10fe80"},
+    {"repository": "google-research-datasets/mbpp", "revision": "4bb6404fdc6cacfda99d4ac4205087b89d32030c", "filename": "full/test-00000-of-00001.parquet", "sha256": "566fd53060ffba5766dace1d1e2f4c38906781526de222b0dfbdbc325b696c77"}
+  ],
+  "toolchain": {
+    "rustc": "1.95.0 (59807616e 2026-04-14)",
+    "cargo": "1.95.0 (f2d3ce0bd 2026-03-21)",
+    "python": "3.11.14",
+    "pyarrow": "22.0.0",
+    "uv": "0.11.14",
+    "cargo_lock_sha256": "2ab010cf214bab55c48c2716d6943b1364e66769bbbfdaff4cf16177f75e2e8f",
+    "build": "dev, --no-default-features --locked, RUSTFLAGS=-D warnings",
+    "executable_sha256": "11919b2b41ec61b7402216adff03442b062e478ac284b08267fee68927a78140",
+    "is_training_toolchain_admitted": false
+  },
+  "gpu_hours": {
+    "parent_caps": {"cost": 4, "teacher": 20, "training": 40, "evaluation": 8},
+    "conditional_pilot_caps": {"teacher": 2, "training": 2, "evaluation": 1},
+    "additional_used": {"cost": 0, "teacher": 0, "training": 0, "evaluation": 0},
+    "previous_cost_probe": 0.005923,
+    "aggregate_used": 0.005923,
+    "aggregate_cap": 72,
+    "gpu_switches": 0
+  },
+  "pilot_results": {
+    "teacher_throughput": null,
+    "training_behavior": null,
+    "calibration_behavior": null,
+    "held_out_results": null,
+    "conditional_acceptance_by_guess": [null, null, null],
+    "eligible_coverage": null,
+    "full_batch_acceptance": null,
+    "learned_projected_resident_tokens_per_second": null,
+    "learned_projected_http_tokens_per_second": null,
+    "reason": "Not measured: R1 prerequisite failed before GPU work."
+  },
+  "next_action": "Stop; no constraint changes, corpus substitution, training or GPU switch without a revised user direction."
+}

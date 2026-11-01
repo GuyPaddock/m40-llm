@@ -1,0 +1,3053 @@
+{
+  "status": "automation_complete_human_review_unavailable",
+  "manifest_sha256": "5fa255942d1ea89f335fc9360134d91d9e332ffe31930078dbbf74c4e917ced8",
+  "human_reviewer_count": 0,
+  "human_review_seconds": null,
+  "reviewer_agreement": null,
+  "human_adjudication_seconds": null,
+  "independent_second_review_seconds": null,
+  "human_stages_status": "not performed; reviewers unavailable",
+  "is_census_admitted": false,
+  "additional_gpu_hours": 0,
+  "timings": [
+    {
+      "stage": "source_identity_and_field_inventory",
+      "cpu_seconds": 0.249977322,
+      "wall_seconds": 0.259376578964293,
+      "status": "complete",
+      "actor": "automation"
+    },
+    {
+      "stage": "raw_overlap_identity_replay",
+      "cpu_seconds": 0.08835964699999999,
+      "wall_seconds": 0.09449845505878329,
+      "status": "complete",
+      "actor": "automation"
+    },
+    {
+      "stage": "local_dependency_graph",
+      "cpu_seconds": 0.06696680600000005,
+      "wall_seconds": 0.06744455127045512,
+      "status": "complete",
+      "actor": "automation"
+    },
+    {
+      "stage": "rights_evidence_inventory",
+      "cpu_seconds": 0.0021099230000000135,
+      "wall_seconds": 0.002794163767248392,
+      "status": "complete",
+      "actor": "automation"
+    },
+    {
+      "stage": "literal_benchmark_input_screen",
+      "cpu_seconds": 7.0151819589999995,
+      "wall_seconds": 7.018979393877089,
+      "status": "complete",
+      "actor": "automation"
+    },
+    {
+      "stage": "dependency_closure_and_blocked_packets",
+      "cpu_seconds": 0.001994862000000097,
+      "wall_seconds": 0.00188034912571311,
+      "status": "complete",
+      "actor": "automation"
+    }
+  ],
+  "retained_records": 846,
+  "review_records": 16,
+  "local_components": 597,
+  "dependency_edges": [
+    [
+      23,
+      44,
+      "shared_32_token_span"
+    ],
+    [
+      23,
+      44,
+      "five_word_jaccard_at_least_half"
+    ],
+    [
+      264,
+      299,
+      "shared_32_token_span"
+    ],
+    [
+      264,
+      304,
+      "shared_32_token_span"
+    ],
+    [
+      268,
+      274,
+      "shared_32_token_span"
+    ],
+    [
+      273,
+      292,
+      "shared_32_token_span"
+    ],
+    [
+      274,
+      280,
+      "shared_32_token_span"
+    ],
+    [
+      274,
+      292,
+      "shared_32_token_span"
+    ],
+    [
+      282,
+      294,
+      "shared_32_token_span"
+    ],
+    [
+      282,
+      309,
+      "shared_32_token_span"
+    ],
+    [
+      289,
+      321,
+      "shared_32_token_span"
+    ],
+    [
+      289,
+      341,
+      "shared_32_token_span"
+    ],
+    [
+      289,
+      374,
+      "shared_32_token_span"
+    ],
+    [
+      294,
+      309,
+      "shared_32_token_span"
+    ],
+    [
+      321,
+      341,
+      "shared_32_token_span"
+    ],
+    [
+      321,
+      374,
+      "shared_32_token_span"
+    ],
+    [
+      326,
+      357,
+      "shared_32_token_span"
+    ],
+    [
+      326,
+      357,
+      "five_word_jaccard_at_least_half"
+    ],
+    [
+      341,
+      374,
+      "shared_32_token_span"
+    ],
+    [
+      377,
+      378,
+      "shared_32_token_span"
+    ],
+    [
+      690,
+      698,
+      "shared_32_token_span"
+    ],
+    [
+      720,
+      721,
+      "shared_32_token_span"
+    ],
+    [
+      720,
+      721,
+      "five_word_jaccard_at_least_half"
+    ],
+    [
+      758,
+      759,
+      "shared_32_token_span"
+    ],
+    [
+      815,
+      816,
+      "shared_32_token_span"
+    ],
+    [
+      301,
+      348,
+      "repository_alias"
+    ],
+    [
+      326,
+      357,
+      "repository_alias"
+    ],
+    [
+      340,
+      363,
+      "repository_alias"
+    ],
+    [
+      356,
+      371,
+      "repository_alias"
+    ],
+    [
+      594,
+      595,
+      "provisional_article"
+    ],
+    [
+      594,
+      596,
+      "provisional_article"
+    ],
+    [
+      594,
+      597,
+      "provisional_article"
+    ],
+    [
+      594,
+      598,
+      "provisional_article"
+    ],
+    [
+      594,
+      599,
+      "provisional_article"
+    ],
+    [
+      594,
+      600,
+      "provisional_article"
+    ],
+    [
+      594,
+      601,
+      "provisional_article"
+    ],
+    [
+      594,
+      602,
+      "provisional_article"
+    ],
+    [
+      594,
+      603,
+      "provisional_article"
+    ],
+    [
+      594,
+      604,
+      "provisional_article"
+    ],
+    [
+      594,
+      605,
+      "provisional_article"
+    ],
+    [
+      606,
+      607,
+      "provisional_article"
+    ],
+    [
+      606,
+      608,
+      "provisional_article"
+    ],
+    [
+      606,
+      609,
+      "provisional_article"
+    ],
+    [
+      606,
+      610,
+      "provisional_article"
+    ],
+    [
+      606,
+      611,
+      "provisional_article"
+    ],
+    [
+      606,
+      612,
+      "provisional_article"
+    ],
+    [
+      606,
+      613,
+      "provisional_article"
+    ],
+    [
+      606,
+      614,
+      "provisional_article"
+    ],
+    [
+      606,
+      615,
+      "provisional_article"
+    ],
+    [
+      606,
+      616,
+      "provisional_article"
+    ],
+    [
+      606,
+      617,
+      "provisional_article"
+    ],
+    [
+      606,
+      618,
+      "provisional_article"
+    ],
+    [
+      606,
+      619,
+      "provisional_article"
+    ],
+    [
+      606,
+      620,
+      "provisional_article"
+    ],
+    [
+      606,
+      621,
+      "provisional_article"
+    ],
+    [
+      606,
+      622,
+      "provisional_article"
+    ],
+    [
+      606,
+      623,
+      "provisional_article"
+    ],
+    [
+      606,
+      624,
+      "provisional_article"
+    ],
+    [
+      606,
+      625,
+      "provisional_article"
+    ],
+    [
+      606,
+      626,
+      "provisional_article"
+    ],
+    [
+      606,
+      627,
+      "provisional_article"
+    ],
+    [
+      606,
+      628,
+      "provisional_article"
+    ],
+    [
+      606,
+      629,
+      "provisional_article"
+    ],
+    [
+      606,
+      630,
+      "provisional_article"
+    ],
+    [
+      606,
+      631,
+      "provisional_article"
+    ],
+    [
+      606,
+      632,
+      "provisional_article"
+    ],
+    [
+      606,
+      633,
+      "provisional_article"
+    ],
+    [
+      606,
+      634,
+      "provisional_article"
+    ],
+    [
+      606,
+      635,
+      "provisional_article"
+    ],
+    [
+      636,
+      637,
+      "provisional_article"
+    ],
+    [
+      636,
+      638,
+      "provisional_article"
+    ],
+    [
+      636,
+      639,
+      "provisional_article"
+    ],
+    [
+      636,
+      640,
+      "provisional_article"
+    ],
+    [
+      636,
+      641,
+      "provisional_article"
+    ],
+    [
+      636,
+      642,
+      "provisional_article"
+    ],
+    [
+      643,
+      644,
+      "provisional_article"
+    ],
+    [
+      643,
+      645,
+      "provisional_article"
+    ],
+    [
+      643,
+      646,
+      "provisional_article"
+    ],
+    [
+      643,
+      647,
+      "provisional_article"
+    ],
+    [
+      648,
+      649,
+      "provisional_article"
+    ],
+    [
+      648,
+      650,
+      "provisional_article"
+    ],
+    [
+      648,
+      651,
+      "provisional_article"
+    ],
+    [
+      648,
+      652,
+      "provisional_article"
+    ],
+    [
+      648,
+      653,
+      "provisional_article"
+    ],
+    [
+      648,
+      654,
+      "provisional_article"
+    ],
+    [
+      648,
+      655,
+      "provisional_article"
+    ],
+    [
+      648,
+      656,
+      "provisional_article"
+    ],
+    [
+      648,
+      657,
+      "provisional_article"
+    ],
+    [
+      648,
+      658,
+      "provisional_article"
+    ],
+    [
+      648,
+      659,
+      "provisional_article"
+    ],
+    [
+      648,
+      660,
+      "provisional_article"
+    ],
+    [
+      648,
+      661,
+      "provisional_article"
+    ],
+    [
+      648,
+      662,
+      "provisional_article"
+    ],
+    [
+      648,
+      663,
+      "provisional_article"
+    ],
+    [
+      664,
+      665,
+      "provisional_article"
+    ],
+    [
+      664,
+      666,
+      "provisional_article"
+    ],
+    [
+      664,
+      667,
+      "provisional_article"
+    ],
+    [
+      664,
+      668,
+      "provisional_article"
+    ],
+    [
+      664,
+      669,
+      "provisional_article"
+    ],
+    [
+      664,
+      670,
+      "provisional_article"
+    ],
+    [
+      664,
+      671,
+      "provisional_article"
+    ],
+    [
+      664,
+      672,
+      "provisional_article"
+    ],
+    [
+      673,
+      674,
+      "provisional_article"
+    ],
+    [
+      673,
+      675,
+      "provisional_article"
+    ],
+    [
+      673,
+      676,
+      "provisional_article"
+    ],
+    [
+      673,
+      677,
+      "provisional_article"
+    ],
+    [
+      678,
+      679,
+      "provisional_article"
+    ],
+    [
+      678,
+      680,
+      "provisional_article"
+    ],
+    [
+      678,
+      681,
+      "provisional_article"
+    ],
+    [
+      678,
+      682,
+      "provisional_article"
+    ],
+    [
+      678,
+      683,
+      "provisional_article"
+    ],
+    [
+      678,
+      684,
+      "provisional_article"
+    ],
+    [
+      678,
+      685,
+      "provisional_article"
+    ],
+    [
+      678,
+      686,
+      "provisional_article"
+    ],
+    [
+      678,
+      687,
+      "provisional_article"
+    ],
+    [
+      678,
+      688,
+      "provisional_article"
+    ],
+    [
+      678,
+      689,
+      "provisional_article"
+    ],
+    [
+      678,
+      690,
+      "provisional_article"
+    ],
+    [
+      678,
+      691,
+      "provisional_article"
+    ],
+    [
+      678,
+      692,
+      "provisional_article"
+    ],
+    [
+      678,
+      693,
+      "provisional_article"
+    ],
+    [
+      678,
+      694,
+      "provisional_article"
+    ],
+    [
+      678,
+      695,
+      "provisional_article"
+    ],
+    [
+      678,
+      696,
+      "provisional_article"
+    ],
+    [
+      678,
+      697,
+      "provisional_article"
+    ],
+    [
+      678,
+      698,
+      "provisional_article"
+    ],
+    [
+      678,
+      699,
+      "provisional_article"
+    ],
+    [
+      678,
+      700,
+      "provisional_article"
+    ],
+    [
+      701,
+      702,
+      "provisional_article"
+    ],
+    [
+      701,
+      703,
+      "provisional_article"
+    ],
+    [
+      701,
+      704,
+      "provisional_article"
+    ],
+    [
+      701,
+      705,
+      "provisional_article"
+    ],
+    [
+      701,
+      706,
+      "provisional_article"
+    ],
+    [
+      701,
+      707,
+      "provisional_article"
+    ],
+    [
+      701,
+      708,
+      "provisional_article"
+    ],
+    [
+      701,
+      709,
+      "provisional_article"
+    ],
+    [
+      701,
+      710,
+      "provisional_article"
+    ],
+    [
+      701,
+      711,
+      "provisional_article"
+    ],
+    [
+      701,
+      712,
+      "provisional_article"
+    ],
+    [
+      701,
+      713,
+      "provisional_article"
+    ],
+    [
+      701,
+      714,
+      "provisional_article"
+    ],
+    [
+      701,
+      715,
+      "provisional_article"
+    ],
+    [
+      701,
+      716,
+      "provisional_article"
+    ],
+    [
+      701,
+      717,
+      "provisional_article"
+    ],
+    [
+      701,
+      718,
+      "provisional_article"
+    ],
+    [
+      701,
+      719,
+      "provisional_article"
+    ],
+    [
+      720,
+      721,
+      "provisional_article"
+    ],
+    [
+      720,
+      722,
+      "provisional_article"
+    ],
+    [
+      720,
+      723,
+      "provisional_article"
+    ],
+    [
+      720,
+      724,
+      "provisional_article"
+    ],
+    [
+      720,
+      725,
+      "provisional_article"
+    ],
+    [
+      720,
+      726,
+      "provisional_article"
+    ],
+    [
+      720,
+      727,
+      "provisional_article"
+    ],
+    [
+      720,
+      728,
+      "provisional_article"
+    ],
+    [
+      720,
+      729,
+      "provisional_article"
+    ],
+    [
+      720,
+      730,
+      "provisional_article"
+    ],
+    [
+      720,
+      731,
+      "provisional_article"
+    ],
+    [
+      720,
+      732,
+      "provisional_article"
+    ],
+    [
+      720,
+      733,
+      "provisional_article"
+    ],
+    [
+      720,
+      734,
+      "provisional_article"
+    ],
+    [
+      720,
+      735,
+      "provisional_article"
+    ],
+    [
+      720,
+      736,
+      "provisional_article"
+    ],
+    [
+      720,
+      737,
+      "provisional_article"
+    ],
+    [
+      720,
+      738,
+      "provisional_article"
+    ],
+    [
+      720,
+      739,
+      "provisional_article"
+    ],
+    [
+      720,
+      740,
+      "provisional_article"
+    ],
+    [
+      720,
+      741,
+      "provisional_article"
+    ],
+    [
+      720,
+      742,
+      "provisional_article"
+    ],
+    [
+      720,
+      743,
+      "provisional_article"
+    ],
+    [
+      720,
+      744,
+      "provisional_article"
+    ],
+    [
+      720,
+      745,
+      "provisional_article"
+    ],
+    [
+      720,
+      746,
+      "provisional_article"
+    ],
+    [
+      720,
+      747,
+      "provisional_article"
+    ],
+    [
+      720,
+      748,
+      "provisional_article"
+    ],
+    [
+      720,
+      749,
+      "provisional_article"
+    ],
+    [
+      720,
+      750,
+      "provisional_article"
+    ],
+    [
+      720,
+      751,
+      "provisional_article"
+    ],
+    [
+      720,
+      752,
+      "provisional_article"
+    ],
+    [
+      720,
+      753,
+      "provisional_article"
+    ],
+    [
+      720,
+      754,
+      "provisional_article"
+    ],
+    [
+      755,
+      756,
+      "provisional_article"
+    ],
+    [
+      755,
+      757,
+      "provisional_article"
+    ],
+    [
+      755,
+      758,
+      "provisional_article"
+    ],
+    [
+      755,
+      759,
+      "provisional_article"
+    ],
+    [
+      755,
+      760,
+      "provisional_article"
+    ],
+    [
+      755,
+      761,
+      "provisional_article"
+    ],
+    [
+      763,
+      764,
+      "provisional_article"
+    ],
+    [
+      763,
+      765,
+      "provisional_article"
+    ],
+    [
+      763,
+      766,
+      "provisional_article"
+    ],
+    [
+      763,
+      767,
+      "provisional_article"
+    ],
+    [
+      768,
+      769,
+      "provisional_article"
+    ],
+    [
+      768,
+      770,
+      "provisional_article"
+    ],
+    [
+      768,
+      771,
+      "provisional_article"
+    ],
+    [
+      768,
+      772,
+      "provisional_article"
+    ],
+    [
+      768,
+      773,
+      "provisional_article"
+    ],
+    [
+      768,
+      774,
+      "provisional_article"
+    ],
+    [
+      768,
+      775,
+      "provisional_article"
+    ],
+    [
+      768,
+      776,
+      "provisional_article"
+    ],
+    [
+      768,
+      777,
+      "provisional_article"
+    ],
+    [
+      768,
+      778,
+      "provisional_article"
+    ],
+    [
+      779,
+      780,
+      "provisional_article"
+    ],
+    [
+      779,
+      781,
+      "provisional_article"
+    ],
+    [
+      779,
+      782,
+      "provisional_article"
+    ],
+    [
+      779,
+      783,
+      "provisional_article"
+    ],
+    [
+      779,
+      784,
+      "provisional_article"
+    ],
+    [
+      779,
+      785,
+      "provisional_article"
+    ],
+    [
+      779,
+      786,
+      "provisional_article"
+    ],
+    [
+      779,
+      787,
+      "provisional_article"
+    ],
+    [
+      779,
+      788,
+      "provisional_article"
+    ],
+    [
+      779,
+      789,
+      "provisional_article"
+    ],
+    [
+      779,
+      790,
+      "provisional_article"
+    ],
+    [
+      779,
+      791,
+      "provisional_article"
+    ],
+    [
+      792,
+      793,
+      "provisional_article"
+    ],
+    [
+      792,
+      794,
+      "provisional_article"
+    ],
+    [
+      792,
+      795,
+      "provisional_article"
+    ],
+    [
+      792,
+      796,
+      "provisional_article"
+    ],
+    [
+      792,
+      797,
+      "provisional_article"
+    ],
+    [
+      792,
+      798,
+      "provisional_article"
+    ],
+    [
+      792,
+      799,
+      "provisional_article"
+    ],
+    [
+      792,
+      800,
+      "provisional_article"
+    ],
+    [
+      792,
+      801,
+      "provisional_article"
+    ],
+    [
+      792,
+      802,
+      "provisional_article"
+    ],
+    [
+      792,
+      803,
+      "provisional_article"
+    ],
+    [
+      805,
+      806,
+      "provisional_article"
+    ],
+    [
+      805,
+      807,
+      "provisional_article"
+    ],
+    [
+      805,
+      808,
+      "provisional_article"
+    ],
+    [
+      805,
+      809,
+      "provisional_article"
+    ],
+    [
+      805,
+      810,
+      "provisional_article"
+    ],
+    [
+      805,
+      811,
+      "provisional_article"
+    ],
+    [
+      805,
+      812,
+      "provisional_article"
+    ],
+    [
+      805,
+      813,
+      "provisional_article"
+    ],
+    [
+      805,
+      814,
+      "provisional_article"
+    ],
+    [
+      805,
+      815,
+      "provisional_article"
+    ],
+    [
+      805,
+      816,
+      "provisional_article"
+    ],
+    [
+      805,
+      817,
+      "provisional_article"
+    ],
+    [
+      805,
+      818,
+      "provisional_article"
+    ],
+    [
+      819,
+      820,
+      "provisional_article"
+    ],
+    [
+      819,
+      821,
+      "provisional_article"
+    ],
+    [
+      819,
+      822,
+      "provisional_article"
+    ],
+    [
+      819,
+      823,
+      "provisional_article"
+    ],
+    [
+      819,
+      824,
+      "provisional_article"
+    ],
+    [
+      819,
+      825,
+      "provisional_article"
+    ],
+    [
+      819,
+      826,
+      "provisional_article"
+    ],
+    [
+      819,
+      827,
+      "provisional_article"
+    ],
+    [
+      819,
+      828,
+      "provisional_article"
+    ],
+    [
+      819,
+      829,
+      "provisional_article"
+    ],
+    [
+      819,
+      830,
+      "provisional_article"
+    ],
+    [
+      831,
+      832,
+      "provisional_article"
+    ],
+    [
+      831,
+      833,
+      "provisional_article"
+    ],
+    [
+      831,
+      834,
+      "provisional_article"
+    ],
+    [
+      831,
+      835,
+      "provisional_article"
+    ],
+    [
+      831,
+      836,
+      "provisional_article"
+    ],
+    [
+      831,
+      837,
+      "provisional_article"
+    ],
+    [
+      831,
+      838,
+      "provisional_article"
+    ],
+    [
+      831,
+      839,
+      "provisional_article"
+    ],
+    [
+      831,
+      840,
+      "provisional_article"
+    ],
+    [
+      831,
+      841,
+      "provisional_article"
+    ],
+    [
+      831,
+      842,
+      "provisional_article"
+    ],
+    [
+      831,
+      843,
+      "provisional_article"
+    ],
+    [
+      831,
+      844,
+      "provisional_article"
+    ],
+    [
+      831,
+      845,
+      "provisional_article"
+    ]
+  ],
+  "rights_evidence": {
+    "local-artifacts/2026-10-30-hf-feasibility/ultrachat-card.md": "d2b3bf76702b85b28172f4dd971ae80c03348cd3fee518c7e6e6f4d43dd33431",
+    "local-artifacts/2026-10-30-hf-feasibility/ultrachat-api.json": "880161bf1ac7b925c3cc7bd257cf928bb90bb234ccff3f866b28a8d9364676b5",
+    "local-artifacts/2026-10-30-hf-feasibility/commitpack-card.md": "69799047051e9d487d20e8930d73de1b3023ee1c75cf36dc3d2dfca2643f0bb0",
+    "local-artifacts/2026-10-30-hf-feasibility/commitpack-api.json": "993760348560a9ed0bdb65d880455fed280d91b68ce5e8a62fe526f0b462c2f5",
+    "local-artifacts/2026-10-30-source-selection/squad-card.md": "fb89c5d06573a2c7b7fb671ad60f5c1f3be2ccd7a63162f41b9e613abca0f0b8",
+    "local-artifacts/2026-10-30-source-selection/squad-api.json": "be4d2aca8df329e5f4336dc079bd1932a85697499b288752cd402b0516b36fd0",
+    "local-artifacts/2026-10-30-source-selection/docred-card.md": "3e17a793c512b1c1c5cbb5b667d4a3d2ebb9fa416b65def079f05829abe30345",
+    "local-artifacts/2026-10-30-source-selection/docred-api.json": "28aeb7948ecf60d8f20a92fff3e5ce48c7e85667ae8d5c48f6f812261b933c1b",
+    "local-artifacts/2026-10-30-source-selection/docred-upstream-LICENSE.txt": "c8ad3bab352bc7fd6662ac85145d613df9063c34152108aec91e1b672e7bba50"
+  },
+  "benchmark": {
+    "matches": {},
+    "inventory_sha256": "28251ae83ab7ed789c3eb3a66ade150da1a27a644db5e6020940e3e6c695796e",
+    "inputs_sha256": "80be76e3af5e8cd8eb9d14a59b3d901779a3649ca7695460322c1c089e931b97",
+    "tokens_sha256": "efa80ab8a7bce89cd898615332e88b94e7329947b39e8981d150db8e6ea6b821",
+    "unique_texts": 265771,
+    "missing_local_references": [],
+    "has_semantic_clearance": false,
+    "has_complete_audit_field_coverage": false
+  },
+  "packets": [
+    {
+      "id": "ultrachat:train:f0e37e9f7800261167ce91143f98f511f768847236f133f2d0aed60b444ebe57",
+      "source": "ultrachat",
+      "split": "train",
+      "prompt_tokens": 133,
+      "available_fields": [
+        "prompt",
+        "prompt_id"
+      ],
+      "source_file_sha256": "847184b2ba9829a8a921b4416cbba51770939313d765507f51d2368a89bd9c5c",
+      "license_label": null,
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "first_user_message_consistency_unverified"
+      ],
+      "local_dependency_ids": [
+        "ultrachat:train:f0e37e9f7800261167ce91143f98f511f768847236f133f2d0aed60b444ebe57"
+      ],
+      "local_dependency_count": 1,
+      "unselected_dependency_count": 0,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "ultrachat:train:1cf08c87f07cc244d329f21e882e926349d39948cce860de3f6960e7fe5d43cc",
+      "source": "ultrachat",
+      "split": "train",
+      "prompt_tokens": 102,
+      "available_fields": [
+        "prompt",
+        "prompt_id"
+      ],
+      "source_file_sha256": "847184b2ba9829a8a921b4416cbba51770939313d765507f51d2368a89bd9c5c",
+      "license_label": null,
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "first_user_message_consistency_unverified"
+      ],
+      "local_dependency_ids": [
+        "ultrachat:train:1cf08c87f07cc244d329f21e882e926349d39948cce860de3f6960e7fe5d43cc"
+      ],
+      "local_dependency_count": 1,
+      "unselected_dependency_count": 0,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "ultrachat:test:ef90b0f9adbc3c5302c1384ce26ff16fb88f01c31c9fe09564217709634be5ca",
+      "source": "ultrachat",
+      "split": "test",
+      "prompt_tokens": 88,
+      "available_fields": [
+        "prompt",
+        "prompt_id"
+      ],
+      "source_file_sha256": "380d143e93adc3c0175878e90ba85f34d0b49269edd370b53281e8be641a6034",
+      "license_label": null,
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "first_user_message_consistency_unverified"
+      ],
+      "local_dependency_ids": [
+        "ultrachat:test:ef90b0f9adbc3c5302c1384ce26ff16fb88f01c31c9fe09564217709634be5ca"
+      ],
+      "local_dependency_count": 1,
+      "unselected_dependency_count": 0,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "ultrachat:test:65e7f991dc464b5e66b6e25e275a685a3d709ab5d6be4b4b47231d243f9d943a",
+      "source": "ultrachat",
+      "split": "test",
+      "prompt_tokens": 219,
+      "available_fields": [
+        "prompt",
+        "prompt_id"
+      ],
+      "source_file_sha256": "380d143e93adc3c0175878e90ba85f34d0b49269edd370b53281e8be641a6034",
+      "license_label": null,
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "first_user_message_consistency_unverified"
+      ],
+      "local_dependency_ids": [
+        "ultrachat:test:65e7f991dc464b5e66b6e25e275a685a3d709ab5d6be4b4b47231d243f9d943a"
+      ],
+      "local_dependency_count": 1,
+      "unselected_dependency_count": 0,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "commitpack:python:e905334869af72025592de586b81650cb3468b8a:sentry/queue/client.py:1",
+      "source": "commitpack",
+      "split": "python",
+      "prompt_tokens": 246,
+      "available_fields": [
+        "commit",
+        "lang",
+        "license",
+        "message",
+        "new_contents",
+        "new_file",
+        "old_contents",
+        "old_file",
+        "repos",
+        "subject"
+      ],
+      "source_file_sha256": "0b7df4a4d9f020c2721444e6d901c16186e5a71d5caf6faf23f9a974ed236e46",
+      "license_label": "bsd-3-clause",
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "dependent_code_template_review_unresolved"
+      ],
+      "local_dependency_ids": [
+        "commitpack:python:e905334869af72025592de586b81650cb3468b8a:sentry/queue/client.py:1"
+      ],
+      "local_dependency_count": 1,
+      "unselected_dependency_count": 0,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [
+        {
+          "id": "commitpack:python:e905334869af72025592de586b81650cb3468b8a:sentry/queue/client.py:1",
+          "field": "old_contents"
+        },
+        {
+          "id": "commitpack:python:e905334869af72025592de586b81650cb3468b8a:sentry/queue/client.py:1",
+          "field": "new_contents"
+        }
+      ],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "commitpack:python:45fc612fdc5a354dbf0bacccd345b1aebcc73e59:tests/test_openweather.py:2",
+      "source": "commitpack",
+      "split": "python",
+      "prompt_tokens": 267,
+      "available_fields": [
+        "commit",
+        "lang",
+        "license",
+        "message",
+        "new_contents",
+        "new_file",
+        "old_contents",
+        "old_file",
+        "repos",
+        "subject"
+      ],
+      "source_file_sha256": "0b7df4a4d9f020c2721444e6d901c16186e5a71d5caf6faf23f9a974ed236e46",
+      "license_label": "bsd-3-clause",
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "dependent_code_template_review_unresolved"
+      ],
+      "local_dependency_ids": [
+        "commitpack:python:45fc612fdc5a354dbf0bacccd345b1aebcc73e59:tests/test_openweather.py:2"
+      ],
+      "local_dependency_count": 1,
+      "unselected_dependency_count": 0,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [
+        {
+          "id": "commitpack:python:45fc612fdc5a354dbf0bacccd345b1aebcc73e59:tests/test_openweather.py:2",
+          "field": "old_contents"
+        },
+        {
+          "id": "commitpack:python:45fc612fdc5a354dbf0bacccd345b1aebcc73e59:tests/test_openweather.py:2",
+          "field": "new_contents"
+        }
+      ],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "commitpack:python:22faee82e1f070532c0dfe5777136e842233a1f0:src/dashboard/src/main/templatetags/percentage.py:3",
+      "source": "commitpack",
+      "split": "python",
+      "prompt_tokens": 120,
+      "available_fields": [
+        "commit",
+        "lang",
+        "license",
+        "message",
+        "new_contents",
+        "new_file",
+        "old_contents",
+        "old_file",
+        "repos",
+        "subject"
+      ],
+      "source_file_sha256": "0b7df4a4d9f020c2721444e6d901c16186e5a71d5caf6faf23f9a974ed236e46",
+      "license_label": "agpl-3.0",
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "dependent_code_template_review_unresolved"
+      ],
+      "local_dependency_ids": [
+        "commitpack:python:22faee82e1f070532c0dfe5777136e842233a1f0:src/dashboard/src/main/templatetags/percentage.py:3"
+      ],
+      "local_dependency_count": 1,
+      "unselected_dependency_count": 0,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [
+        {
+          "id": "commitpack:python:22faee82e1f070532c0dfe5777136e842233a1f0:src/dashboard/src/main/templatetags/percentage.py:3",
+          "field": "old_contents"
+        },
+        {
+          "id": "commitpack:python:22faee82e1f070532c0dfe5777136e842233a1f0:src/dashboard/src/main/templatetags/percentage.py:3",
+          "field": "new_contents"
+        }
+      ],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "commitpack:python:462ae981ed5b9cc9a8f46e97dfe7908c0827ea64:account_invoice_line_description/res_config.py:5",
+      "source": "commitpack",
+      "split": "python",
+      "prompt_tokens": 332,
+      "available_fields": [
+        "commit",
+        "lang",
+        "license",
+        "message",
+        "new_contents",
+        "new_file",
+        "old_contents",
+        "old_file",
+        "repos",
+        "subject"
+      ],
+      "source_file_sha256": "0b7df4a4d9f020c2721444e6d901c16186e5a71d5caf6faf23f9a974ed236e46",
+      "license_label": "agpl-3.0",
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "dependent_code_template_review_unresolved"
+      ],
+      "local_dependency_ids": [
+        "commitpack:python:462ae981ed5b9cc9a8f46e97dfe7908c0827ea64:account_invoice_line_description/res_config.py:5"
+      ],
+      "local_dependency_count": 1,
+      "unselected_dependency_count": 0,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [
+        {
+          "id": "commitpack:python:462ae981ed5b9cc9a8f46e97dfe7908c0827ea64:account_invoice_line_description/res_config.py:5",
+          "field": "old_contents"
+        },
+        {
+          "id": "commitpack:python:462ae981ed5b9cc9a8f46e97dfe7908c0827ea64:account_invoice_line_description/res_config.py:5",
+          "field": "new_contents"
+        }
+      ],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "squad-original:train:5733be284776f41900661182",
+      "source": "squad-original",
+      "split": "train",
+      "prompt_tokens": 197,
+      "available_fields": [
+        "context",
+        "id",
+        "question",
+        "title"
+      ],
+      "source_file_sha256": "4db93d43285415fc8f5997e1103997d045303a9ebc12265f6937dec17d2ed2c7",
+      "license_label": null,
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "historical_article_identity_unresolved",
+        "source_answers_unavailable"
+      ],
+      "local_dependency_ids": [
+        "squad-original:train:5733be284776f41900661182",
+        "squad-original:train:5733a70c4776f41900660f65",
+        "squad-original:train:5733afd3d058e614000b6046",
+        "squad-original:train:5733b5344776f419006610e0",
+        "squad-original:train:57338724d058e614000b5c9d",
+        "squad-original:train:573393184776f41900660da8",
+        "squad-original:train:573398164776f41900660e25",
+        "squad-original:train:5733a4c54776f41900660f2d",
+        "squad-original:train:573383494776f41900660c41",
+        "squad-original:train:5733c0e6d058e614000b61d7",
+        "squad-original:train:5733c4494776f419006611de",
+        "squad-original:train:5733ccbe4776f41900661272"
+      ],
+      "local_dependency_count": 12,
+      "unselected_dependency_count": 10,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "squad-original:train:5733a70c4776f41900660f65",
+      "source": "squad-original",
+      "split": "train",
+      "prompt_tokens": 158,
+      "available_fields": [
+        "context",
+        "id",
+        "question",
+        "title"
+      ],
+      "source_file_sha256": "4db93d43285415fc8f5997e1103997d045303a9ebc12265f6937dec17d2ed2c7",
+      "license_label": null,
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "historical_article_identity_unresolved",
+        "source_answers_unavailable"
+      ],
+      "local_dependency_ids": [
+        "squad-original:train:5733be284776f41900661182",
+        "squad-original:train:5733a70c4776f41900660f65",
+        "squad-original:train:5733afd3d058e614000b6046",
+        "squad-original:train:5733b5344776f419006610e0",
+        "squad-original:train:57338724d058e614000b5c9d",
+        "squad-original:train:573393184776f41900660da8",
+        "squad-original:train:573398164776f41900660e25",
+        "squad-original:train:5733a4c54776f41900660f2d",
+        "squad-original:train:573383494776f41900660c41",
+        "squad-original:train:5733c0e6d058e614000b61d7",
+        "squad-original:train:5733c4494776f419006611de",
+        "squad-original:train:5733ccbe4776f41900661272"
+      ],
+      "local_dependency_count": 12,
+      "unselected_dependency_count": 10,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "squad-original:validation:56be4db0acb8001400a502ec",
+      "source": "squad-original",
+      "split": "validation",
+      "prompt_tokens": 197,
+      "available_fields": [
+        "context",
+        "id",
+        "question",
+        "title"
+      ],
+      "source_file_sha256": "4e70d42ac8eb12c1326d88849459dcaad63c83aca3bcb3d074d3890dbfef2158",
+      "license_label": null,
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "historical_article_identity_unresolved",
+        "source_answers_unavailable"
+      ],
+      "local_dependency_ids": [
+        "squad-original:validation:56be4db0acb8001400a502ec",
+        "squad-original:validation:56d20362e7d4791d009025ea",
+        "squad-original:validation:56d2045de7d4791d009025f5",
+        "squad-original:validation:56d601e41c85041400946ece",
+        "squad-original:validation:56d2051ce7d4791d00902609",
+        "squad-original:validation:56be5438acb8001400a5031c",
+        "squad-original:validation:56beb0f43aeaaa14008c921e",
+        "squad-original:validation:56bf23363aeaaa14008c9530",
+        "squad-original:validation:56d6f1190d65d21400198274",
+        "squad-original:validation:56d9943fdc89441400fdb578",
+        "squad-original:validation:56beb4343aeaaa14008c925d",
+        "squad-original:validation:56d6f4030d65d2140019829b",
+        "squad-original:validation:56d99c44dc89441400fdb5d7",
+        "squad-original:validation:56bf34293aeaaa14008c955a",
+        "squad-original:validation:56d99f99dc89441400fdb62c",
+        "squad-original:validation:56d704430d65d214001982e0",
+        "squad-original:validation:56beb97c3aeaaa14008c92dd",
+        "squad-original:validation:56bebad93aeaaa14008c92fc",
+        "squad-original:validation:56d9a6b4dc89441400fdb6a0",
+        "squad-original:validation:56bf52483aeaaa14008c95c8",
+        "squad-original:validation:56bebd713aeaaa14008c9331",
+        "squad-original:validation:56d9b4ebdc89441400fdb709",
+        "squad-original:validation:56d9b6a3dc89441400fdb730",
+        "squad-original:validation:56d9b7dcdc89441400fdb741",
+        "squad-original:validation:56d7205e0d65d21400198391",
+        "squad-original:validation:56d9bdc1dc89441400fdb769",
+        "squad-original:validation:56bec4a33aeaaa14008c93b1",
+        "squad-original:validation:56d724620d65d214001983c1",
+        "squad-original:validation:56bec6ac3aeaaa14008c9400",
+        "squad-original:validation:56bec7a63aeaaa14008c941a",
+        "squad-original:validation:56d9c660dc89441400fdb7ea",
+        "squad-original:validation:56d9c79edc89441400fdb806",
+        "squad-original:validation:56d7261e0d65d214001983e4",
+        "squad-original:validation:56becaf93aeaaa14008c9485",
+        "squad-original:validation:56d9cd9adc89441400fdb850"
+      ],
+      "local_dependency_count": 35,
+      "unselected_dependency_count": 33,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "squad-original:validation:56d20362e7d4791d009025ea",
+      "source": "squad-original",
+      "split": "validation",
+      "prompt_tokens": 191,
+      "available_fields": [
+        "context",
+        "id",
+        "question",
+        "title"
+      ],
+      "source_file_sha256": "4e70d42ac8eb12c1326d88849459dcaad63c83aca3bcb3d074d3890dbfef2158",
+      "license_label": null,
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "historical_article_identity_unresolved",
+        "source_answers_unavailable"
+      ],
+      "local_dependency_ids": [
+        "squad-original:validation:56be4db0acb8001400a502ec",
+        "squad-original:validation:56d20362e7d4791d009025ea",
+        "squad-original:validation:56d2045de7d4791d009025f5",
+        "squad-original:validation:56d601e41c85041400946ece",
+        "squad-original:validation:56d2051ce7d4791d00902609",
+        "squad-original:validation:56be5438acb8001400a5031c",
+        "squad-original:validation:56beb0f43aeaaa14008c921e",
+        "squad-original:validation:56bf23363aeaaa14008c9530",
+        "squad-original:validation:56d6f1190d65d21400198274",
+        "squad-original:validation:56d9943fdc89441400fdb578",
+        "squad-original:validation:56beb4343aeaaa14008c925d",
+        "squad-original:validation:56d6f4030d65d2140019829b",
+        "squad-original:validation:56d99c44dc89441400fdb5d7",
+        "squad-original:validation:56bf34293aeaaa14008c955a",
+        "squad-original:validation:56d99f99dc89441400fdb62c",
+        "squad-original:validation:56d704430d65d214001982e0",
+        "squad-original:validation:56beb97c3aeaaa14008c92dd",
+        "squad-original:validation:56bebad93aeaaa14008c92fc",
+        "squad-original:validation:56d9a6b4dc89441400fdb6a0",
+        "squad-original:validation:56bf52483aeaaa14008c95c8",
+        "squad-original:validation:56bebd713aeaaa14008c9331",
+        "squad-original:validation:56d9b4ebdc89441400fdb709",
+        "squad-original:validation:56d9b6a3dc89441400fdb730",
+        "squad-original:validation:56d9b7dcdc89441400fdb741",
+        "squad-original:validation:56d7205e0d65d21400198391",
+        "squad-original:validation:56d9bdc1dc89441400fdb769",
+        "squad-original:validation:56bec4a33aeaaa14008c93b1",
+        "squad-original:validation:56d724620d65d214001983c1",
+        "squad-original:validation:56bec6ac3aeaaa14008c9400",
+        "squad-original:validation:56bec7a63aeaaa14008c941a",
+        "squad-original:validation:56d9c660dc89441400fdb7ea",
+        "squad-original:validation:56d9c79edc89441400fdb806",
+        "squad-original:validation:56d7261e0d65d214001983e4",
+        "squad-original:validation:56becaf93aeaaa14008c9485",
+        "squad-original:validation:56d9cd9adc89441400fdb850"
+      ],
+      "local_dependency_count": 35,
+      "unselected_dependency_count": 33,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "docred-original:train_annotated:0",
+      "source": "docred-original",
+      "split": "train_annotated",
+      "prompt_tokens": 254,
+      "available_fields": [
+        "labels",
+        "sents",
+        "title",
+        "vertexSet"
+      ],
+      "source_file_sha256": "50ffe44b4477efdd2a96312e9c2d0ce73968c9bb962e14061841e30373ebd9eb",
+      "license_label": null,
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "historical_article_identity_unresolved"
+      ],
+      "local_dependency_ids": [
+        "docred-original:train_annotated:0"
+      ],
+      "local_dependency_count": 1,
+      "unselected_dependency_count": 0,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "docred-original:train_annotated:1",
+      "source": "docred-original",
+      "split": "train_annotated",
+      "prompt_tokens": 172,
+      "available_fields": [
+        "labels",
+        "sents",
+        "title",
+        "vertexSet"
+      ],
+      "source_file_sha256": "50ffe44b4477efdd2a96312e9c2d0ce73968c9bb962e14061841e30373ebd9eb",
+      "license_label": null,
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "historical_article_identity_unresolved"
+      ],
+      "local_dependency_ids": [
+        "docred-original:train_annotated:1"
+      ],
+      "local_dependency_count": 1,
+      "unselected_dependency_count": 0,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "docred-original:dev:0",
+      "source": "docred-original",
+      "split": "dev",
+      "prompt_tokens": 206,
+      "available_fields": [
+        "labels",
+        "sents",
+        "title",
+        "vertexSet"
+      ],
+      "source_file_sha256": "5719734fd9db36e2262afceb6e6182b051c078fb9f0ef048dda72fc0a52fa2bb",
+      "license_label": null,
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "historical_article_identity_unresolved"
+      ],
+      "local_dependency_ids": [
+        "docred-original:dev:0"
+      ],
+      "local_dependency_count": 1,
+      "unselected_dependency_count": 0,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    },
+    {
+      "id": "docred-original:test:0",
+      "source": "docred-original",
+      "split": "test",
+      "prompt_tokens": 226,
+      "available_fields": [
+        "sents",
+        "title",
+        "vertexSet"
+      ],
+      "source_file_sha256": "e602851a24a7ed1c48694490a7c87adf152e0538c899fa158c4768f634dbf1ec",
+      "license_label": null,
+      "status": "blocked",
+      "blockers": [
+        "independent_human_review_unavailable",
+        "external_dependency_closure_unknown",
+        "semantic_benchmark_review_pending",
+        "rights_chain_unresolved",
+        "audit_only_fields_not_fully_screened",
+        "registry_second_review_pending",
+        "historical_article_identity_unresolved",
+        "source_relation_labels_unavailable"
+      ],
+      "local_dependency_ids": [
+        "docred-original:test:0"
+      ],
+      "local_dependency_count": 1,
+      "unselected_dependency_count": 0,
+      "has_cross_family_dependency": false,
+      "has_cross_native_split_dependency": false,
+      "unresolved_code_fields": [],
+      "benchmark_matches": [],
+      "has_complete_dependency_closure": false
+    }
+  ],
+  "unresolved_code_fields": [
+    {
+      "id": "commitpack:python:e905334869af72025592de586b81650cb3468b8a:sentry/queue/client.py:1",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:e905334869af72025592de586b81650cb3468b8a:sentry/queue/client.py:1",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:45fc612fdc5a354dbf0bacccd345b1aebcc73e59:tests/test_openweather.py:2",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:45fc612fdc5a354dbf0bacccd345b1aebcc73e59:tests/test_openweather.py:2",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:22faee82e1f070532c0dfe5777136e842233a1f0:src/dashboard/src/main/templatetags/percentage.py:3",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:22faee82e1f070532c0dfe5777136e842233a1f0:src/dashboard/src/main/templatetags/percentage.py:3",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:950ac9130bafe1fced578bf61d746b047830bfa0:automata/base/exceptions.py:4",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:950ac9130bafe1fced578bf61d746b047830bfa0:automata/base/exceptions.py:4",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:462ae981ed5b9cc9a8f46e97dfe7908c0827ea64:account_invoice_line_description/res_config.py:5",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:462ae981ed5b9cc9a8f46e97dfe7908c0827ea64:account_invoice_line_description/res_config.py:5",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:f183b471bf92c03bb5353b02009e3287ffe06ae7:txircd/modules/umode_i.py:6",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:f183b471bf92c03bb5353b02009e3287ffe06ae7:txircd/modules/umode_i.py:6",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:c3f8860c717a139d396b0d902db989ab7b8369ba:stock_inventory_hierarchical/__openerp__.py:7",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:c3f8860c717a139d396b0d902db989ab7b8369ba:stock_inventory_hierarchical/__openerp__.py:7",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:9e169348d95e29ad04942ecb00628f3d1f3a3a1c:partner_email_check/models/res_partner.py:8",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:9e169348d95e29ad04942ecb00628f3d1f3a3a1c:partner_email_check/models/res_partner.py:8",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:cd56fb2c1a0f4b6dd40ce03545e57c6fd2e1c519:setup.py:9",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:cd56fb2c1a0f4b6dd40ce03545e57c6fd2e1c519:setup.py:9",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:db7bc89d03089ad3107a19220a94ee3fe3d230c3:setup.py:10",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:db7bc89d03089ad3107a19220a94ee3fe3d230c3:setup.py:10",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:4f133cb1c9bb389156175268eb1b989d76e4d280:setup.py:11",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:4f133cb1c9bb389156175268eb1b989d76e4d280:setup.py:11",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:fc8d9f995b0abd66da9b2db02dc3588f5e99e66a:setup.py:12",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:fc8d9f995b0abd66da9b2db02dc3588f5e99e66a:setup.py:12",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:a0e73b06e22be39d06c276a89e04f56452802fba:setup.py:13",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:a0e73b06e22be39d06c276a89e04f56452802fba:setup.py:13",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:6dc4cb5ec0f0e2373d364e93b7d342beaad6dc4b:setup.py:14",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:6dc4cb5ec0f0e2373d364e93b7d342beaad6dc4b:setup.py:14",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:340cdd0ea77c5edb9ae6f38cf380eec1772cee66:setup.py:15",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:340cdd0ea77c5edb9ae6f38cf380eec1772cee66:setup.py:15",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:78497a5ef492f18511c4a09b5ca62facafe9c302:setup.py:17",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:78497a5ef492f18511c4a09b5ca62facafe9c302:setup.py:17",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:4bb6876b089375e228320162b7955bcdfa824f41:setup.py:18",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:4bb6876b089375e228320162b7955bcdfa824f41:setup.py:18",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:49ac4dc3e7506f35d2f3ad695afaf9c89f08720b:setup.py:19",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:49ac4dc3e7506f35d2f3ad695afaf9c89f08720b:setup.py:19",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:ae4ff7cffa1273338fff56eb531f2a6f5989de41:setup.py:20",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:ae4ff7cffa1273338fff56eb531f2a6f5989de41:setup.py:20",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:6b9f6ee4d4f00e988fb0419eedb81eaa56e3bbe7:setup.py:22",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:6b9f6ee4d4f00e988fb0419eedb81eaa56e3bbe7:setup.py:22",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:be8d6400426fb96964a8447bd941d4ab777a867c:setup.py:23",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:be8d6400426fb96964a8447bd941d4ab777a867c:setup.py:23",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:644d24ad024f0d81f49b85417fecb154a6f259a9:setup.py:24",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:644d24ad024f0d81f49b85417fecb154a6f259a9:setup.py:24",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:4f436f14cd1615175051910b38eb83a512fb26ff:setup.py:25",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:4f436f14cd1615175051910b38eb83a512fb26ff:setup.py:25",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:cf69afe8f9e8151141e6040e9d0212b00edcbef1:setup.py:26",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:cf69afe8f9e8151141e6040e9d0212b00edcbef1:setup.py:26",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:ee57052a6749459e2702b36a0341e03d6b5e448a:setup.py:27",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:ee57052a6749459e2702b36a0341e03d6b5e448a:setup.py:27",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:8ff387b039a83d21eb4999d1bc1704a827b3c3a2:setup.py:28",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:8ff387b039a83d21eb4999d1bc1704a827b3c3a2:setup.py:28",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:eb2cfa7578012f7312bdb655368ce543cb680a0d:setup.py:29",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:eb2cfa7578012f7312bdb655368ce543cb680a0d:setup.py:29",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:3187ff297b02eaf1c0b6debdb48d2f6396751947:setup.py:30",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:3187ff297b02eaf1c0b6debdb48d2f6396751947:setup.py:30",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:c5a71b5e97657358f41fc7f96b1b674ceb37dfb1:setup.py:31",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:c5a71b5e97657358f41fc7f96b1b674ceb37dfb1:setup.py:31",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:70a642c0597fb2f929fc83d821c8b1f095ed1328:proxy/plugins/plugins.py:32",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:70a642c0597fb2f929fc83d821c8b1f095ed1328:proxy/plugins/plugins.py:32",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:44e31e2153f4eec2863f9d712ab60f0ef00d1779:mongo_connector/get_last_oplog_timestamp.py:33",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:44e31e2153f4eec2863f9d712ab60f0ef00d1779:mongo_connector/get_last_oplog_timestamp.py:33",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:af91b7c2612fab598ba50c0c0256f7e552098d92:reportlab/docs/genAll.py:34",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:7c2a640d2c3ab9218d8334f4939d7c1af919c318:setup.py:35",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:7c2a640d2c3ab9218d8334f4939d7c1af919c318:setup.py:35",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:3e4e44968412acb2ada2279b6fb4108eb66b02b2:setup.py:36",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:3e4e44968412acb2ada2279b6fb4108eb66b02b2:setup.py:36",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:913a102332e5d2caeab265f8a9980e2303f58550:setup.py:37",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:913a102332e5d2caeab265f8a9980e2303f58550:setup.py:37",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:aba2ccc48fdae23c1e04eab705402e319c97e76a:setup.py:38",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:aba2ccc48fdae23c1e04eab705402e319c97e76a:setup.py:38",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:6123ca57cac5d61de833e1102297b0cc9d7a3e0c:setup.py:39",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:6123ca57cac5d61de833e1102297b0cc9d7a3e0c:setup.py:39",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:f1cba9b90d4b85a88b799a43a05807484e9b9910:setup.py:40",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:f1cba9b90d4b85a88b799a43a05807484e9b9910:setup.py:40",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:a0325e9b29e41badf576c699163aef081df2ab32:setup.py:41",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:a0325e9b29e41badf576c699163aef081df2ab32:setup.py:41",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:9da7f07e2a6900b1df2cc0d8e0766409d4a41495:setup.py:42",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:9da7f07e2a6900b1df2cc0d8e0766409d4a41495:setup.py:42",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:4523e55f7a7c5333b1087a037c6a96b6af30e111:setup.py:43",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:4523e55f7a7c5333b1087a037c6a96b6af30e111:setup.py:43",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:bc4e66a5229ea6863b39ce62a35e19c7cca217aa:setup.py:44",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:bc4e66a5229ea6863b39ce62a35e19c7cca217aa:setup.py:44",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:4359912ce0898c6c4a8d54c7328fb11a7eb486c9:setup.py:45",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:4359912ce0898c6c4a8d54c7328fb11a7eb486c9:setup.py:45",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:adfc532450699ac929dd08199abc2c0f751d982f:setup.py:47",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:adfc532450699ac929dd08199abc2c0f751d982f:setup.py:47",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:35dc73f0149d83f2f7f0cae9e602b1aaa399f2c5:setup.py:48",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:35dc73f0149d83f2f7f0cae9e602b1aaa399f2c5:setup.py:48",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:597854eeaacaae71832833d41eea260ad5ef7279:setup.py:49",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:597854eeaacaae71832833d41eea260ad5ef7279:setup.py:49",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:7bd045ce1157343b17318ce446185138400a5f75:setup.py:50",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:7bd045ce1157343b17318ce446185138400a5f75:setup.py:50",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:c972357a44640c7a5f803d79fc77ca597e1b22f0:setup.py:51",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:c972357a44640c7a5f803d79fc77ca597e1b22f0:setup.py:51",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:655ac367fde72d892eccfeece3ebf6719612d35b:setup.py:52",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:655ac367fde72d892eccfeece3ebf6719612d35b:setup.py:52",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:eda2686d7a59acf5fc7f6d72b710ccc8b20801a9:setup.py:53",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:eda2686d7a59acf5fc7f6d72b710ccc8b20801a9:setup.py:53",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:06110d32be6bc52f05274318a0f5ff27828acf91:setup.py:54",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:06110d32be6bc52f05274318a0f5ff27828acf91:setup.py:54",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:e34969db596ff3dfa4bf78efb3f3ccfe771d9ef9:setup.py:55",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:e34969db596ff3dfa4bf78efb3f3ccfe771d9ef9:setup.py:55",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:23981dd5908b423104bdf51e6882d043b3efdc6e:setup.py:56",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:23981dd5908b423104bdf51e6882d043b3efdc6e:setup.py:56",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:c6265c2112ee9985af8b6b80fe0bee1811dc6abd:setup.py:57",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:c6265c2112ee9985af8b6b80fe0bee1811dc6abd:setup.py:57",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:e01697c5d5e5e45a0dd20870c71bb17399991ca1:setup.py:58",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:e01697c5d5e5e45a0dd20870c71bb17399991ca1:setup.py:58",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:da10b6baa19c1ef3a5f875297187e7248b7460b1:setup.py:59",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:da10b6baa19c1ef3a5f875297187e7248b7460b1:setup.py:59",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:0458cc6e41b55bdd6e393c517492a5f6631a51c9:setup.py:60",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:0458cc6e41b55bdd6e393c517492a5f6631a51c9:setup.py:60",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:b78c634069354565cf749ed139cade244415b5a4:setup.py:62",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:b78c634069354565cf749ed139cade244415b5a4:setup.py:62",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:ae1cf07cc703d85f3d3c77eab76c83baec17a74d:split.py:63",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:ae1cf07cc703d85f3d3c77eab76c83baec17a74d:split.py:63",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:cfe77bd4fd40b58678fa56ec08b5f862d9f1781c:post.py:64",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:cfe77bd4fd40b58678fa56ec08b5f862d9f1781c:post.py:64",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:7b422b2432bc8db3034e39073d2efa0bd69ec35f:test.py:66",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:7b422b2432bc8db3034e39073d2efa0bd69ec35f:test.py:66",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:75f6963082ed686f4d91ec8df3961048d9428c6b:test.py:67",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:75f6963082ed686f4d91ec8df3961048d9428c6b:test.py:67",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:3ba5b6491bf61e2d2919f05bbf5cef088a754aeb:molecule/default/tests/test_installation.py:68",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:3ba5b6491bf61e2d2919f05bbf5cef088a754aeb:molecule/default/tests/test_installation.py:68",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:a8d873e178d45024db9c0ef6a25c6867424785f7:bindings/python/llvm/tests/base.py:69",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:a8d873e178d45024db9c0ef6a25c6867424785f7:bindings/python/llvm/tests/base.py:69",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:b15872bff28628c468d3d485eae2f79efba41160:worker/server/constants.py:70",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:b15872bff28628c468d3d485eae2f79efba41160:worker/server/constants.py:70",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:b4c9b76d132668695b77d37d7db3071e629fcba7:makerscience_admin/models.py:71",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:b4c9b76d132668695b77d37d7db3071e629fcba7:makerscience_admin/models.py:71",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:9fa296bfad85b42c04c325f1dfdd1caaa31bbd1b:NSYSU.py:72",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:9fa296bfad85b42c04c325f1dfdd1caaa31bbd1b:NSYSU.py:72",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:c3e81aee9852a94befdec9d9b2d3f9cd3d7914e2:dbaas/system/tasks.py:73",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:c3e81aee9852a94befdec9d9b2d3f9cd3d7914e2:dbaas/system/tasks.py:73",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:c713273fe145418113d750579f8b135dc513c3b8:config.py:74",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:c713273fe145418113d750579f8b135dc513c3b8:config.py:74",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:ac863c20ac4094168b07d6823241d55e985ba231:site.py:75",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:ac863c20ac4094168b07d6823241d55e985ba231:site.py:75",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:c61d5e84863dd67b5b76ec8031e624642f4c957c:main.py:76",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:c61d5e84863dd67b5b76ec8031e624642f4c957c:main.py:76",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:a4013c7f33226915b3c1fb7863f3e96b24413591:main.py:77",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:a4013c7f33226915b3c1fb7863f3e96b24413591:main.py:77",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:db136a4313c859495109e4ddaa0b715260526f63:webhooks/registry.py:78",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:db136a4313c859495109e4ddaa0b715260526f63:webhooks/registry.py:78",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:78be1f58d618077f42d04390baf97938d01df44f:models/analyze_pic_server.py:79",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:78be1f58d618077f42d04390baf97938d01df44f:models/analyze_pic_server.py:79",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:4e75e742475236cf7358b4481a29a54eb607dd4d:spacy/tests/regression/test_issue850.py:80",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:4e75e742475236cf7358b4481a29a54eb607dd4d:spacy/tests/regression/test_issue850.py:80",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:aa8a54c765ace8f4aa3a88fd7a956d481b1484a2:scrapi/util/__init__.py:81",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:aa8a54c765ace8f4aa3a88fd7a956d481b1484a2:scrapi/util/__init__.py:81",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:fa8783f3307582dafcf636f5c94a7e4cff05724b:bin/tree_print_fasta_names.py:82",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:fa8783f3307582dafcf636f5c94a7e4cff05724b:bin/tree_print_fasta_names.py:82",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:a20c6d072d70c535ed1f116fc04016c834ea9c14:doc/en/_getdoctarget.py:83",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:a20c6d072d70c535ed1f116fc04016c834ea9c14:doc/en/_getdoctarget.py:83",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:efd6fad89131c4d3070c68013ace77f11647bd68:opal/core/search/__init__.py:84",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:efd6fad89131c4d3070c68013ace77f11647bd68:opal/core/search/__init__.py:84",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:56a8b900570200e63ee460dd7e2962cba2450b16:preparation/tools/build_assets.py:85",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:56a8b900570200e63ee460dd7e2962cba2450b16:preparation/tools/build_assets.py:85",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:aae01cdcbd239397dad46b2d5fac91eb4219479f:project/apps/forum/serializers.py:86",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:aae01cdcbd239397dad46b2d5fac91eb4219479f:project/apps/forum/serializers.py:86",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:6167215e4ed49e8a4300f327d5b4ed4540d1a420:numba/tests/npyufunc/test_parallel_env_variable.py:87",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:6167215e4ed49e8a4300f327d5b4ed4540d1a420:numba/tests/npyufunc/test_parallel_env_variable.py:87",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:504205d02ef2f5b66da225390fdb34b8b736ce57:ideascube/migrations/0009_add_a_system_user.py:89",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:504205d02ef2f5b66da225390fdb34b8b736ce57:ideascube/migrations/0009_add_a_system_user.py:89",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:d8d2e4b763fbd7cedc42046f6f45395bf15caa79:samples/plugins/scenario/scenario_plugin.py:90",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:d8d2e4b763fbd7cedc42046f6f45395bf15caa79:samples/plugins/scenario/scenario_plugin.py:90",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:68a621005c5a520b7a97c4cad462d43fb7f3aaed:paws/views.py:91",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:68a621005c5a520b7a97c4cad462d43fb7f3aaed:paws/views.py:91",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:af118bcc539b5db0b6daa9cf74777176df413e32:test/integration/022_bigquery_test/test_bigquery_adapter_specific.py:92",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:af118bcc539b5db0b6daa9cf74777176df413e32:test/integration/022_bigquery_test/test_bigquery_adapter_specific.py:92",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:901ebb52f82c518c11285e6a282e18ad6954cd96:python/scannerpy/stdlib/tensorflow.py:93",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:901ebb52f82c518c11285e6a282e18ad6954cd96:python/scannerpy/stdlib/tensorflow.py:93",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:d4d448adff71b609d5efb269d1a9a2ea4aba3590:radio/templatetags/radio_js_config.py:94",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:d4d448adff71b609d5efb269d1a9a2ea4aba3590:radio/templatetags/radio_js_config.py:94",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:0a13a9a8a779102dbcb2beead7d8aa9143f4c79b:tests/pytests/unit/client/ssh/test_shell.py:95",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:0a13a9a8a779102dbcb2beead7d8aa9143f4c79b:tests/pytests/unit/client/ssh/test_shell.py:95",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:09d780474d00f3a8f4c2295154d74dae2023c1d3:samples/storage_sample/storage/__init__.py:96",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:09d780474d00f3a8f4c2295154d74dae2023c1d3:samples/storage_sample/storage/__init__.py:96",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:08d838e87bd92dacbbbfe31b19c628b9d3b271a8:src/plone.example/plone/example/todo.py:97",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:08d838e87bd92dacbbbfe31b19c628b9d3b271a8:src/plone.example/plone/example/todo.py:97",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:9b5542836c85ba6c17be907ff3cb011b3e98b63a:basic.py:98",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:9b5542836c85ba6c17be907ff3cb011b3e98b63a:basic.py:98",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:29a964a64230e26fca550e81a1ecba3dd782dfb1:python/vtd.py:99",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:29a964a64230e26fca550e81a1ecba3dd782dfb1:python/vtd.py:99",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:b532ffff18e95b6014921d88b6df075e8ac2c4ec:problib/example1/__init__.py:100",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:b532ffff18e95b6014921d88b6df075e8ac2c4ec:problib/example1/__init__.py:100",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:3a9568b4d4de969b1e2031e8d2d3cdd7bd56824f:zerver/migrations/0237_rename_zulip_realm_to_zulipinternal.py:101",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:3a9568b4d4de969b1e2031e8d2d3cdd7bd56824f:zerver/migrations/0237_rename_zulip_realm_to_zulipinternal.py:101",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:97e3b202bbe6726a4056facb8b4690b0710029a9:handroll/tests/test_site.py:102",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:97e3b202bbe6726a4056facb8b4690b0710029a9:handroll/tests/test_site.py:102",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:7e44a8bd38105144111624710819a1ee54891222:campos_checkin/__openerp__.py:103",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:7e44a8bd38105144111624710819a1ee54891222:campos_checkin/__openerp__.py:103",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:3cd99c23099a625da711e3ac458a46a7b364d83c:hystrix/pool.py:104",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:3cd99c23099a625da711e3ac458a46a7b364d83c:hystrix/pool.py:104",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:c52edc120f38acb079fa364cdb684fc2052d4727:corehq/messaging/smsbackends/trumpia/urls.py:105",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:c52edc120f38acb079fa364cdb684fc2052d4727:corehq/messaging/smsbackends/trumpia/urls.py:105",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:ecb6f388ba3c0f17fcfd22a8cafcda974e7e0fc8:site.py:106",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:ecb6f388ba3c0f17fcfd22a8cafcda974e7e0fc8:site.py:106",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:14546b0ba1dd7f5a9ea623fde85737fa95bd2843:test/integration/test_node_propagation.py:107",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:14546b0ba1dd7f5a9ea623fde85737fa95bd2843:test/integration/test_node_propagation.py:107",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:58976f0e63376d056c482b3cd0e103c0a0cccb9e:test.py:108",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:58976f0e63376d056c482b3cd0e103c0a0cccb9e:test.py:108",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:24c83c6a7a1981184545a72b3691a29121d81050:lib-dynload/lz4/__init__.py:111",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:24c83c6a7a1981184545a72b3691a29121d81050:lib-dynload/lz4/__init__.py:111",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:920e2fbb7e99c17dbe8d5b71e9c9b26a718ca444:ideascube/search/apps.py:112",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:920e2fbb7e99c17dbe8d5b71e9c9b26a718ca444:ideascube/search/apps.py:112",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:5d192ed46c0ca76d2dd3aa25f7fac5ad7b61ad3e:scripts/ls.py:113",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:5d192ed46c0ca76d2dd3aa25f7fac5ad7b61ad3e:scripts/ls.py:113",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:8545423373dee1f4b801375922b67bc2417cb426:ooni/resources/update.py:114",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:8545423373dee1f4b801375922b67bc2417cb426:ooni/resources/update.py:114",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:360efe51bc45f189c235bed6b2b7bfdd4fd1bfbd:flask-restful/api.py:115",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:360efe51bc45f189c235bed6b2b7bfdd4fd1bfbd:flask-restful/api.py:115",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:797b42cfd752d4ce43fdce616280710478420197:tests/rules/test_git_remote_seturl_add.py:116",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:797b42cfd752d4ce43fdce616280710478420197:tests/rules/test_git_remote_seturl_add.py:116",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:cfe848c3aa7e2365ec93f04edb2edf7357068a9a:gn/create_sksl_enums.py:117",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:cfe848c3aa7e2365ec93f04edb2edf7357068a9a:gn/create_sksl_enums.py:117",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:db51cb32148a595f74eb4ed8cbcc5dc989db5786:src/reduce_framerate.py:118",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:db51cb32148a595f74eb4ed8cbcc5dc989db5786:src/reduce_framerate.py:118",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:03ffbda9725d7cf37b2fe8df2cfe13b2096c81c1:src/Person.py:119",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:03ffbda9725d7cf37b2fe8df2cfe13b2096c81c1:src/Person.py:119",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:e78910c8b9ecf48f96a693dae3c15afa32a12da1:casexml/apps/phone/views.py:120",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:e78910c8b9ecf48f96a693dae3c15afa32a12da1:casexml/apps/phone/views.py:120",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:5ac26c7ec252778f58887279b76f22d15095b0df:stock_packaging_calculator/__manifest__.py:121",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:5ac26c7ec252778f58887279b76f22d15095b0df:stock_packaging_calculator/__manifest__.py:121",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:4aa6987d3048d6de36ddc07b63a02a3ddf3ab410:integration/integration.py:122",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:4aa6987d3048d6de36ddc07b63a02a3ddf3ab410:integration/integration.py:122",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:3d0ecb4bfd92e96dd195142c3b31955d521dfaf1:sahara/tests/unit/plugins/cdh/v5_5_0/test_plugin_utils_550.py:123",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:3d0ecb4bfd92e96dd195142c3b31955d521dfaf1:sahara/tests/unit/plugins/cdh/v5_5_0/test_plugin_utils_550.py:123",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:63f6e4d50116d5ca2bfc82c1c608e08040055b5e:subdue/core/__init__.py:124",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:63f6e4d50116d5ca2bfc82c1c608e08040055b5e:subdue/core/__init__.py:124",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:459bf08b9fe4ae5a879a138bd2497abb23bf5910:modules/expansion/cve.py:125",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:459bf08b9fe4ae5a879a138bd2497abb23bf5910:modules/expansion/cve.py:125",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:43efd1f110daa8f2f16475e4e6edbdf18ff28286:linter.py:126",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:43efd1f110daa8f2f16475e4e6edbdf18ff28286:linter.py:126",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:f1874e9af69b22fd3f17938ba673d955780b69a9:linter.py:127",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:f1874e9af69b22fd3f17938ba673d955780b69a9:linter.py:127",
+      "field": "new_contents"
+    },
+    {
+      "id": "commitpack:python:9e9a19e0f87806c75892f55b1d603bd47d552693:product_supplier_pricelist/__openerp__.py:128",
+      "field": "old_contents"
+    },
+    {
+      "id": "commitpack:python:9e9a19e0f87806c75892f55b1d603bd47d552693:product_supplier_pricelist/__openerp__.py:128",
+      "field": "new_contents"
+    }
+  ],
+  "blocked_by_reason": {
+    "independent_human_review_unavailable": 16,
+    "external_dependency_closure_unknown": 16,
+    "semantic_benchmark_review_pending": 16,
+    "rights_chain_unresolved": 16,
+    "audit_only_fields_not_fully_screened": 16,
+    "registry_second_review_pending": 16,
+    "first_user_message_consistency_unverified": 4,
+    "dependent_code_template_review_unresolved": 4,
+    "historical_article_identity_unresolved": 8,
+    "source_answers_unavailable": 4,
+    "source_relation_labels_unavailable": 1
+  },
+  "cpu_seconds": 7.4245905190000006,
+  "wall_seconds": 7.44589863717556,
+  "peak_rss_kib": 1745788
+}

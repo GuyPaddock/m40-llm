@@ -1,0 +1,172 @@
+{
+  "kind": "prepared_prefix_probe_audit",
+  "records": 333,
+  "summary": {
+    "first_different_generated_step": 310,
+    "head_probes": 12,
+    "historical_first_difference": 310,
+    "is_performance_measurement": false,
+    "kind": "q8_prefix_drift_summary",
+    "predictions": 317,
+    "prepared_history_mismatches_on_shared_prefix": 0,
+    "qualifies_for_promotion": false,
+    "reference_history_mismatches": 0,
+    "reproduces_historical_first_branch": true
+  },
+  "all_sampled_heads_match_generic_top": true,
+  "all_sampled_top10_overlap_ten": true,
+  "actual_different_steps": [
+    310
+  ],
+  "branch": {
+    "expected_reference_token_id": 1008,
+    "generated_step_zero_based": 310,
+    "generic_forward_difference_with_native_head": {
+      "elements": 151936,
+      "max_abs_diff": 0.004250049591064453,
+      "mean_abs_diff": 0.00047320340065287134
+    },
+    "generic_forward_difference_with_prepared_head": {
+      "elements": 151936,
+      "max_abs_diff": 0.004248619079589844,
+      "mean_abs_diff": 0.00047320140903876827
+    },
+    "generic_head_difference_on_prepared_hidden": {
+      "elements": 151936,
+      "max_abs_diff": 0.000003814697265625,
+      "mean_abs_diff": 3.568575856383347E-7
+    },
+    "generic_head_difference_on_reference_hidden": {
+      "elements": 151936,
+      "max_abs_diff": 0.000003814697265625,
+      "mean_abs_diff": 3.5683591100807037E-7
+    },
+    "generic_whole_path_difference": {
+      "elements": 151936,
+      "max_abs_diff": 0.0042493343353271484,
+      "mean_abs_diff": 0.00047320014514302066
+    },
+    "generic_whole_path_top10_overlap": 10,
+    "hidden_difference": {
+      "elements": 2048,
+      "max_abs_diff": 0.01226806640625,
+      "mean_abs_diff": 0.0009705187258077785
+    },
+    "kind": "q8_prefix_head_probe",
+    "prepared_hidden_native_head": {
+      "actual_greedy_token_id": 5815,
+      "generic_actual_token_logit": 25.422805786132812,
+      "generic_actual_token_rank": 1,
+      "generic_expected_token": {
+        "nll": 1.273594324246844,
+        "target_logit": 25.422340393066406,
+        "target_rank": 2,
+        "top_indices": [
+          5815,
+          1008,
+          5871,
+          5107,
+          24784,
+          5435,
+          4963,
+          2567,
+          5230,
+          10592
+        ]
+      },
+      "generic_top2_margin": 0.00046539306640625,
+      "generic_top_token_id": 5815,
+      "generic_top_token_logit": 25.422805786132812,
+      "is_generic_top_equal_to_actual_greedy": true,
+      "scope": "generic full-logit projection is NOT the native fused greedy-head arithmetic"
+    },
+    "prepared_hidden_prepared_head": {
+      "actual_greedy_token_id": 5815,
+      "generic_actual_token_logit": 25.42280387878418,
+      "generic_actual_token_rank": 1,
+      "generic_expected_token": {
+        "nll": 1.2735937560316197,
+        "target_logit": 25.422340393066406,
+        "target_rank": 2,
+        "top_indices": [
+          5815,
+          1008,
+          5871,
+          5107,
+          24784,
+          5435,
+          4963,
+          2567,
+          5230,
+          10592
+        ]
+      },
+      "generic_top2_margin": 0.0004634857177734375,
+      "generic_top_token_id": 5815,
+      "generic_top_token_logit": 25.42280387878418,
+      "is_generic_top_equal_to_actual_greedy": true,
+      "scope": "generic full-logit projection is NOT the native fused greedy-head arithmetic"
+    },
+    "reference_hidden_native_head": {
+      "actual_greedy_token_id": 1008,
+      "generic_actual_token_logit": 25.423492431640625,
+      "generic_actual_token_rank": 1,
+      "generic_expected_token": {
+        "nll": 1.2730321083453189,
+        "target_logit": 25.423492431640625,
+        "target_rank": 1,
+        "top_indices": [
+          1008,
+          5815,
+          5871,
+          5107,
+          24784,
+          5435,
+          4963,
+          2567,
+          5230,
+          10592
+        ]
+      },
+      "generic_top2_margin": 0.000270843505859375,
+      "generic_top_token_id": 1008,
+      "generic_top_token_logit": 25.423492431640625,
+      "is_generic_top_equal_to_actual_greedy": true,
+      "scope": "generic full-logit projection is NOT the native fused greedy-head arithmetic"
+    },
+    "reference_hidden_prepared_head": {
+      "actual_greedy_token_id": 1008,
+      "generic_actual_token_logit": 25.423492431640625,
+      "generic_actual_token_rank": 1,
+      "generic_expected_token": {
+        "nll": 1.2730321153661948,
+        "target_logit": 25.423492431640625,
+        "target_rank": 1,
+        "top_indices": [
+          1008,
+          5815,
+          5871,
+          5107,
+          24784,
+          5435,
+          4963,
+          2567,
+          5230,
+          10592
+        ]
+      },
+      "generic_top2_margin": 0.000270843505859375,
+      "generic_top_token_id": 1008,
+      "generic_top_token_logit": 25.423492431640625,
+      "is_generic_top_equal_to_actual_greedy": true,
+      "scope": "generic full-logit projection is NOT the native fused greedy-head arithmetic"
+    },
+    "scope": "same absolute prefix; read-only two-by-two hidden/head recomputation; no new forward or sampled continuation; diagnostic allocation/readback, NOT timing"
+  },
+  "complete": {
+    "device_bytes_after": 0,
+    "device_bytes_before": 0,
+    "is_complete": true,
+    "kind": "q8_prefix_drift_complete"
+  }
+}

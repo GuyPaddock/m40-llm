@@ -1,0 +1,26 @@
+{
+  "is_complete": true,
+  "preparation_cases": 6,
+  "additional_device_bytes_per_case": 47906816,
+  "retained_host_bytes_per_case": 47906816,
+  "scale_bytes_per_pair": 2818048,
+  "value_bytes_per_pair": 45088768,
+  "observed_tracked_bytes_by_rows": [
+    {
+      "rows": 1,
+      "bytes": [
+        4520563136
+      ]
+    },
+    {
+      "rows": 4,
+      "bytes": [
+        4521165248
+      ]
+    }
+  ],
+  "median_packing_ms": 28.5633815,
+  "median_allocation_upload_ms": 8.191182,
+  "estimated_all_layers_extra_bytes": 1724645376,
+  "estimate_scope": "36 identical gate/up pair shapes; not measured whole-model runtime residency"
+}

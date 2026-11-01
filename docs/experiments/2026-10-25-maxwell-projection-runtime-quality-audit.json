@@ -1,0 +1,28 @@
+{
+  "passes_quality_audit": true,
+  "source": "1349613b4844a6e097eeb4fdddafa8ead587531d",
+  "executable": "6b01f34771bb491ba95f6e0b28ffe5acb49dcb63d0e93936b9948881f6743c71",
+  "scope": "actual full-model quality against qualified split-FFN/SGEMM; not HTTP timing",
+  "actual_browser_ids_equal": 512,
+  "task_outputs_equal": 12,
+  "dense_valid_tasks": 7,
+  "regressions": 0,
+  "sampled_full_vocabulary_logit_max_diff": 0,
+  "sampled_full_vocabulary_logit_mean_diff": 0,
+  "top10_overlap": 10,
+  "prepared_tensor_identities_equal": 109,
+  "additional_device_weight_bytes": 0,
+  "source_plus_prepared_bytes": 6197100544,
+  "kv_bytes_per_model": 37748736,
+  "temporary_prefill_bytes": 90177536,
+  "candidate_qkv_warp_launches": 18432,
+  "candidate_output_warp_launches": 18432,
+  "unchanged_other_dispatch": true,
+  "unchanged_enqueue_counters": true,
+  "tracked_device_bytes_after": 0,
+  "diagnostic_resident_generation_ms": [
+    11381.893413,
+    10851.15826
+  ],
+  "makes_http_or_default_claim": false
+}

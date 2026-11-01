@@ -1,0 +1,37 @@
+{
+   "cleared_suffix_words" : 516096,
+   "correctness_cases" : 21,
+   "decisions" : [
+      {
+         "exact_empirical_ci95" : [
+            0.126511301136875,
+            0.128622899888681
+         ],
+         "gain" : 0.127954999488753,
+         "id" : "held-copy-short",
+         "paired_ci95" : [
+            0.126511301136875,
+            0.128622899888681
+         ]
+      },
+      {
+         "exact_empirical_ci95" : [
+            0.06649876845526,
+            0.0685288205643928
+         ],
+         "gain" : 0.0667232589704345,
+         "id" : "held-copy-long",
+         "paired_ci95" : [
+            0.06649876845526,
+            0.0685288205643928
+         ]
+      }
+   ],
+   "device_bytes_after" : 0,
+   "full_logit_rows" : 1544,
+   "is_http_claim" : false,
+   "is_passed" : true,
+   "pairs_per_copy_case" : 5,
+   "rejected_corruptions" : 8,
+   "valid_kv_words" : 85948416
+}

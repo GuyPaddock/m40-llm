@@ -1,0 +1,1471 @@
+{
+  "passes_audit": true,
+  "source": "c6294717e423057cec566cd7951fb0031e12d18e",
+  "executable_sha256": "a660dd9184307ad3440b5913007ee2f241c003b563f9b20b377423ed5b44ca4a",
+  "trials": 5,
+  "gpu_boundaries": 60,
+  "primary_intervals": 360,
+  "validation_records": 24,
+  "tracked_device_bytes_after": 0,
+  "screens": [
+    {
+      "acceptance": "compound complete one-row FFN >=5% gain versus qualified split with positive paired bounds at all three layers; no runtime/E2E qualification implied",
+      "compound_vs_joint": {
+        "bootstrap_gain_ci95": [
+          0.005533100327346219,
+          0.008205730498212604
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3337023973464966,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3360512018203735,
+        "pairs": [
+          [
+            0.33603200912475584,
+            0.3335391998291016
+          ],
+          [
+            0.3360512018203735,
+            0.3334847927093506
+          ],
+          [
+            0.33623039722442627,
+            0.3339103937149048
+          ],
+          [
+            0.33655359745025637,
+            0.3338144063949585
+          ],
+          [
+            0.3355488061904907,
+            0.3337023973464966
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.007038620317246558
+      },
+      "compound_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.0534320275800515,
+          0.06236206302172964
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3337023973464966,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.35215039253234864,
+        "pairs": [
+          [
+            0.3516704082489014,
+            0.3335391998291016
+          ],
+          [
+            0.3542815923690796,
+            0.3334847927093506
+          ],
+          [
+            0.3522432088851929,
+            0.3339103937149048
+          ],
+          [
+            0.35215039253234864,
+            0.3338144063949585
+          ],
+          [
+            0.3515327930450439,
+            0.3337023973464966
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.05528277690704386
+      },
+      "joint_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.04634267825467986,
+          0.05424884794326856
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3360512018203735,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.35215039253234864,
+        "pairs": [
+          [
+            0.3516704082489014,
+            0.33603200912475584
+          ],
+          [
+            0.3542815923690796,
+            0.3360512018203735
+          ],
+          [
+            0.3522432088851929,
+            0.33623039722442627
+          ],
+          [
+            0.35215039253234864,
+            0.33655359745025637
+          ],
+          [
+            0.3515327930450439,
+            0.3355488061904907
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.04790695770396458
+      },
+      "kind": "ffn_compound_summary",
+      "layer_id": 0,
+      "rows": 1,
+      "shared_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.015324812682030897,
+          0.027746779033550606
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3444607973098755,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.35215039253234864,
+        "pairs": [
+          [
+            0.3516704082489014,
+            0.34425599575042726
+          ],
+          [
+            0.3542815923690796,
+            0.34471681118011477
+          ],
+          [
+            0.3522432088851929,
+            0.34428160190582274
+          ],
+          [
+            0.35215039253234864,
+            0.34683520793914796
+          ],
+          [
+            0.3515327930450439,
+            0.3444607973098755
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.02232357145581254
+      }
+    },
+    {
+      "acceptance": "compound complete one-row FFN >=5% gain versus qualified split with positive paired bounds at all three layers; no runtime/E2E qualification implied",
+      "compound_vs_joint": {
+        "bootstrap_gain_ci95": [
+          -0.011459487081564967,
+          0.008250721588932919
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.5244992256164551,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5256447792053223,
+        "pairs": [
+          [
+            1.5246015548706056,
+            1.5422752380371094
+          ],
+          [
+            1.5256447792053223,
+            1.5227807998657226
+          ],
+          [
+            1.5289728164672851,
+            1.5219488143920898
+          ],
+          [
+            1.5246944427490234,
+            1.5244992256164551
+          ],
+          [
+            1.5454079627990722,
+            1.532761573791504
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.0007514294331005811
+      },
+      "compound_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.022124201888605866,
+          0.060609990295600324
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.5244992256164551,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5896448135375976,
+        "pairs": [
+          [
+            1.5763968467712401,
+            1.5422752380371094
+          ],
+          [
+            1.6015743255615233,
+            1.5227807998657226
+          ],
+          [
+            1.5896448135375976,
+            1.5219488143920898
+          ],
+          [
+            1.6168991088867188,
+            1.5244992256164551
+          ],
+          [
+            1.584614372253418,
+            1.532761573791504
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.04273245064772002
+      },
+      "joint_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.025369617860214966,
+          0.060474193092387996
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.5256447792053223,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5896448135375976,
+        "pairs": [
+          [
+            1.5763968467712401,
+            1.5246015548706056
+          ],
+          [
+            1.6015743255615233,
+            1.5256447792053223
+          ],
+          [
+            1.5896448135375976,
+            1.5289728164672851
+          ],
+          [
+            1.6168991088867188,
+            1.5246944427490234
+          ],
+          [
+            1.584614372253418,
+            1.5454079627990722
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.041949499126272105
+      },
+      "kind": "ffn_compound_summary",
+      "layer_id": 0,
+      "rows": 4,
+      "shared_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.005090452712395832,
+          0.028882213111754762
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.5717663764953613,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5896448135375976,
+        "pairs": [
+          [
+            1.5763968467712401,
+            1.5649824142456055
+          ],
+          [
+            1.6015743255615233,
+            1.5717663764953613
+          ],
+          [
+            1.5896448135375976,
+            1.5809408187866212
+          ],
+          [
+            1.6168991088867188,
+            1.571510410308838
+          ],
+          [
+            1.584614372253418,
+            1.5765888214111328
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.011374742016113437
+      }
+    },
+    {
+      "acceptance": "compound complete one-row FFN >=5% gain versus qualified split with positive paired bounds at all three layers; no runtime/E2E qualification implied",
+      "compound_vs_joint": {
+        "bootstrap_gain_ci95": [
+          0.0021499835470977224,
+          0.00718216650246517
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.33384320735931394,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3358112096786499,
+        "pairs": [
+          [
+            0.33560640811920167,
+            0.33488640785217283
+          ],
+          [
+            0.3361119985580444,
+            0.33376638889312743
+          ],
+          [
+            0.3361119985580444,
+            0.33371520042419434
+          ],
+          [
+            0.3358112096786499,
+            0.33434879779815674
+          ],
+          [
+            0.33552639484405516,
+            0.33384320735931394
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.005894989851382038
+      },
+      "compound_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.05128421630575897,
+          0.06028654398755018
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.33384320735931394,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3537247896194458,
+        "pairs": [
+          [
+            0.35206079483032227,
+            0.33488640785217283
+          ],
+          [
+            0.3538880109786987,
+            0.33376638889312743
+          ],
+          [
+            0.35190401077270506,
+            0.33371520042419434
+          ],
+          [
+            0.3538111925125122,
+            0.33434879779815674
+          ],
+          [
+            0.3537247896194458,
+            0.33384320735931394
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.05955365219916975
+      },
+      "joint_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.04698437509642628,
+          0.05423834027677277
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3358112096786499,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3537247896194458,
+        "pairs": [
+          [
+            0.35206079483032227,
+            0.33560640811920167
+          ],
+          [
+            0.3538880109786987,
+            0.3361119985580444
+          ],
+          [
+            0.35190401077270506,
+            0.3361119985580444
+          ],
+          [
+            0.3538111925125122,
+            0.3358112096786499
+          ],
+          [
+            0.3537247896194458,
+            0.33552639484405516
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.05334419883701336
+      },
+      "kind": "ffn_compound_summary",
+      "layer_id": 17,
+      "rows": 1,
+      "shared_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.02172174973784924,
+          0.027199549027039138
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.34457600116729736,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3537247896194458,
+        "pairs": [
+          [
+            0.35206079483032227,
+            0.34457600116729736
+          ],
+          [
+            0.3538880109786987,
+            0.3446208000183105
+          ],
+          [
+            0.35190401077270506,
+            0.34431359767913816
+          ],
+          [
+            0.3538111925125122,
+            0.3450592041015625
+          ],
+          [
+            0.3537247896194458,
+            0.3443583965301514
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.02655085792729528
+      }
+    },
+    {
+      "acceptance": "compound complete one-row FFN >=5% gain versus qualified split with positive paired bounds at all three layers; no runtime/E2E qualification implied",
+      "compound_vs_joint": {
+        "bootstrap_gain_ci95": [
+          -0.006249749075839417,
+          0.00969230464718085
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.4709823608398438,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.468943977355957,
+        "pairs": [
+          [
+            1.4837823867797852,
+            1.4695391654968262
+          ],
+          [
+            1.4645440101623535,
+            1.4647839546203614
+          ],
+          [
+            1.483555221557617,
+            1.475823974609375
+          ],
+          [
+            1.4659071922302247,
+            1.475126361846924
+          ],
+          [
+            1.468943977355957,
+            1.4709823608398438
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.00138572938612469
+      },
+      "compound_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.040430817065253866,
+          0.04731189438335126
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.4709823608398438,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5371456146240234,
+        "pairs": [
+          [
+            1.5356991767883301,
+            1.4695391654968262
+          ],
+          [
+            1.5240063667297363,
+            1.4647839546203614
+          ],
+          [
+            1.5456480026245116,
+            1.475823974609375
+          ],
+          [
+            1.5371456146240234,
+            1.475126361846924
+          ],
+          [
+            1.5381535530090331,
+            1.4709823608398438
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.044978957970919664
+      },
+      "joint_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.03498949069022084,
+          0.04859681620459
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.468943977355957,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5371456146240234,
+        "pairs": [
+          [
+            1.5356991767883301,
+            1.4837823867797852
+          ],
+          [
+            1.5240063667297363,
+            1.4645440101623535
+          ],
+          [
+            1.5456480026245116,
+            1.483555221557617
+          ],
+          [
+            1.5371456146240234,
+            1.4659071922302247
+          ],
+          [
+            1.5381535530090331,
+            1.468943977355957
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.04642902542194083
+      },
+      "kind": "ffn_compound_summary",
+      "layer_id": 17,
+      "rows": 4,
+      "shared_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.016602818724581914,
+          0.056027288410321896
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.5037759780883788,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5371456146240234,
+        "pairs": [
+          [
+            1.5356991767883301,
+            1.5063615798950196
+          ],
+          [
+            1.5240063667297363,
+            1.499116802215576
+          ],
+          [
+            1.5456480026245116,
+            1.5093536376953125
+          ],
+          [
+            1.5371456146240234,
+            1.5037759780883788
+          ],
+          [
+            1.5381535530090331,
+            1.456547164916992
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.022190563635724914
+      }
+    },
+    {
+      "acceptance": "compound complete one-row FFN >=5% gain versus qualified split with positive paired bounds at all three layers; no runtime/E2E qualification implied",
+      "compound_vs_joint": {
+        "bootstrap_gain_ci95": [
+          0.003941326501520237,
+          0.006732144929209483
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3336832046508789,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3358207941055298,
+        "pairs": [
+          [
+            0.33591361045837403,
+            0.3337631940841675
+          ],
+          [
+            0.3358207941055298,
+            0.3345024108886719
+          ],
+          [
+            0.3352672100067139,
+            0.33333759307861327
+          ],
+          [
+            0.3359296083450317,
+            0.3336832046508789
+          ],
+          [
+            0.33540799617767336,
+            0.3333791971206665
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.006406044490274487
+      },
+      "compound_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.05415562370135851,
+          0.05670646680197233
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3336832046508789,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3520800113677979,
+        "pairs": [
+          [
+            0.3520800113677979,
+            0.3337631940841675
+          ],
+          [
+            0.35261759757995603,
+            0.3345024108886719
+          ],
+          [
+            0.352239990234375,
+            0.33333759307861327
+          ],
+          [
+            0.3517568111419678,
+            0.3336832046508789
+          ],
+          [
+            0.3519871950149536,
+            0.3333791971206665
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.055132552254665956
+      },
+      "joint_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.047114640697821564,
+          0.050624635279189034
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3358207941055298,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3520800113677979,
+        "pairs": [
+          [
+            0.3520800113677979,
+            0.33591361045837403
+          ],
+          [
+            0.35261759757995603,
+            0.3358207941055298
+          ],
+          [
+            0.352239990234375,
+            0.3352672100067139
+          ],
+          [
+            0.3517568111419678,
+            0.3359296083450317
+          ],
+          [
+            0.3519871950149536,
+            0.33540799617767336
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.048416350469228986
+      },
+      "kind": "ffn_compound_summary",
+      "layer_id": 35,
+      "rows": 1,
+      "shared_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.01959917891642715,
+          0.023898681906084684
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.34438719749450686,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3520800113677979,
+        "pairs": [
+          [
+            0.3520800113677979,
+            0.3442431926727295
+          ],
+          [
+            0.35261759757995603,
+            0.34438719749450686
+          ],
+          [
+            0.352239990234375,
+            0.3446079969406128
+          ],
+          [
+            0.3517568111419678,
+            0.3449951887130737
+          ],
+          [
+            0.3519871950149536,
+            0.3442944049835205
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.022337688303333936
+      }
+    },
+    {
+      "acceptance": "compound complete one-row FFN >=5% gain versus qualified split with positive paired bounds at all three layers; no runtime/E2E qualification implied",
+      "compound_vs_joint": {
+        "bootstrap_gain_ci95": [
+          -0.012906755429564432,
+          0.024274330469773897
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.5218496322631836,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5257599830627442,
+        "pairs": [
+          [
+            1.5257599830627442,
+            1.5318495750427246
+          ],
+          [
+            1.5335871696472168,
+            1.5218496322631836
+          ],
+          [
+            1.5390303611755372,
+            1.5025568008422852
+          ],
+          [
+            1.5246879577636718,
+            1.5446240425109863
+          ],
+          [
+            1.4138431549072266,
+            1.3894880294799805
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.0025694725133555973
+      },
+      "compound_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.030627990874850797,
+          0.12993102600042628
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.5218496322631836,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5998527526855468,
+        "pairs": [
+          [
+            1.6013248443603516,
+            1.5318495750427246
+          ],
+          [
+            1.5998527526855468,
+            1.5218496322631836
+          ],
+          [
+            1.6052896499633789,
+            1.5025568008422852
+          ],
+          [
+            1.591932773590088,
+            1.5446240425109863
+          ],
+          [
+            1.570025634765625,
+            1.3894880294799805
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.05125547147937515
+      },
+      "joint_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.04305261966192253,
+          0.11046662376679728
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.5257599830627442,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5998527526855468,
+        "pairs": [
+          [
+            1.6013248443603516,
+            1.5257599830627442
+          ],
+          [
+            1.5998527526855468,
+            1.5335871696472168
+          ],
+          [
+            1.6052896499633789,
+            1.5390303611755372
+          ],
+          [
+            1.591932773590088,
+            1.5246879577636718
+          ],
+          [
+            1.570025634765625,
+            1.4138431549072266
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.04856122224025827
+      },
+      "kind": "ffn_compound_summary",
+      "layer_id": 35,
+      "rows": 4,
+      "shared_vs_split": {
+        "bootstrap_gain_ci95": [
+          0.020686534476929364,
+          0.06040857155831558
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.555356788635254,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5998527526855468,
+        "pairs": [
+          [
+            1.6013248443603516,
+            1.5688703536987305
+          ],
+          [
+            1.5998527526855468,
+            1.5664575576782227
+          ],
+          [
+            1.6052896499633789,
+            1.5363264083862305
+          ],
+          [
+            1.591932773590088,
+            1.555356788635254
+          ],
+          [
+            1.570025634765625,
+            1.4805855751037598
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.028608203838127677
+      }
+    }
+  ],
+  "timing_variation": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "arms": [
+        {
+          "variant": "joint-f32x4-128",
+          "complete_mad_fraction": 0.0005329542050095418
+        },
+        {
+          "variant": "joint-f32x4-shared-scales-128",
+          "complete_mad_fraction": 0.0004892903667055463
+        },
+        {
+          "variant": "split-f32x4-128",
+          "complete_mad_fraction": 0.0013648696967063216
+        },
+        {
+          "variant": "split-f32x4-shared-scales-128",
+          "complete_mad_fraction": 0.0005949106536309417
+        }
+      ]
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "arms": [
+        {
+          "variant": "joint-f32x4-128",
+          "complete_mad_fraction": 0.0006842603114131632
+        },
+        {
+          "variant": "joint-f32x4-shared-scales-128",
+          "complete_mad_fraction": 0.001675753612899316
+        },
+        {
+          "variant": "split-f32x4-128",
+          "complete_mad_fraction": 0.0074486159234246705
+        },
+        {
+          "variant": "split-f32x4-shared-scales-128",
+          "complete_mad_fraction": 0.003058784161272458
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "arms": [
+        {
+          "variant": "joint-f32x4-128",
+          "complete_mad_fraction": 0.0008488596991814896
+        },
+        {
+          "variant": "joint-f32x4-shared-scales-128",
+          "complete_mad_fraction": 0.0003835813740486397
+        },
+        {
+          "variant": "split-f32x4-128",
+          "complete_mad_fraction": 0.00046122319544391206
+        },
+        {
+          "variant": "split-f32x4-shared-scales-128",
+          "complete_mad_fraction": 0.0006319132605408046
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "arms": [
+        {
+          "variant": "joint-f32x4-128",
+          "complete_mad_fraction": 0.0030043256898205114
+        },
+        {
+          "variant": "joint-f32x4-shared-scales-128",
+          "complete_mad_fraction": 0.0028092515422825847
+        },
+        {
+          "variant": "split-f32x4-128",
+          "complete_mad_fraction": 0.0009418757641834622
+        },
+        {
+          "variant": "split-f32x4-shared-scales-128",
+          "complete_mad_fraction": 0.0031079472032578197
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "arms": [
+        {
+          "variant": "joint-f32x4-128",
+          "complete_mad_fraction": 0.0003239197641375009
+        },
+        {
+          "variant": "joint-f32x4-shared-scales-128",
+          "complete_mad_fraction": 0.0009118971214703149
+        },
+        {
+          "variant": "split-f32x4-128",
+          "complete_mad_fraction": 0.00045417576371924433
+        },
+        {
+          "variant": "split-f32x4-shared-scales-128",
+          "complete_mad_fraction": 0.000418322932283077
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "arms": [
+        {
+          "variant": "joint-f32x4-128",
+          "complete_mad_fraction": 0.005103841985241251
+        },
+        {
+          "variant": "joint-f32x4-shared-scales-128",
+          "complete_mad_fraction": 0.012840001396342211
+        },
+        {
+          "variant": "split-f32x4-128",
+          "complete_mad_fraction": 0.003386863721420034
+        },
+        {
+          "variant": "split-f32x4-shared-scales-128",
+          "complete_mad_fraction": 0.008613563913434513
+        }
+      ]
+    }
+  ],
+  "stages": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "arms": [
+        {
+          "variant": "joint-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.3360512018203735
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.20532801151275634
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.13112000226974488
+            }
+          ]
+        },
+        {
+          "variant": "joint-f32x4-shared-scales-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.3337023973464966
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.2032831907272339
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.1309856057167053
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.35215039253234864
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.22200000286102295
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.13100800514221192
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-shared-scales-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.3444607973098755
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.21374399662017823
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.13107199668884278
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "arms": [
+        {
+          "variant": "joint-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.5256447792053223
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.9232224464416504
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.5891071796417237
+            }
+          ]
+        },
+        {
+          "variant": "joint-f32x4-shared-scales-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.5244992256164551
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.9215231895446777
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.594924783706665
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.5896448135375976
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.9842816352844238
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.5881152153015137
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-shared-scales-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.5717663764953613
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.959228801727295
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.5949312210083008
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "arms": [
+        {
+          "variant": "joint-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.3358112096786499
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.2050976037979126
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.13134080171585083
+            }
+          ]
+        },
+        {
+          "variant": "joint-f32x4-shared-scales-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.33384320735931394
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.2032543897628784
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.13150719404220582
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.3537247896194458
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.2212671995162964
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.13178880214691163
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-shared-scales-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.34457600116729736
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.21514561176300048
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.1314527988433838
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "arms": [
+        {
+          "variant": "joint-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.468943977355957
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.9027359962463379
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.5593215942382812
+            }
+          ]
+        },
+        {
+          "variant": "joint-f32x4-shared-scales-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.4709823608398438
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.8917792320251465
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.5624320030212402
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.5371456146240234
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.9617792129516601
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.5614848136901855
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-shared-scales-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.5037759780883788
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.9294560432434082
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.5618879795074463
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "arms": [
+        {
+          "variant": "joint-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.3358207941055298
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.2052608013153076
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.13125439882278442
+            }
+          ]
+        },
+        {
+          "variant": "joint-f32x4-shared-scales-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.3336832046508789
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.2031712055206299
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.13146560192108153
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.3520800113677979
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.22121601104736327
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.1313024044036865
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-shared-scales-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.34438719749450686
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.21362240314483644
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.13111040592193604
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "arms": [
+        {
+          "variant": "joint-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.5257599830627442
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.9332703590393067
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.5935359954833984
+            }
+          ]
+        },
+        {
+          "variant": "joint-f32x4-shared-scales-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.5218496322631836
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.9210111618041992
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.590284776687622
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.5998527526855468
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.9903424263000489
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.594652795791626
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-shared-scales-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.555356788635254
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.961087989807129
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.5918432235717773
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "passes_all_one_row_gates": true,
+  "is_e2e_claim": false,
+  "changes_runtime_defaults": false
+}

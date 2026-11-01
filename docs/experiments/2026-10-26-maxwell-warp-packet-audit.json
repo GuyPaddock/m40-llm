@@ -1,0 +1,567 @@
+{
+  "passes_audit": true,
+  "source": "966ead2439b95d56cd59f8a20ff1ec1ba5151b98",
+  "executable_sha256": "ff037b7b54937e4d91242b12cd265d300c192e443c006667e70fb1295d91a926",
+  "pairs": 40,
+  "serial_primary_intervals": 200,
+  "gpu_boundaries": 80,
+  "tracked_device_bytes_after": 0,
+  "screens": [
+    {
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          0.020827562017984302,
+          0.026496961397496577
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3429824113845825,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3519551992416382,
+        "pairs": [
+          [
+            0.3516671895980835,
+            0.34279680252075195
+          ],
+          [
+            0.3519551992416382,
+            0.3447743892669678
+          ],
+          [
+            0.35207040309906007,
+            0.3429824113845825
+          ],
+          [
+            0.35216000080108645,
+            0.34387519359588625
+          ],
+          [
+            0.35158400535583495,
+            0.3429696083068848
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.026161072869111734
+      },
+      "family": "down",
+      "gate": "complete FFN >=5% and positive paired interval; isolated down is diagnostic only",
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          0.07176859510252065,
+          0.09513848531630464
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.12229759693145752,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.131494402885437,
+        "pairs": [
+          [
+            0.13222399950027466,
+            0.12259839773178101
+          ],
+          [
+            0.13120959997177123,
+            0.12219200134277344
+          ],
+          [
+            0.131494402885437,
+            0.12200640439987183
+          ],
+          [
+            0.13112959861755372,
+            0.12234879732131958
+          ],
+          [
+            0.13393280506134034,
+            0.12229759693145752
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.07520021803154409
+      },
+      "kind": "prepared_projection_screen",
+      "layer_id": 0,
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          0.008057477800758939,
+          0.024695772100545854
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.510646438598633,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5327743530273437,
+        "pairs": [
+          [
+            1.5357791900634765,
+            1.5226495742797852
+          ],
+          [
+            1.5327743530273437,
+            1.4958335876464843
+          ],
+          [
+            1.5257216453552247,
+            1.513526439666748
+          ],
+          [
+            1.5419391632080077,
+            1.510646438598633
+          ],
+          [
+            1.5122495651245118,
+            1.4816896438598632
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.014647977093328324
+      },
+      "family": "down",
+      "gate": "complete FFN >=5% and positive paired interval; isolated down is diagnostic only",
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          0.030956634806646566,
+          0.06131929455177665
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.5203455924987793,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.5522528171539307,
+        "pairs": [
+          [
+            0.5651423931121826,
+            0.5481728076934814
+          ],
+          [
+            0.5522528171539307,
+            0.5203455924987793
+          ],
+          [
+            0.5364575862884522,
+            0.5191711902618408
+          ],
+          [
+            0.555244779586792,
+            0.5234432220458984
+          ],
+          [
+            0.5219679832458496,
+            0.49445438385009766
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.06131929455177665
+      },
+      "kind": "prepared_projection_screen",
+      "layer_id": 0,
+      "rows": 4,
+      "runtime_integration_allowed": false
+    },
+    {
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          0.021656085080191456,
+          0.027611527907866362
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3430912017822266,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.35189759731292725,
+        "pairs": [
+          [
+            0.3517568111419678,
+            0.34295039176940917
+          ],
+          [
+            0.35189759731292725,
+            0.34443840980529783
+          ],
+          [
+            0.3519808053970337,
+            0.3430912017822266
+          ],
+          [
+            0.3517119884490967,
+            0.34371199607849123
+          ],
+          [
+            0.35216000080108645,
+            0.34269759654998777
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.025667797614613352
+      },
+      "family": "down",
+      "gate": "complete FFN >=5% and positive paired interval; isolated down is diagnostic only",
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          0.06388305274359474,
+          0.07887531388624103
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.1226848006248474,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.1319167971611023,
+        "pairs": [
+          [
+            0.13236160278320314,
+            0.1226848006248474
+          ],
+          [
+            0.1312351942062378,
+            0.12248320579528808
+          ],
+          [
+            0.1319167971611023,
+            0.12278720140457153
+          ],
+          [
+            0.13168959617614745,
+            0.12235840559005737
+          ],
+          [
+            0.1320032000541687,
+            0.12407679557800293
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.07524971707363348
+      },
+      "kind": "prepared_projection_screen",
+      "layer_id": 17,
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          -0.01226018911925153,
+          0.020613948605731514
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.509500789642334,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.507852840423584,
+        "pairs": [
+          [
+            1.507852840423584,
+            1.5126463890075683
+          ],
+          [
+            1.5406175613403321,
+            1.509500789642334
+          ],
+          [
+            1.4878016471862794,
+            1.5062687873840332
+          ],
+          [
+            1.507260799407959,
+            1.498681640625
+          ],
+          [
+            1.5327648162841796,
+            1.5161279678344726
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.0010917180236390545
+      },
+      "family": "down",
+      "gate": "complete FFN >=5% and positive paired interval; isolated down is diagnostic only",
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          -0.000972187622033549,
+          0.05260419487118395
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.5300864219665528,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.548144006729126,
+        "pairs": [
+          [
+            0.5195487976074219,
+            0.5200543880462647
+          ],
+          [
+            0.5578879833221435,
+            0.5333024024963379
+          ],
+          [
+            0.5350175857543945,
+            0.5239520072937012
+          ],
+          [
+            0.55797119140625,
+            0.5300864219665528
+          ],
+          [
+            0.548144006729126,
+            0.5319488048553467
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.03406535993806803
+      },
+      "kind": "prepared_projection_screen",
+      "layer_id": 17,
+      "rows": 4,
+      "runtime_integration_allowed": false
+    },
+    {
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          0.020741715624902124,
+          0.027071463211880253
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3433759927749634,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3518336057662964,
+        "pairs": [
+          [
+            0.3518336057662964,
+            0.3425600051879883
+          ],
+          [
+            0.35208640098571775,
+            0.3434079885482788
+          ],
+          [
+            0.351475191116333,
+            0.3433759927749634
+          ],
+          [
+            0.35196480751037595,
+            0.344812798500061
+          ],
+          [
+            0.35176639556884765,
+            0.3426527976989746
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.024630763854466275
+      },
+      "family": "down",
+      "gate": "complete FFN >=5% and positive paired interval; isolated down is diagnostic only",
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          0.07003685735043086,
+          0.07783384607475563
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.12243520021438599,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.13175040483474731,
+        "pairs": [
+          [
+            0.13175040483474731,
+            0.12245759963989258
+          ],
+          [
+            0.1311071991920471,
+            0.12233920097351074
+          ],
+          [
+            0.13190720081329346,
+            0.12278399467468262
+          ],
+          [
+            0.13092800378799438,
+            0.12235840559005737
+          ],
+          [
+            0.1319648027420044,
+            0.12243520021438599
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.0760827327766056
+      },
+      "kind": "prepared_projection_screen",
+      "layer_id": 35,
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          -0.0005340695121017758,
+          0.06348190997031056
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.5646400451660156,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.597270393371582,
+        "pairs": [
+          [
+            1.562880039215088,
+            1.5637151718139648
+          ],
+          [
+            1.6015296936035157,
+            1.5793312072753907
+          ],
+          [
+            1.5960448265075684,
+            1.572275161743164
+          ],
+          [
+            1.597270393371582,
+            1.5646400451660156
+          ],
+          [
+            1.5975744247436523,
+            1.5022111892700196
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.02085485943324694
+      },
+      "family": "down",
+      "gate": "complete FFN >=5% and positive paired interval; isolated down is diagnostic only",
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          0.016260479028279873,
+          0.05673192494643686
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.5690944194793701,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.5880095958709717,
+        "pairs": [
+          [
+            0.5791264057159424,
+            0.5569727897644043
+          ],
+          [
+            0.5967360019683838,
+            0.5798687934875488
+          ],
+          [
+            0.5880095958709717,
+            0.5564415931701661
+          ],
+          [
+            0.5851871967315674,
+            0.5758240222930908
+          ],
+          [
+            0.5983200073242188,
+            0.5690944194793701
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.03323732537898705
+      },
+      "kind": "prepared_projection_screen",
+      "layer_id": 35,
+      "rows": 4,
+      "runtime_integration_allowed": false
+    },
+    {
+      "family": "vocabulary",
+      "kind": "prepared_projection_screen",
+      "result": {
+        "bootstrap_gain_ci95": [
+          0.09238393588914184,
+          0.09348911963285245
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.4301152229309082,
+        "interpretation": "complete vocabulary projection micro screen; not FFN or E2E throughput",
+        "native_median_ms": 1.562825584411621,
+        "pairs": [
+          [
+            1.5631327629089355,
+            1.4301152229309082
+          ],
+          [
+            1.562825584411621,
+            1.4306559562683105
+          ],
+          [
+            1.5636544227600098,
+            1.4299679756164552
+          ],
+          [
+            1.562649631500244,
+            1.4302847862243653
+          ],
+          [
+            1.5625599861145019,
+            1.429964828491211
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.09279697142775212
+      },
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "family": "vocabulary",
+      "kind": "prepared_projection_screen",
+      "result": {
+        "bootstrap_gain_ci95": [
+          0.09135058666196949,
+          0.09172274217091059
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 5.691551971435547,
+        "interpretation": "complete vocabulary projection micro screen; not FFN or E2E throughput",
+        "native_median_ms": 6.212460708618164,
+        "pairs": [
+          [
+            6.211171340942383,
+            5.691270446777343
+          ],
+          [
+            6.212460708618164,
+            5.691791915893555
+          ],
+          [
+            6.212160110473633,
+            5.6912895202636715
+          ],
+          [
+            6.213081741333008,
+            5.692150497436524
+          ],
+          [
+            6.2135967254638675,
+            5.691551971435547
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.09152314514510729
+      },
+      "rows": 4,
+      "runtime_integration_allowed": false
+    }
+  ],
+  "down_complete_one_row_qualifies": false,
+  "vocabulary_projection_qualifies": true,
+  "qualified_middle_vocabulary_fraction": 0.07980905884300443,
+  "vocabulary_only_optimistic_e2e_gain": 0.006823383844054121,
+  "runtime_integration_allowed": false,
+  "interpretation": "complete FFN gates exclude failed down; vocabulary-only scope is hypothetical, not HTTP performance"
+}

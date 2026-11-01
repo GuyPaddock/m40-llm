@@ -1,0 +1,14 @@
+5080d497a2bc6672be4b7eeabbf3734f80628a98ae9059d37ea5559a5ce19987  docs/experiments/2026-10-26-maxwell-layer-reuse-audit.jq
+7aa3cc909d639a07758fc3fd882fbbc6fc404fa5c79770a1ea40d1c0ef7c9b84  docs/experiments/2026-10-26-maxwell-layer-reuse-audit.json
+05523d9202dd1fb38df7a9e1bdd45a4c938a658f294ff00b6840e7d6f44e247e  docs/experiments/2026-10-26-maxwell-layer-reuse-audit.sh
+9fb5b239982a2081d2ea68de28a17f14abee546a5a15dc95e0462969a79f5928  docs/experiments/2026-10-26-maxwell-layer-reuse-build.log.gz
+625191fdb7533c260039d042f75e0969ee7d1c8fb1170a3c726228cdf703de8d  docs/experiments/2026-10-26-maxwell-layer-reuse-clippy.log.gz
+16cfb0f711a4c4b6f6986b045cac1a9768c16848b8a656d1bf0ca5e039cf67f3  docs/experiments/2026-10-26-maxwell-layer-reuse-cpu-tests.log.gz
+53f684257da8fdc3b99acbb535a994c97e73a6b2e21b9604ce6e3f03629a2eb7  docs/experiments/2026-10-26-maxwell-layer-reuse-cuda-off.log.gz
+9c0ce74e72fba6540d19ada23a30fb17b673b2423265802a042e8888778a3c6f  docs/experiments/2026-10-26-maxwell-layer-reuse-cuda-on.log.gz
+79450bc8fde469b0bd2207eb48a328dd729bea1653226401e0fb1cbd1beabf08  docs/experiments/2026-10-26-maxwell-layer-reuse-hypothesis.md
+f156db3d86d3fe2f664b9cf11fc816bfbbe98c5cbea032bf2b27003a265df427  docs/experiments/2026-10-26-maxwell-layer-reuse-noncuda.log.gz
+61248396c4eca2066c02a6eaf67f626f6b65670c7e07379e10b9649a25987241  docs/experiments/2026-10-26-maxwell-layer-reuse-preflight-failed.log.gz
+b818f8040d41d085b1eb4c0b90e9588eb7eccac4a3ec8531bb62a799eb4174a3  docs/experiments/2026-10-26-maxwell-layer-reuse-screen.jsonl
+7241bc1544510f4f2e25889ef831168c454371d524eeabbc476e374b14dfeffd  docs/experiments/2026-10-26-maxwell-layer-reuse-screen.log.gz
+4e3a39d5c69a5e673de907131ad600c217e180bfa7ca08c7424691daf90d87b0  docs/experiments/2026-10-26-maxwell-layer-reuse-screen.md

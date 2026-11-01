@@ -1,0 +1,13 @@
+{
+  "source_revision": "be82fa4c3cbad4cf97b59dfff1b0570be8aa0adb",
+  "observer_sha256": "c5539c951fe5d0309f31139bae00efb1882e81e9abe02ab1cefb057c3ebd3d78",
+  "fixture_sha256": "c0792720ac41a6276b416997097bedd71f83e07f6b3f1ab81683c91fa7f5a8ef",
+  "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+  "ollama_sha256": "b0a4becfaf872e3ad5d2e9051244e0dfe55409f03d6e2cd9bd9c34400e201b4c",
+  "runner_sha256": "234b05b2138264f8fb263c3205e85f4c290e8afe5067e280a4f6f90cdac5696b",
+  "backend_sha256": "7a7b6696ffb43ca00f78504a0b2e76db0c6554320ed64e405559e3433580d9b3",
+  "server_pid": 3636581,
+  "runner_pid": 3636932,
+  "runner_port": 44745,
+  "has_authoritative_throughput": false
+}

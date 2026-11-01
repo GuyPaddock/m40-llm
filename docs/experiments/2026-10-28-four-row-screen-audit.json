@@ -1,0 +1,28 @@
+{
+   "confidence_scope" : "checks actual pairs, recorded seed/resample contract and interval range; bootstrap computed by existing Rust summarizer",
+   "correctness_only" : false,
+   "device_bytes_after" : 0,
+   "executable_sha256" : "a19efd16c9a46790776729dc4bc83e4713b6dd1a535569a7f36a1a994a8cebf1",
+   "is_audit_passed" : true,
+   "layers" : [
+      {
+         "is_micro_passed" : true,
+         "layer" : 0,
+         "max_variation" : 0.000364611233986701,
+         "needs_confirmation" : false
+      },
+      {
+         "is_micro_passed" : true,
+         "layer" : 17,
+         "max_variation" : 0.000335530952368089,
+         "needs_confirmation" : false
+      },
+      {
+         "is_micro_passed" : true,
+         "layer" : 35,
+         "max_variation" : 0.000578171903481998,
+         "needs_confirmation" : false
+      }
+   ],
+   "revision" : "de0481dbdf8345a110eb9e36082c8a860e33b727"
+}

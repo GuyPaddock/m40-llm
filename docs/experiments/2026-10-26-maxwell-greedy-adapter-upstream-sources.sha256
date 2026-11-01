@@ -1,0 +1,3 @@
+64d6aae3f3cc42d2508b0ceb67ac62d79dbc699cf2f5b36a87022c9652c9979d  target/research-sources/llama.cpp-9ff0d7e90f0faaa7c16017e6dcf9cf91c50a100e/ggml/src/ggml-cuda/mmvf.cu
+63dda3d1b8ca90959d596e8d623f60cfed7ed45c0996be995c3bc6a20611dfa3  target/research-sources/llama.cpp-9ff0d7e90f0faaa7c16017e6dcf9cf91c50a100e/ggml/src/ggml-cuda/mmvq.cu
+37aa1bbf64367736a65a122ccc49ce2ce8a305eeb4931385156d282c1efbf296  target/research-sources/llama.cpp-9ff0d7e90f0faaa7c16017e6dcf9cf91c50a100e/ggml/src/ggml-cuda/vecdotq.cuh

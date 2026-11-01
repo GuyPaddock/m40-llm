@@ -1,0 +1,363 @@
+# Controlled Qwen / Ollama Comparison
+
+`compare_ollama` measures client-observed buffered HTTP time with resident
+weights, a fresh prompt KV state, and the same Qwen2.5-3B Q8_0 GGUF bytes.
+It does not change the runtime's general compressed-KV default. This short
+workload explicitly uses full dense FP16 KV in both engines.
+
+The [2026-10-24 baseline checkpoint](experiments/2026-10-24-qwen-baseline-checkpoint.md)
+combines the repeated HTTP results, stage profile, counter availability, and
+bounded optimization decisions. It distinguishes measured timings from
+bandwidth/Amdahl estimates.
+The [2026-10-25 exact-kernel checkpoint](experiments/2026-10-25-exact-kernel-checkpoint.md)
+records the selected native-Q8/split8/256 configuration after cleanup and a
+fresh 31.850 versus 43.032 HTTP tok/s confirmation. Both speed targets remain
+unmet; prepared projection microbenchmarks are not promoted generation results.
+The later [native-order prepared confirmation](experiments/2026-10-25-q8-native-order-http.md)
+qualifies split down/vocabulary on the same exact workload at 35.725 versus
+31.962 native HTTP tok/s, with all 512 IDs equal. General preparation remains
+off. This paired m40-llm screen is not a fresh timed Ollama comparison, and
+both original speed goals remain unmet.
+
+## Build Isolation
+
+Use a separate `CARGO_TARGET_DIR` for each source checkout or archived revision.
+Sharing a release target directory between snapshots can reuse another
+revision's package artifacts. Verify the executable hash and actual dispatch
+before timing. If a shared-target comparison contaminated package outputs,
+clear the affected package artifacts and rebuild from the intended source.
+
+## Ollama Setup
+
+Use an isolated server, not an existing server with unrelated traffic. The
+2026-10-24 checkpoint uses the official prebuilt Linux x86-64
+[Ollama v0.40.11 release](https://github.com/ollama/ollama/releases/tag/v0.40.11).
+The downloaded `ollama-linux-amd64.tar.zst` SHA-256 is
+`7bedab90dd122661be78798e9f0edf37fccf0cccf2699d2c58ea1a3afdc04b6d`.
+The system's older Ollama installation is unchanged.
+
+This release runs on the M40 through its CUDA 12 backend and bundled `sm_52`
+PTX. Its CUDA 13 backend rejects this device. Allow for driver JIT and model
+warmup during cold startup; a 60-second combined discovery/load probe timed
+out, while a later 240-second-budget probe completed and generated `4`.
+That probe is compatibility evidence, not a throughput measurement.
+
+```bash
+OLLAMA_HOST=127.0.0.1:18435 \
+OLLAMA_MODELS="$HOME/.ollama/models" \
+OLLAMA_DEBUG=1 \
+OLLAMA_NUM_PARALLEL=1 \
+OLLAMA_MAX_LOADED_MODELS=1 \
+OLLAMA_KEEP_ALIVE=30m \
+OLLAMA_NO_CLOUD=1 \
+OLLAMA_NOPRUNE=1 \
+LLAMA_ARG_CACHE_RAM=0 \
+/tmp/m40-llm-tools/ollama-0.40.11/bin/ollama serve \
+  > /tmp/m40-ollama-controlled.log 2>&1
+```
+
+Run that command in its own terminal and record its PID. Disabling the RAM
+prompt cache prevents restoration of older measured prompts after the cache
+replacement request. The tool also verifies the actual cache count and actual
+prompt evaluation in runner diagnostics before accepting a trial. Neither
+`prompt_eval_count` alone nor a nominally unrelated replacement prompt proves
+that the full prompt was processed.
+
+## Run the Comparison
+
+### Stacked Compressed-KV Diagnostic
+
+The ignored `q8_kv_stack::test_preferred_q8_runtime_with_compressed_kv` probe
+in `qwen_decode_throughput` compares dense, compressed defaults, and a
+128-token recent window with top8/top4. It requires explicit
+`M40LLM_QWEN_THROUGHPUT_MODEL` and a new
+`M40LLM_QWEN_THROUGHPUT_REPORT` JSONL path, plus the qualified packed QKV,
+split FFN, gate-up/down/vocabulary preparation and dequant-SGEMM settings.
+Use a release CUDA build and `--include-ignored --test-threads=1` with the
+exact test filter. Other KV diagnostics/policies are rejected.
+
+One model remains resident; fresh KV allocation is measured separately and
+excluded from generation wall time. Each case warms once, then five rounds
+alternate forward/reverse order. Rows contain actual IDs/output, dispatch,
+memory, GPU boundaries and natural stop reasons. These are **resident
+generation**, not buffered HTTP measurements or fresh Ollama qualification.
+The default 1024-token recent window contains the entire short workload;
+only the smaller window exercises old-block selection. Output divergence
+is evidence to report, not an error to hide or an exact-output promotion.
+
+### Maxwell Runtime Candidates
+
+M08 reuses this comparison tool with explicit FFN and prefill settings. First
+complete the matching [`model_quality` run](maxwell_q8_execution.md#explicit-runtime-qualification)
+on both frozen splits. Then add the following to the ordinary command:
+
+```bash
+--compare-q8-runtime packed-f32-128 \
+--q8-runtime-prefill sequential \
+--q8-runtime-quality-report /path/to/completed-quality.jsonl
+```
+
+The control and candidate both retain prepared down/vocabulary, original model
+bytes and dense/context-1024 attention. The reference uses native FFN and
+sequential prefill. Prefill choices are `sequential`, `native-packed` and
+`dequant-sgemm`, independent of the FFN choice. The quality report must match
+the model, candidate, frozen corpus and both splits; missing or inconsistent
+completion evidence fails. A valid failed-quality report permits diagnostic
+timing but blocks exact-output promotion. Q8_1 is always a numerical track.
+
+Five alternating pairs, variation extension and fresh borderline confirmation
+reuse the existing protocol. Rows report actual launch/copy/allocation deltas,
+model-local choices and resident scratch outside the HTTP timing boundary.
+Matching untimed production token traces report actual prefill mode and
+temporary-weight capacity. No extra full-logit readback enters timed requests.
+Ollama supplies the untimed tokenizer/oracle check in candidate-pair mode;
+those pairs alone do not establish the fresh 1.30x-Ollama goal.
+
+For a fresh M09 comparison against Ollama, add `--time-ollama` to the same
+explicit runtime/evidence arguments. This loads the selected FFN/prefill
+configuration as the only M40 model and uses the ordinary alternating
+Ollama/M40 HTTP protocol. It requires a passing exact quality report with
+the corrected prefix-completion contract; numerical or failed-quality
+reports are rejected before loading the runtime. Candidate-pair mode remains
+available for those diagnostics.
+
+Every timed M40 output must match the completed quality output. Both engines
+must keep their own warmup output throughout the pairs. Untimed actual M40
+IDs must also match the quality report before the final
+`selected_runtime_ollama_qualification` record is emitted. Neither identical
+text across engines nor identical cross-engine arithmetic is assumed.
+The final record reports both the fixed 53.06 HTTP tok/s requirement and
+1.30x that run's fresh Ollama median. A summary without the final verified
+record is not completed qualification. Runtime defaults remain unchanged.
+
+Use `--profile-q8-runtime` instead of `--time-ollama` for a separate
+selected-runtime stage diagnostic. It requires the same completed exact
+quality report, selects the same immutable FFN/prefill configuration, and
+reuses five alternating profiling-off/on pairs. Set
+`M40LLM_STAGE_PROFILE_REPORT` to a new path; existing stage reports are
+rejected. `M40LLM_STAGE_PROFILE_TOKENS` defaults to `0,255,511`. Both actual
+off/on token traces must match each other and the completed quality IDs.
+Ollama supplies only an untimed oracle. These samples locate bottlenecks
+and measure profiling perturbation, not an optimization or target gain.
+
+### Baseline Command
+
+Build and execute through the project environment with hardware access:
+
+```bash
+source scripts/dev-env.sh
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo build --release --features cuda,server --example compare_ollama
+
+M40LLM_ENABLE_NVCC=1 \
+M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_Q8_DECODE_STREAM=decode \
+M40LLM_Q8_DECODE_SPLIT_QBLOCK=4 \
+M40LLM_Q8_DECODE_COL_TILE=4 \
+M40LLM_Q8_MLP_GATE_UP_SPLIT_QBLOCK=4 \
+M40LLM_FUSED_Q8_QKV=1 \
+M40LLM_FUSED_Q8_MLP_SWIGLU=1 \
+M40LLM_CUDA_GREEDY_ARGMAX=1 \
+M40LLM_Q8_LM_HEAD_ARGMAX=1 \
+M40LLM_Q8_LM_HEAD_ARGMAX_SHARED_A=1 \
+M40LLM_PROJECTION_BACKEND=large-model \
+M40LLM_MATERIALIZE_F32_WEIGHTS=0 \
+M40LLM_DECODE_GRAPH=0 \
+target/release/examples/compare_ollama \
+  --model "$HOME/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d" \
+  --ollama-pid OLLAMA_SERVER_PID \
+  --ollama-log /tmp/m40-ollama-controlled.log \
+  --output /tmp/m40-controlled-comparison.jsonl
+```
+
+The output file must not already exist. Requested hardware/model failures are
+errors, not successful skips. The tool starts the normal m40-llm HTTP router on
+an ephemeral loopback port and runs one request at a time. Both models may be
+resident, but no inference work runs concurrently. Unknown compute processes
+on the selected M40 invalidate the run.
+
+The prompt includes the same explicit Qwen system message and ChatML assistant
+prefix in both engines' raw-prompt interfaces. Before timing, actual Ollama
+prompt token IDs must match the local tokenizer. Greedy `top_k=1` is argmax in
+both engines; m40-llm omits temperature/top-p overrides to retain its existing
+GPU greedy path. No sampling or natural stop is overridden to fill the budget.
+
+Ollama 0.40.11 omits the historical `context` field for raw requests. The tool
+uses its current native runner's `/tokenize` endpoint as the tokenizer oracle,
+with special-token parsing enabled and BOS insertion disabled. Untimed
+`/completion` calls request actual generated IDs with `return_tokens=true`;
+their output must match the measured Ollama output. Timed requests still use
+the public Ollama `/api/generate` route.
+
+The initial matched setup exposed an extra-BOS bug in m40-llm's Raw/Auto
+handling of preformatted Qwen ChatML: generation consumed 66 IDs while the
+oracle and Ollama consumed 65. Commit `2f4d7ca` fixes this independently of the
+benchmark. The mismatched attempt was rejected and does not support a speed
+claim. Older 44-token results used a different rendered prompt and remain
+historical, not matched measurements.
+
+## Records and Decisions
+
+The JSONL contains model and executable hashes, source revision/worktree state,
+tensor shapes/dtypes, environment/build details, GPU conditions, cold-load
+timing, tokenizer-oracle evidence, and individual warm HTTP trials. Every
+trial records actual generated counts, stop reason, output, wall time,
+prefill/decode timing, and cache evidence. HTTP timing ends after reading the
+complete body, before parsing JSON. Internal generation timings are not a
+substitute for this client wall time.
+
+The initial screen contains five contemporaneous pairs in alternating order.
+Variation is MAD divided by median throughput. Variation over 5% extends the
+screen to ten pairs once; continuing instability blocks a speed conclusion.
+All observations remain in the report.
+
+An optimization must exceed `max(3%, 2 * larger timing variation)` and have a
+positive lower bound on its 95% paired-bootstrap gain interval, using 10,000
+resamples and seed zero. A point estimate within one percentage point of that
+threshold, or above threshold with an interval crossing zero, schedules
+exactly twenty fresh confirmation pairs. Screen and confirmation summaries
+remain separate. Confirmation is not repeatedly extended until significant.
+
+Only 512-generated-token, length-limited rows qualify for the fixed-workload
+claim. Natural EOS and mismatched counts remain visible but stop the paired
+comparison as invalid. Untimed companion generations save actual token-ID
+traces and must reproduce the measured output. These traces support the
+later history-only n-gram acceptance study.
+
+Both unchanged-model targets still apply: at least 53.06 HTTP E2E generated
+tokens/s and at least 1.30x the controlled Ollama median. Reaching neither is
+not a reason to change the workload or report decode-only TPS as E2E.
+
+Run the protocol tests without a GPU:
+
+```bash
+source scripts/dev-env.sh
+cargo test --no-default-features --example compare_ollama
+```
+
+Long benchmark records belong in linked experiment artifacts. Dated summaries
+and interpretations belong in [perf_baselines.md](perf_baselines.md).
+
+## Check Stage-Profiler Perturbation
+
+After building the same release example, keep the backend flags above and add:
+Reuse every backend assignment from the full command; the abbreviated invocation
+below omits those assignments, not their effect.
+
+```bash
+M40LLM_STAGE_PROFILE_TOKENS=0,255,511 \
+M40LLM_STAGE_PROFILE_REPORT=/tmp/m40-stages.jsonl \
+target/release/examples/compare_ollama \
+  --model "$HOME/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d" \
+  --ollama-pid OLLAMA_SERVER_PID \
+  --ollama-log /tmp/m40-ollama-controlled.log \
+  --compare-stage-profile \
+  --output /tmp/m40-profile-comparison.jsonl
+```
+
+Keep `M40LLM_STAGE_PROFILE` unset initially. This mode alternates five pairs
+of ordinary and profiled **m40-llm** HTTP requests; it does not time Ollama
+inference. Ollama is used only for the same model/tokenizer/oracle verification
+before timing. Each engine invocation completes before the next begins. No
+GPU tests or competing work should run during measurement.
+
+The comparison checks equal output for every pair and actual generated-ID
+equality in untimed companions. The HTTP report identifies profiling on/off.
+The separate stage report contains one profiler session for the enabled warmup,
+then the five enabled measured requests, then the enabled untimed companion.
+Use measured sessions for attribution rather than mixing in warmup or traces.
+This is an instrumentation-perturbation check, not an optimization-promotion
+decision or a new Ollama speed comparison. See the
+[stage timing caveats](diagnostics.md#launch-sync-and-timing-logs) before adding
+stage or host-wait durations together.
+The [qualified prepared-weight profile](experiments/2026-10-25-q8-native-order-profile.md)
+uses this same mode with explicit load-time `split`, families
+`down,vocabulary`, budget 6144 MiB. Ordinary native profiling leaves
+preparation off. Do not combine `--compare-stage-profile` with the two-model
+`--compare-q8-execution` mode; their configuration ownership is different.
+
+## Compare Exact Attention Kernels
+
+Keep the same server setup, model/prompt checks, release build, and Q8 backend
+assignments as the full command. Add `M40LLM_ATTN_HEAD128_PARTITIONS=8`,
+`M40LLM_ATTN_HEAD128_THREADS=256`, and `--compare-head128-attention`. This mode
+alternates complete legacy/parallel **m40-llm** HTTP requests. Ollama supplies
+only untimed model/tokenizer verification, not the timed control. The tool
+restores the attention env setting on return and keeps stage profiling off.
+
+```bash
+# Reuse every Q8 backend assignment from the full command above.
+M40LLM_ATTN_HEAD128_PARTITIONS=8 M40LLM_ATTN_HEAD128_THREADS=256 \
+target/release/examples/compare_ollama \
+  --model "$HOME/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d" \
+  --ollama-pid OLLAMA_SERVER_PID \
+  --ollama-log /tmp/m40-ollama-controlled.log \
+  --compare-head128-attention --output /tmp/head128-http.jsonl
+```
+
+The existing five/ten-pair screen, fixed twenty-pair borderline confirmation,
+and paired-bootstrap rules apply. Actual 512-token length stops remain required.
+Rows record kernel choices, retained KV bytes, and cached partial workspace
+capacity. Untimed companions retain actual IDs and first token divergence if
+any; floating-point association changes are not assumed to preserve whole-text
+identity. Numerical parity and model behavior must be checked separately.
+The summary deliberately omits the 1.30x-Ollama target calculation, since this
+mode's control is another m40-llm kernel. It cannot by itself establish a new
+Ollama comparison or completion of the unchanged-model goal.
+
+## Compare Prepared Q8 Families
+
+`--compare-q8-execution split` compares two separately loaded m40-llm models.
+The control explicitly disables preparation; the candidate uses the requested
+mode and immutable family subset. No execution flags change between requests.
+Ollama provides only the untimed same-file/tokenizer/backend oracle in this
+mode. It performs no inference during the paired m40-llm measurements.
+
+Reuse the complete Q8 backend assignments above and the selected C07 attention
+settings: `M40LLM_ATTN_HEAD128_KERNEL=parallel`,
+`M40LLM_ATTN_HEAD128_PARTITIONS=8`, `M40LLM_ATTN_HEAD128_THREADS=256`.
+Keep profiling/logging diagnostics disabled and rebuild the release example.
+
+```bash
+# Reuse every backend assignment from the full comparison command above.
+target/release/examples/compare_ollama \
+  --model "$HOME/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d" \
+  --ollama-pid OLLAMA_SERVER_PID \
+  --ollama-log /tmp/m40-ollama-controlled.log \
+  --compare-q8-execution split \
+  --q8-families down,vocabulary \
+  --output /tmp/q8-down-vocabulary-http.jsonl
+```
+
+`--q8-families all` prepares all projection families; native fused MLP is
+retained regardless of that subset after the C11 cleanup. To reproduce the
+historical all-prepared-MLP timing, use its recorded revision `26bc810` rather
+than current code. `--q8-budget-mb` limits extra prepared bytes and defaults to
+6144 MiB. `mixed` additionally prepares the previously measured multi-row tiled
+Q/output/down layouts; it is not a new launch-geometry search. CLI candidate
+settings are explicit and do not use ambient preparation env vars.
+Keep `M40LLM_Q8_EXECUTION_WEIGHTS=off` for the native control. Only
+down/vocabulary qualifies in the current full-workload screen; other subsets
+remain separate experiments. Standalone single-model timing must explicitly
+select `split`, `down,vocabulary`, and its budget before loading, rather than
+assuming the candidate flags change runtime defaults.
+
+Arithmetic, exact-OK, and config-lookup smokes use the same canonical Qwen
+system message as the browser prompt, supplied through the raw interface.
+They precede warmup. Dense-failed
+smokes are inconclusive, not prepared-weight failures. Fixed-workload warmups
+and every timed request must generate 512 IDs with length stops. Each model's
+output must remain stable within the run. Alternating native/prepared pairs
+reuse the existing bootstrap, variation, and borderline-confirmation protocol.
+Actual untimed IDs must reproduce each model's measured output; timing alone
+cannot promote a candidate. The promotion record also requires ID equality
+and no regression on dense-valid smokes, and never changes runtime defaults.
+
+JSONL records identify each model and its families, absolute request intervals,
+cold loading/repacking, source plus extra prepared payload, resident KV, and
+combined tracked device payload. Host peak RSS covers the whole benchmark
+process, including both models; boundary GPU snapshots include idle Ollama too.
+These are not measured peak VRAM or DRAM-traffic counters. Retained setup
+payload estimates remain separately labeled in the model cache statistics.
+Do not interpret this mode's native-control ratio as a new Ollama comparison
+or as satisfying the two original throughput targets.

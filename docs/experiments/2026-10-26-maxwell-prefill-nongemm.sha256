@@ -1,0 +1,11 @@
+725b5403ee35557f376c4c864dea5278f4738977e4036ab69d1a87a63bf03c67  docs/experiments/2026-10-26-maxwell-prefill-nongemm-audit.jq
+bc3e829897ffa4d2abbf90d956d94801dfca52bb844a2d405a853314a430ac06  docs/experiments/2026-10-26-maxwell-prefill-nongemm-audit.json
+934ed5c2c965af4198a6a58cdf554e9fb1ae48a110104255f643ae601dfe3b42  docs/experiments/2026-10-26-maxwell-prefill-nongemm-audit.sh
+06366256fb347fa0c01067fc080501ce5f6fd1ff50119b369058f13025113864  docs/experiments/2026-10-26-maxwell-prefill-nongemm-events.jsonl.gz
+06547c93f56219cc1c2975ed09e4a7b525599e99a52c04ea45f8077ea2469599  docs/experiments/2026-10-26-maxwell-prefill-nongemm-http.jsonl
+f6666dfa2c7f58816d5c2ada8aa140baf07cddd1f9f84ba580991bd4b040323b  docs/experiments/2026-10-26-maxwell-prefill-nongemm-hypothesis.md
+95c87cb50f5caa6df4ddcdfa430aecb84a7f3f4fa9ef4318f28269c6f408b5ca  docs/experiments/2026-10-26-maxwell-prefill-nongemm-oracle.log.gz
+f3223dfd9ca6d4257935af038fefbc281d9b13f48339aeb4537f412bae35160c  docs/experiments/2026-10-26-maxwell-prefill-nongemm-preflight-rejected.log.gz
+83b89fd3a4bebddd122b4b22c43ae2c73ee1332237b8508946e371e9f10edb0a  docs/experiments/2026-10-26-maxwell-prefill-nongemm-run.log.gz
+5b9c15f741cbb730d1e770e963c4d6c5f40be24ca9741eb7e711aa273839ac26  docs/experiments/2026-10-26-maxwell-prefill-nongemm-validation.tar.gz
+af2dbf6f748bc78f4b8164ee42d7bfb4bd5bdbe07a997d827d833f5a6e1a1b34  docs/experiments/2026-10-26-maxwell-prefill-nongemm.md

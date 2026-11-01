@@ -1,0 +1,309 @@
+{
+  "is_complete": true,
+  "source": "12191f55c1aedd917e8a83048b989bbc89802384",
+  "executable": "8d0995e317beaa17e37dcf4d1632abf61c9b867f2dc46746951a3cfeef82241d",
+  "qkv_peer": {
+    "executable_sha256": "04aab98908b357e522b4aaefecf96a0969459b37eef2919ee796af5b0dc4a04b",
+    "path": "docs/experiments/2026-10-25-maxwell-qkv-warp-screen.jsonl",
+    "revision": "499d2dea3988ec4418856c6d779cec75d991cd85",
+    "sha256": "9c1468a93abc8b4828e04d5880f1d1fbb70c36fe4790c73c27087a0098217b73"
+  },
+  "pairs": 30,
+  "primary_intervals": 60,
+  "gpu_boundary_samples": 60,
+  "validation_records": 6,
+  "all_output_control_bits_equal": true,
+  "no_timed_allocation_copy_sync": true,
+  "tracked_device_bytes_after": 0,
+  "stage_micro_gate_passed": true,
+  "combined_feasibility_gate_passed": true,
+  "runtime_quality_and_http_qualification_complete": false,
+  "screens": [
+    {
+      "kind": "output_warp_screen",
+      "layer_id": 0,
+      "optimistic_combined_e2e_gain": 0.04680345658085194,
+      "optimistic_profile_weighted_e2e_gain": 0.01962273686857796,
+      "qualification_scope": "case-level feasibility only; all three one-request cases, actual-512 quality and measured HTTP gates remain required",
+      "result": {
+        "bootstrap_gain_ci95": [
+          0.2818895398053054,
+          0.3140666930925131
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.03714880049228668,
+        "control_median_ms": 0.048451200127601624,
+        "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+        "pairs": [
+          [
+            0.048451200127601624,
+            0.03700479865074158
+          ],
+          [
+            0.04810880124568939,
+            0.037529599666595456
+          ],
+          [
+            0.04832000136375427,
+            0.03702079951763153
+          ],
+          [
+            0.04959680140018463,
+            0.037920001149177554
+          ],
+          [
+            0.048816001415252684,
+            0.03714880049228668
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.30424669129388704
+      },
+      "rows": 1,
+      "runtime_integration_allowed": true
+    },
+    {
+      "kind": "output_warp_screen",
+      "layer_id": 0,
+      "optimistic_combined_e2e_gain": 0.044049171311379975,
+      "optimistic_profile_weighted_e2e_gain": 0.017779013002621413,
+      "qualification_scope": "case-level feasibility only; all three one-request cases, actual-512 quality and measured HTTP gates remain required",
+      "result": {
+        "bootstrap_gain_ci95": [
+          0.26340493922297403,
+          0.27694224401364664
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.15187840461730956,
+        "control_median_ms": 0.1926751971244812,
+        "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+        "pairs": [
+          [
+            0.1931839942932129,
+            0.15128639936447144
+          ],
+          [
+            0.1920415997505188,
+            0.1520032048225403
+          ],
+          [
+            0.19290560483932495,
+            0.15137920379638672
+          ],
+          [
+            0.1923359990119934,
+            0.15187840461730956
+          ],
+          [
+            0.1926751971244812,
+            0.15192320346832275
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.26861483441288425
+      },
+      "rows": 4,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "output_warp_screen",
+      "layer_id": 17,
+      "optimistic_combined_e2e_gain": 0.047177359357393645,
+      "optimistic_profile_weighted_e2e_gain": 0.02019337968571433,
+      "qualification_scope": "case-level feasibility only; all three one-request cases, actual-512 quality and measured HTTP gates remain required",
+      "result": {
+        "bootstrap_gain_ci95": [
+          0.2546882390278118,
+          0.3549481932066709
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.03680959939956665,
+        "control_median_ms": 0.04842880070209503,
+        "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+        "pairs": [
+          [
+            0.04981440007686615,
+            0.03676480054855347
+          ],
+          [
+            0.04755840003490448,
+            0.037513598799705505
+          ],
+          [
+            0.048444798588752745,
+            0.03680959939956665
+          ],
+          [
+            0.04752959907054901,
+            0.03788160085678101
+          ],
+          [
+            0.04842880070209503,
+            0.036697599291801455
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.3156568257209875
+      },
+      "rows": 1,
+      "runtime_integration_allowed": true
+    },
+    {
+      "kind": "output_warp_screen",
+      "layer_id": 17,
+      "optimistic_combined_e2e_gain": 0.04419429121693352,
+      "optimistic_profile_weighted_e2e_gain": 0.018129530257665394,
+      "qualification_scope": "case-level feasibility only; all three one-request cases, actual-512 quality and measured HTTP gates remain required",
+      "result": {
+        "bootstrap_gain_ci95": [
+          0.265029512560212,
+          0.28124593272156706
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.1509503960609436,
+        "control_median_ms": 0.19249919652938843,
+        "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+        "pairs": [
+          [
+            0.19268159866333007,
+            0.1509503960609436
+          ],
+          [
+            0.1920415997505188,
+            0.15180799961090088
+          ],
+          [
+            0.1926911950111389,
+            0.15039360523223877
+          ],
+          [
+            0.192412805557251,
+            0.15176639556884766
+          ],
+          [
+            0.19249919652938843,
+            0.15081599950790406
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.275248038777389
+      },
+      "rows": 4,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "output_warp_screen",
+      "layer_id": 35,
+      "optimistic_combined_e2e_gain": 0.04708763969043339,
+      "optimistic_profile_weighted_e2e_gain": 0.019984003071550127,
+      "qualification_scope": "case-level feasibility only; all three one-request cases, actual-512 quality and measured HTTP gates remain required",
+      "result": {
+        "bootstrap_gain_ci95": [
+          0.25508230715671343,
+          0.3226641949241913
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.03728640079498291,
+        "control_median_ms": 0.04889920055866241,
+        "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+        "pairs": [
+          [
+            0.04905920028686524,
+            0.03709119856357575
+          ],
+          [
+            0.04889920055866241,
+            0.03783999979496002
+          ],
+          [
+            0.04921599924564361,
+            0.037264001369476316
+          ],
+          [
+            0.04761280119419098,
+            0.03793599903583526
+          ],
+          [
+            0.048307201266288756,
+            0.03728640079498291
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.31144866536010807
+      },
+      "rows": 1,
+      "runtime_integration_allowed": true
+    },
+    {
+      "kind": "output_warp_screen",
+      "layer_id": 35,
+      "optimistic_combined_e2e_gain": 0.04434168760031931,
+      "optimistic_profile_weighted_e2e_gain": 0.018067443565577435,
+      "qualification_scope": "case-level feasibility only; all three one-request cases, actual-512 quality and measured HTTP gates remain required",
+      "result": {
+        "bootstrap_gain_ci95": [
+          0.2497340493510245,
+          0.2814659748509938
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.1518336057662964,
+        "control_median_ms": 0.19344639778137207,
+        "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+        "pairs": [
+          [
+            0.19344639778137207,
+            0.15144959688186646
+          ],
+          [
+            0.1918015956878662,
+            0.15216319561004638
+          ],
+          [
+            0.19360320568084716,
+            0.1517024040222168
+          ],
+          [
+            0.1917631983757019,
+            0.1534432053565979
+          ],
+          [
+            0.1945695996284485,
+            0.1518336057662964
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.2740683908878938
+      },
+      "rows": 4,
+      "runtime_integration_allowed": false
+    }
+  ],
+  "memory": [
+    {
+      "rows": 1,
+      "scratch_bytes": [
+        16512
+      ],
+      "tracked_device_bytes": [
+        4472471680
+      ]
+    },
+    {
+      "rows": 4,
+      "scratch_bytes": [
+        65664
+      ],
+      "tracked_device_bytes": [
+        4472520832
+      ]
+    }
+  ],
+  "max_cpu_abs_error": 0.0000011851883057190093,
+  "max_cpu_mean_abs_error": 1.4274360674035118E-7
+}

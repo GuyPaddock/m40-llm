@@ -1,0 +1,56 @@
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.76s
+     Running tests/activation_calibration_cuda.rs (target/debug/deps/activation_calibration_cuda-ac261d51be4db6a8)
+
+running 3 tests
+test test_activation_setup_rejects_mismatched_artifacts_and_unsupported_sessions ... ok
+test test_capture_and_applied_thresholds_preserve_model_contracts ... ok
+test test_masked_activation_application_preserves_original_layer_routing ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+
+     Running tests/attention_parity_cuda_grid.rs (target/debug/deps/attention_parity_cuda_grid-ede5ab533724ab3e)
+
+running 11 tests
+test attention_block_select_exact_matches_dense_when_all_old_blocks_selected ... ok
+test attention_block_summary_lossy_is_finite_and_deterministic ... ok
+test attention_dense_recent_window_matches_reference ... ok
+test attention_dense_sink_recent_head128_matches_reference ... ok
+test attention_fp16_k_q4_v_direct_handles_partial_old_block ... ok
+test attention_fp16_k_q4_v_direct_supports_head128 ... ok
+test attention_last_token_cuda_gqa_head64_long_parity ... ok
+test attention_last_token_cuda_gqa_parity_grid ... ok
+test attention_last_token_cuda_parity_grid ... ok
+test compressed_kv_recent_ring_matches_dense_window_after_wrap ... ok
+test compressed_kv_recent_window_matches_dense_attention ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.63s
+
+     Running tests/layer_mask_cuda.rs (target/debug/deps/layer_mask_cuda-d996f602ed9ee969)
+
+running 5 tests
+test test_empty_mask_logits_and_setup_validation ... ok
+test test_masked_device_params_and_graph_session_guard ... ok
+test test_masked_forward_matches_manual_layers_and_preserves_kv_ids ... ok
+test test_masked_packed_prefill_and_batched_decode ... ok
+test test_masked_reconstruction_rejects_without_mutating_session ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.26s
+
+     Running tests/mlp_wrappers.rs (target/debug/deps/mlp_wrappers-06192ee172de6e90)
+
+running 1 test
+test mlp_gates_and_down_proj_f32xf16_f32_smoke ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/proj_wrappers.rs (target/debug/deps/proj_wrappers-92bbe4196fa7a6d4)
+
+running 2 tests
+test out_proj_f32xf16_f32_smoke ... ok
+test qkv_project_f32xf16_f32_smoke ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+

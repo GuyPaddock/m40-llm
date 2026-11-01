@@ -1,0 +1,28 @@
+{
+   "candidate" : {
+      "accumulator_registers" : [
+         "R25",
+         "R26",
+         "R27",
+         "R28",
+         "R29",
+         "R30",
+         "R31",
+         "R35"
+      ],
+      "dynamic_shared_bytes" : 1536,
+      "local_bytes" : 0,
+      "name" : "_ZN13m40llm_q8_ffn18gate_up_joint_ilp4EPKfPKjPK5uint2PfS7_S7_ii",
+      "registers" : 40,
+      "sha256" : "6591a45e5e18814370c30db474a9d41cc4cc0e26d13febecaf5d38a114f6febd",
+      "stack_bytes" : 0,
+      "static_shared_bytes" : 0,
+      "words" : 560
+   },
+   "is_passed" : true,
+   "reference" : "docs/experiments/2026-10-28-draft-compiled-audit.json",
+   "resource_sha256" : "9f67cd31e72ec49da871801b45773507bf33d0e2753fec6b32de16eb39662619",
+   "sass_sha256" : "2fe2357e6ba361139815dd62a07528804512850ace71ded5ef40abcf420c6f94",
+   "scope" : "Compiled identity/resources, not measured occupancy, stalls or traffic",
+   "unchanged_entries" : 138
+}

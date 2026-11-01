@@ -1,0 +1,8 @@
+ Function _ZN16m40llm_q8_output20decode_coltile4_warpEPKfPKhPfii:
+  REG:40 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0
+--
+ Function qkv_f32xq8_0_gguf_decode_split4_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:416 TEXTURE:0 SURFACE:0 SAMPLER:0
+--
+ Function gemm_f32xq8_0_gguf_f32_decode_coltile4_split4_kernel:
+  REG:40 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:352 TEXTURE:0 SURFACE:0 SAMPLER:0

@@ -1,0 +1,18 @@
+{
+  "original_functions": 135,
+  "original_words": 100400,
+  "current_functions": 137,
+  "has_identical_original_words": false,
+  "changed_functions": [
+    "compressed_rope_k_append_f32_to_f16_kernel",
+    "rope_f32_inplace_kernel",
+    "rope_f32_inplace_position_dev_kernel",
+    "rope_f32_kernel",
+    "rope_k_append_f32_to_f16_h2_at_kernel",
+    "rope_k_append_f32_to_f16_h2_kernel"
+  ],
+  "new_functions": [
+    "_ZN3cub17CUB_200700_520_NS11EmptyKernelIvEEvv",
+    "_ZN3cub17CUB_200700_520_NS27DeviceSegmentedReduceKernelINS0_18DeviceReducePolicyI5uint2iN18m40llm_q8_cub_read7AddPairEE9Policy600ENS0_22TransformInputIteratorIS3_NS4_8ReadPairENS0_21CountingInputIteratorIilEElEEPS3_NS8_IiNS4_13SegmentOffsetESB_lEESF_iS5_S3_S3_EEvT0_T1_T2_T3_iT5_T6_"
+  ]
+}

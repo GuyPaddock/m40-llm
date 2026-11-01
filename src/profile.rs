@@ -36,7 +36,7 @@ impl BenchmarkMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct OpCounters {
     pub launches: u64,
     pub cublas_calls: u64,
@@ -195,6 +195,24 @@ pub fn reset() {
 pub fn snapshot() -> ProfileSnapshot {
     let by_op = counters().lock().map(|map| map.clone()).unwrap_or_default();
     ProfileSnapshot { by_op }
+}
+
+pub fn counter_delta(before: &ProfileSnapshot, after: &ProfileSnapshot) -> OpCounters {
+    let mut total = OpCounters::default();
+    for (op, counts) in &after.by_op {
+        let delta = counts.saturating_sub(before.by_op.get(op).copied().unwrap_or_default());
+        total.launches += delta.launches;
+        total.cublas_calls += delta.cublas_calls;
+        total.stream_syncs += delta.stream_syncs;
+        total.stream_waits += delta.stream_waits;
+        total.device_allocs += delta.device_allocs;
+        total.device_frees += delta.device_frees;
+        total.h2d_copies += delta.h2d_copies;
+        total.d2h_copies += delta.d2h_copies;
+        total.h2d_bytes += delta.h2d_bytes;
+        total.d2h_bytes += delta.d2h_bytes;
+    }
+    total
 }
 
 pub fn snapshot_if_enabled() -> Option<ProfileSnapshot> {

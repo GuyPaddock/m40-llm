@@ -1,0 +1,258 @@
+{
+  "additional_gpu_hours": 0,
+  "benchmark_literal_overlap": {},
+  "exclusion_inventory_sha256": "28251ae83ab7ed789c3eb3a66ade150da1a27a644db5e6020940e3e6c695796e",
+  "has_complete_semantic_clearance": false,
+  "has_full_corpus_census": false,
+  "inputs_sha256": "a41ae66cda384431cfd16c1ac37249fd4bfc6f3c2934473c46f70649dd640406",
+  "is_r1_admitted": false,
+  "kind": "bounded_dataset_feasibility_sample",
+  "lengths": [
+    {
+      "buckets": {
+        "1-64": 0,
+        "128-255": 38,
+        "256-447": 29,
+        "448-1000000": 2,
+        "65-127": 0
+      },
+      "max": 509,
+      "median": 233,
+      "min": 160,
+      "p90_nearest_rank": 355,
+      "provisional_groups_1_447": 67,
+      "provisional_groups_65_447": 67,
+      "rows": 69,
+      "source": "docred-original",
+      "split": "dev"
+    },
+    {
+      "buckets": {
+        "1-64": 0,
+        "128-255": 40,
+        "256-447": 31,
+        "448-1000000": 3,
+        "65-127": 0
+      },
+      "max": 544,
+      "median": 249.5,
+      "min": 169,
+      "p90_nearest_rank": 356,
+      "provisional_groups_1_447": 71,
+      "provisional_groups_65_447": 71,
+      "rows": 74,
+      "source": "docred-original",
+      "split": "test"
+    },
+    {
+      "buckets": {
+        "1-64": 0,
+        "128-255": 43,
+        "256-447": 26,
+        "448-1000000": 2,
+        "65-127": 0
+      },
+      "max": 489,
+      "median": 238,
+      "min": 172,
+      "p90_nearest_rank": 344,
+      "provisional_groups_1_447": 69,
+      "provisional_groups_65_447": 69,
+      "rows": 71,
+      "source": "docred-original",
+      "split": "train_annotated"
+    },
+    {
+      "buckets": {
+        "1-64": 0,
+        "128-255": 1,
+        "256-447": 22,
+        "448-1000000": 14,
+        "65-127": 0
+      },
+      "max": 611,
+      "median": 409,
+      "min": 254,
+      "p90_nearest_rank": 535,
+      "provisional_groups_1_447": 23,
+      "provisional_groups_65_447": 23,
+      "rows": 37,
+      "source": "ncbi-sciriff",
+      "split": "devel"
+    },
+    {
+      "buckets": {
+        "1-64": 0,
+        "128-255": 0,
+        "256-447": 21,
+        "448-1000000": 14,
+        "65-127": 0
+      },
+      "max": 769,
+      "median": 398,
+      "min": 272,
+      "p90_nearest_rank": 531,
+      "provisional_groups_1_447": 21,
+      "provisional_groups_65_447": 21,
+      "rows": 35,
+      "source": "ncbi-sciriff",
+      "split": "test"
+    },
+    {
+      "buckets": {
+        "1-64": 0,
+        "128-255": 2,
+        "256-447": 14,
+        "448-1000000": 17,
+        "65-127": 0
+      },
+      "max": 824,
+      "median": 449,
+      "min": 213,
+      "p90_nearest_rank": 619,
+      "provisional_groups_1_447": 16,
+      "provisional_groups_65_447": 16,
+      "rows": 33,
+      "source": "ncbi-sciriff",
+      "split": "train"
+    },
+    {
+      "buckets": {
+        "1-64": 0,
+        "128-255": 4,
+        "256-447": 20,
+        "448-1000000": 4,
+        "65-127": 0
+      },
+      "max": 540,
+      "median": 345.0,
+      "min": 156,
+      "p90_nearest_rank": 461,
+      "provisional_groups_1_447": 24,
+      "provisional_groups_65_447": 24,
+      "rows": 28,
+      "source": "pubmedqa-original",
+      "split": "cv_unresolved"
+    },
+    {
+      "buckets": {
+        "1-64": 0,
+        "128-255": 5,
+        "256-447": 16,
+        "448-1000000": 2,
+        "65-127": 0
+      },
+      "max": 503,
+      "median": 344,
+      "min": 230,
+      "p90_nearest_rank": 416,
+      "provisional_groups_1_447": 21,
+      "provisional_groups_65_447": 21,
+      "rows": 23,
+      "source": "pubmedqa-original",
+      "split": "test"
+    },
+    {
+      "buckets": {
+        "1-64": 0,
+        "128-255": 2,
+        "256-447": 18,
+        "448-1000000": 8,
+        "65-127": 0
+      },
+      "max": 591,
+      "median": 396.0,
+      "min": 207,
+      "p90_nearest_rank": 512,
+      "provisional_groups_1_447": 20,
+      "provisional_groups_65_447": 20,
+      "rows": 28,
+      "source": "pubmedqa-sciriff",
+      "split": "cv_unresolved"
+    },
+    {
+      "buckets": {
+        "1-64": 0,
+        "128-255": 0,
+        "256-447": 18,
+        "448-1000000": 5,
+        "65-127": 0
+      },
+      "max": 554,
+      "median": 395,
+      "min": 281,
+      "p90_nearest_rank": 467,
+      "provisional_groups_1_447": 18,
+      "provisional_groups_65_447": 18,
+      "rows": 23,
+      "source": "pubmedqa-sciriff",
+      "split": "test"
+    },
+    {
+      "buckets": {
+        "1-64": 1,
+        "128-255": 96,
+        "256-447": 21,
+        "448-1000000": 3,
+        "65-127": 5
+      },
+      "max": 609,
+      "median": 190.5,
+      "min": 57,
+      "p90_nearest_rank": 305,
+      "provisional_groups_1_447": 9,
+      "provisional_groups_65_447": 9,
+      "rows": 126,
+      "source": "squad-original",
+      "split": "train"
+    },
+    {
+      "buckets": {
+        "1-64": 3,
+        "128-255": 91,
+        "256-447": 20,
+        "448-1000000": 1,
+        "65-127": 11
+      },
+      "max": 460,
+      "median": 185.0,
+      "min": 53,
+      "p90_nearest_rank": 289,
+      "provisional_groups_1_447": 11,
+      "provisional_groups_65_447": 11,
+      "rows": 126,
+      "source": "squad-original",
+      "split": "validation"
+    }
+  ],
+  "tokens_sha256": "5af8a218909b1a46c61891be30f30877875aeaf3549e6523cb8eddbc8df08ec4",
+  "sample_count": 673,
+  "shared_span_pairs": 6790,
+  "span_summary": [
+    {
+      "sources": "ncbi-sciriff / ncbi-sciriff",
+      "pairs": 5460,
+      "cross_split": 3671,
+      "same_document": 0
+    },
+    {
+      "sources": "pubmedqa-original / pubmedqa-sciriff",
+      "pairs": 51,
+      "cross_split": 0,
+      "same_document": 51
+    },
+    {
+      "sources": "pubmedqa-sciriff / pubmedqa-sciriff",
+      "pairs": 1275,
+      "cross_split": 644,
+      "same_document": 0
+    },
+    {
+      "sources": "squad-original / squad-original",
+      "pairs": 4,
+      "cross_split": 0,
+      "same_document": 4
+    }
+  ],
+  "full_sample_report": "local-artifacts/2026-10-30-source-selection/sample-report.json"
+}

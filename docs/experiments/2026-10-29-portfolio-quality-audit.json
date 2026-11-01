@@ -1,0 +1,70 @@
+{
+  "is_passed": true,
+  "revision": "1b1890ad7f2dac99b10536dccdf2a01ae5d6d623",
+  "executable_sha256": "21cb3e53fe9c9a9f7d9bbcedc93da4e84fd4fb2fd50807b676815ab534f5ab46",
+  "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+  "arms": [
+    "control",
+    "down",
+    "vocabulary",
+    "argmax",
+    "all"
+  ],
+  "full_logit_vectors": 35,
+  "vocabulary": 151936,
+  "valid_kv_words_per_arm": 10616832,
+  "frozen_tasks_per_arm": 12,
+  "dense_valid_per_arm": 7,
+  "loads": [
+    {
+      "arm": "control",
+      "original_load_ms": 17812.273686,
+      "packet_preparation_ms": 6621.201435,
+      "packet_bytes": 1192935424,
+      "combined_prepared_bytes": 4110516224,
+      "temporary_packet_host_payload_bytes": 661225472,
+      "tracked_device_delta": 7390035968,
+      "process_lifetime_host_high_water": "VmHWM:\t 7007420 kB"
+    },
+    {
+      "arm": "down",
+      "original_load_ms": 16415.275267999998,
+      "packet_preparation_ms": 6408.427881,
+      "packet_bytes": 1192935424,
+      "combined_prepared_bytes": 4110516224,
+      "temporary_packet_host_payload_bytes": 661225472,
+      "tracked_device_delta": 7390035968,
+      "process_lifetime_host_high_water": "VmHWM:\t 7096492 kB"
+    },
+    {
+      "arm": "vocabulary",
+      "original_load_ms": 16443.881752,
+      "packet_preparation_ms": 6427.69637,
+      "packet_bytes": 1192935424,
+      "combined_prepared_bytes": 4110516224,
+      "temporary_packet_host_payload_bytes": 661225472,
+      "tracked_device_delta": 7390035968,
+      "process_lifetime_host_high_water": "VmHWM:\t 7096492 kB"
+    },
+    {
+      "arm": "argmax",
+      "original_load_ms": 16536.680581999997,
+      "packet_preparation_ms": 6389.078127000001,
+      "packet_bytes": 1192935424,
+      "combined_prepared_bytes": 4110516224,
+      "temporary_packet_host_payload_bytes": 661225472,
+      "tracked_device_delta": 7390035968,
+      "process_lifetime_host_high_water": "VmHWM:\t 7131764 kB"
+    },
+    {
+      "arm": "all",
+      "original_load_ms": 16469.965834,
+      "packet_preparation_ms": 6410.276931,
+      "packet_bytes": 1192935424,
+      "combined_prepared_bytes": 4110516224,
+      "temporary_packet_host_payload_bytes": 661225472,
+      "tracked_device_delta": 7390035968,
+      "process_lifetime_host_high_water": "VmHWM:\t 7135040 kB"
+    }
+  ]
+}

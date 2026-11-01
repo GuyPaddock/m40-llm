@@ -1,0 +1,326 @@
+{
+  "sources": {
+    "http": "2026-10-25-q8-native-order-profile-http.jsonl",
+    "stage_gzip": "2026-10-25-q8-native-order-stage-events.jsonl.gz",
+    "measured_sessions": [
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "excluded_sessions": [
+      1,
+      7
+    ]
+  },
+  "checks": {
+    "clean_release": true,
+    "same_executable_as_qualified": true,
+    "qualified_execution": true,
+    "dense_1024_unchanged_source": true,
+    "ten_valid_fixed_rows": true,
+    "five_profile_pairs": true,
+    "serial_http_requests": true,
+    "actual_ids_equal": true,
+    "matches_qualified_ids": true,
+    "measured_stage_count": true,
+    "exact_step_positions": true,
+    "steady_no_allocation_or_cublas": true,
+    "all_decode_stream": true
+  },
+  "perturbation": {
+    "is_optimization_claim": false,
+    "kind": "profile_comparison_summary",
+    "pairs": 5,
+    "profile_off": {
+      "mad_over_median": 0.0005846210326098586,
+      "max": 35.75344407785499,
+      "median": 35.6461793944015,
+      "min": 35.614564171931924
+    },
+    "profile_on": {
+      "mad_over_median": 0.0005482635539760181,
+      "max": 35.45858124096525,
+      "median": 35.390621591768,
+      "min": 35.37121820379668
+    },
+    "report_path": "/tmp/m40-q8-native-order-profile-stages.jsonl",
+    "throughput_change": -0.007169290144840468
+  },
+  "timing_by_phase": [
+    {
+      "phase": "profile-off",
+      "median_prefill_ms": 1577.996886,
+      "median_decode_ms": 12739.333952,
+      "median_generation_ms": 14317.528212,
+      "median_http_ms": 14363.390655
+    },
+    {
+      "phase": "profile-on",
+      "median_prefill_ms": 1613.206816,
+      "median_decode_ms": 12808.983167,
+      "median_generation_ms": 14422.274167,
+      "median_http_ms": 14467.109561000001
+    }
+  ],
+  "stage_medians": [
+    {
+      "step": 0,
+      "stages": [
+        {
+          "stage": "attention",
+          "median_gpu_ms": 0.623936
+        },
+        {
+          "stage": "attn_norm",
+          "median_gpu_ms": 0.38988799999999996
+        },
+        {
+          "stage": "attn_residual",
+          "median_gpu_ms": 0.158848
+        },
+        {
+          "stage": "embedding",
+          "median_gpu_ms": 0.001376
+        },
+        {
+          "stage": "ffn_norm",
+          "median_gpu_ms": 0.4008319999999999
+        },
+        {
+          "stage": "greedy_argmax",
+          "median_gpu_ms": 0.259168
+        },
+        {
+          "stage": "kv_append_rope_k",
+          "median_gpu_ms": 0.31910399999999994
+        },
+        {
+          "stage": "lm_head",
+          "median_gpu_ms": 1.563488
+        },
+        {
+          "stage": "mlp_down",
+          "median_gpu_ms": 4.7883520000000015
+        },
+        {
+          "stage": "mlp_gate_up_swiglu",
+          "median_gpu_ms": 11.871584000000002
+        },
+        {
+          "stage": "mlp_residual",
+          "median_gpu_ms": 0.15916799999999998
+        },
+        {
+          "stage": "out_project",
+          "median_gpu_ms": 1.742016
+        },
+        {
+          "stage": "output_norm",
+          "median_gpu_ms": 0.010912
+        },
+        {
+          "stage": "qkv_project",
+          "median_gpu_ms": 2.5023359999999997
+        },
+        {
+          "stage": "rope_q",
+          "median_gpu_ms": 0.2758079999999999
+        }
+      ]
+    },
+    {
+      "step": 255,
+      "stages": [
+        {
+          "stage": "attention",
+          "median_gpu_ms": 0.7767680000000002
+        },
+        {
+          "stage": "attn_norm",
+          "median_gpu_ms": 0.3874879999999999
+        },
+        {
+          "stage": "attn_residual",
+          "median_gpu_ms": 0.16179200000000005
+        },
+        {
+          "stage": "embedding",
+          "median_gpu_ms": 0.027264
+        },
+        {
+          "stage": "ffn_norm",
+          "median_gpu_ms": 0.39363200000000015
+        },
+        {
+          "stage": "greedy_argmax",
+          "median_gpu_ms": 0.25872
+        },
+        {
+          "stage": "kv_append_rope_k",
+          "median_gpu_ms": 0.328576
+        },
+        {
+          "stage": "lm_head",
+          "median_gpu_ms": 1.563424
+        },
+        {
+          "stage": "mlp_down",
+          "median_gpu_ms": 4.773503999999999
+        },
+        {
+          "stage": "mlp_gate_up_swiglu",
+          "median_gpu_ms": 11.871936
+        },
+        {
+          "stage": "mlp_residual",
+          "median_gpu_ms": 0.16416000000000006
+        },
+        {
+          "stage": "out_project",
+          "median_gpu_ms": 1.738816
+        },
+        {
+          "stage": "output_norm",
+          "median_gpu_ms": 0.010496
+        },
+        {
+          "stage": "qkv_project",
+          "median_gpu_ms": 2.5079040000000004
+        },
+        {
+          "stage": "rope_q",
+          "median_gpu_ms": 0.274752
+        }
+      ]
+    },
+    {
+      "step": 511,
+      "stages": [
+        {
+          "stage": "attention",
+          "median_gpu_ms": 0.9749119999999999
+        },
+        {
+          "stage": "attn_norm",
+          "median_gpu_ms": 0.38783999999999985
+        },
+        {
+          "stage": "attn_residual",
+          "median_gpu_ms": 0.16124800000000003
+        },
+        {
+          "stage": "embedding",
+          "median_gpu_ms": 0.02864
+        },
+        {
+          "stage": "ffn_norm",
+          "median_gpu_ms": 0.3933440000000002
+        },
+        {
+          "stage": "greedy_argmax",
+          "median_gpu_ms": 0.259168
+        },
+        {
+          "stage": "kv_append_rope_k",
+          "median_gpu_ms": 0.32697599999999993
+        },
+        {
+          "stage": "lm_head",
+          "median_gpu_ms": 1.564992
+        },
+        {
+          "stage": "mlp_down",
+          "median_gpu_ms": 4.772128
+        },
+        {
+          "stage": "mlp_gate_up_swiglu",
+          "median_gpu_ms": 11.879264
+        },
+        {
+          "stage": "mlp_residual",
+          "median_gpu_ms": 0.16438400000000003
+        },
+        {
+          "stage": "out_project",
+          "median_gpu_ms": 1.7407359999999998
+        },
+        {
+          "stage": "output_norm",
+          "median_gpu_ms": 0.010656
+        },
+        {
+          "stage": "qkv_project",
+          "median_gpu_ms": 2.5114239999999994
+        },
+        {
+          "stage": "rope_q",
+          "median_gpu_ms": 0.27488
+        }
+      ]
+    }
+  ],
+  "token_medians": [
+    {
+      "step": 0,
+      "wall_ms": 79.276149,
+      "union_ms": 25.06070245942101,
+      "sum_ms": 25.06070404034108,
+      "timeline_span_ms": 25.682143392274156,
+      "ffn_fraction": 0.6643119887158947,
+      "gate_up_fraction": 0.4732139631487009,
+      "attention_fraction": 0.024900620856673127,
+      "host_waits": [
+        {
+          "operation": "d2h_copy",
+          "median_ms": 0.030674
+        },
+        {
+          "operation": "stream_synchronize",
+          "median_ms": 21.606943
+        }
+      ]
+    },
+    {
+      "step": 255,
+      "wall_ms": 26.039226,
+      "union_ms": 25.266686541959643,
+      "sum_ms": 25.26668796921149,
+      "timeline_span_ms": 26.013887153938413,
+      "ffn_fraction": 0.6595809314456811,
+      "gate_up_fraction": 0.47024600258641897,
+      "attention_fraction": 0.03074277265085964,
+      "host_waits": [
+        {
+          "operation": "d2h_copy",
+          "median_ms": 0.023372999999999998
+        },
+        {
+          "operation": "stream_synchronize",
+          "median_ms": 20.019451
+        }
+      ]
+    },
+    {
+      "step": 511,
+      "wall_ms": 26.31777,
+      "union_ms": 25.446486542467028,
+      "sum_ms": 25.446495986077935,
+      "timeline_span_ms": 26.256416503805667,
+      "ffn_fraction": 0.6541174936752692,
+      "gate_up_fraction": 0.46646281541139684,
+      "attention_fraction": 0.0382595100797025,
+      "host_waits": [
+        {
+          "operation": "d2h_copy",
+          "median_ms": 0.024458
+        },
+        {
+          "operation": "stream_synchronize",
+          "median_ms": 20.324099
+        }
+      ]
+    }
+  ]
+}

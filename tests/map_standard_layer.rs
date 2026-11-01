@@ -129,10 +129,22 @@ fn make_model_with_layer(
         gguf,
         cuda,
         kv_cache: None,
+        layer_mask: m40_llm::infer::LayerMask::default(),
+        q8_ffn: m40_llm::infer::Q8FfnConfig::native(),
+        q8_prefill: m40_llm::infer::q8_prefill::Q8PrefillBackend::Native,
+        q8_attention_projection: m40_llm::infer::Q8AttentionProjectionState::native(),
         #[cfg(feature = "cuda")]
         forward_workspace: std::sync::Mutex::new(None),
         #[cfg(feature = "cuda")]
         materialized_weights: std::sync::Mutex::new(std::collections::HashMap::new()),
+        #[cfg(feature = "cuda")]
+        q8_execution: m40_llm::infer::execution_weights::Q8ExecutionCache::disabled(),
+        #[cfg(feature = "cuda")]
+        activation_research: None,
+        #[cfg(feature = "cuda")]
+        layer_influence: None,
+        #[cfg(feature = "cuda")]
+        ffn_capture: None,
         device_tensors,
         weights_len: 0,
         #[cfg(feature = "cuda")]

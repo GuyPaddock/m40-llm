@@ -1,0 +1,14 @@
+246ce99567375d1bee545f390c84b96c532602e46162a5a606c7cbee0cb7af90  docs/experiments/2026-10-26-maxwell-q81-corrected-128-audit.json
+e3dba2e4d312590bcb694e3c423d0c3942f7b74abf06fd8b89aab6987619933a  docs/experiments/2026-10-26-maxwell-q81-corrected-128.jsonl
+afe0d9c6e992bbeebd9808afd14637864b4ffa4aa8d57a90d2c0de6ec70e0b94  docs/experiments/2026-10-26-maxwell-q81-corrected-128.log.gz
+5a44f4872b77ae4388d13103793b12e6d0fd1aa7e010ecc18df82d2e36017b15  docs/experiments/2026-10-26-maxwell-q81-corrected-256-audit.json
+82a7aed95ef6d169f26e6d8a1d1e56194742f7dc324347c6467c5ee86e9f451f  docs/experiments/2026-10-26-maxwell-q81-corrected-256.jsonl
+4ca7f6df8b67c79ce91762d5d8239f6162f0859a33364dd3c38e6479d8e35d0c  docs/experiments/2026-10-26-maxwell-q81-corrected-256.log.gz
+b7eb19da27a6973ddbff8c1e9a53d333d33261b39b36c0e368d00258a06256fc  docs/experiments/2026-10-26-maxwell-q81-corrected-audit.jq
+39f45787dcf7b72671f865a9744415711d46195509f9546442f6f1243e5452d8  docs/experiments/2026-10-26-maxwell-q81-corrected-build.log.gz
+5daeeba179176f7c68ed0575af1193eca42bdf97fe0edab3f92918919af177c0  docs/experiments/2026-10-26-maxwell-q81-corrected-negative-controls.log.gz
+0842557b545c75b807282ea3d69b475ce56a7c0f12edc31a807855df37b1c328  docs/experiments/2026-10-26-maxwell-q81-corrected-negative-controls.sh
+35d5fa6b4b14a34e1692a8a6c72b3f0c81d95bb8eaea5d0d06dfbdfd3213e40e  docs/experiments/2026-10-26-maxwell-q81-corrected-primitive-included.log.gz
+a8271e6d009971dc12b9cc4295e6fd02d9d0d690866c65bb416b4db21a0da34c  docs/experiments/2026-10-26-maxwell-q81-corrected-primitive.log.gz
+6a2e4b560857e85326c9111b42463a617764d40bba1406cba4ed533bb7609eb2  docs/experiments/2026-10-26-maxwell-q81-corrected-quality.md
+7792353a8bfe2a5cbc92de4c65a3ca21dbd3a168e4f79cc1537fc101b5aa2836  docs/experiments/2026-10-26-maxwell-q81-corrected-runner-tests.log.gz

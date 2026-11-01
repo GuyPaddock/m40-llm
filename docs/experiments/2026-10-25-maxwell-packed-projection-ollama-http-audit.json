@@ -1,0 +1,83 @@
+{
+  "passes_audit": true,
+  "comparison_kind": "ollama",
+  "source": "f276957c78d85e41bad99e2275fc584333b0d22b",
+  "executable_sha256": "4b7f15aa9361a29e42472e7c0194c92863b050ed1c3ab436f2f68514f4ff9cf7",
+  "primary_pairs": 5,
+  "primary_requests": 10,
+  "screen_requests": 10,
+  "fresh_confirmation_requests": 0,
+  "gpu_boundary_samples": 20,
+  "observed_clocks": [
+    {
+      "pstate": "P0",
+      "sm_mhz": 1113,
+      "memory_mhz": 3004
+    }
+  ],
+  "observed_compute_processes": [
+    {
+      "uuid": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852",
+      "pid": "1724899",
+      "name": "/tmp/m40-llm-tools/ollama-0.40.11/lib/ollama/llama-server"
+    },
+    {
+      "uuid": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852",
+      "pid": "1742689",
+      "name": "target/release/examples/compare_ollama"
+    }
+  ],
+  "completed_quality_and_actual_ids_bound": true,
+  "prompt_cache_resets_verified": true,
+  "all_existing_prepared_tensor_identities_unchanged": 109,
+  "comparison": {
+    "bootstrap_gain_ci95": [
+      0.13974350927965173,
+      0.1437048673839969
+    ],
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 0,
+    "candidate": {
+      "mad_over_median": 0.0023971537004720627,
+      "max": 49.31710010908406,
+      "median": 49.14644856972014,
+      "min": 49.02863697866618
+    },
+    "control": {
+      "mad_over_median": 0.0011434490213857215,
+      "max": 43.15485932127784,
+      "median": 43.10557029910306,
+      "min": 42.92063174661588
+    },
+    "gain": 0.14014147658180476,
+    "needs_fresh_confirmation": false,
+    "needs_variation_extension": false,
+    "pairs": 5,
+    "passes_promotion_gate": true,
+    "promotion_threshold": 0.03,
+    "reaches_original_target": false
+  },
+  "phase_medians": [
+    {
+      "label": "m40-llm",
+      "requests": 5,
+      "http_ms": 10417.843300999999,
+      "prefill_ms": 498.8804439999999,
+      "decode_ms": 9870.477983
+    },
+    {
+      "label": "ollama",
+      "requests": 5,
+      "http_ms": 11877.815244000001,
+      "prefill_ms": 229.589,
+      "decode_ms": 11643.652
+    }
+  ],
+  "prepared_bytes": 2917580800,
+  "source_plus_prepared_bytes_per_m40_model": 6197100544,
+  "dense_kv_bytes_per_model": 37748736,
+  "original_absolute_target_http_tps": 53.06,
+  "original_relative_target_http_tps": 56.037241388833976,
+  "reaches_both_original_targets": false,
+  "changes_runtime_defaults": false
+}

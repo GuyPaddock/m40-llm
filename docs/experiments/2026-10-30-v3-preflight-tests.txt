@@ -1,0 +1,115 @@
+test_frequent_key_limit_is_incomplete_not_suppression (test_census_matching.MatchingTests.test_frequent_key_limit_is_incomplete_not_suppression)
+A repeated template cannot be dropped to make the audit finish. ... ok
+test_prefix_candidates_match_exhaustive_oracle (test_census_matching.MatchingTests.test_prefix_candidates_match_exhaustive_oracle)
+Indexed candidates retain all three rules on deterministic mixed content. ... ok
+test_transitive_native_and_family_quarantine (test_census_matching.MatchingTests.test_transitive_native_and_family_quarantine)
+Connecting through an ineligible vertex cannot split a leaked component. ... ok
+test_cross_partition_component_is_transitive (test_group_capacity.GroupCapacityTests.test_cross_partition_component_is_transitive)
+Text and solution edges together quarantine the entire component. ... ok
+test_dolly_context_hash_is_not_document_identity (test_group_capacity.GroupCapacityTests.test_dolly_context_hash_is_not_document_identity)
+A context paragraph remains quarantined without reviewed provenance. ... ok
+test_duplicate_ids_cannot_inflate_capacity (test_group_capacity.GroupCapacityTests.test_duplicate_ids_cannot_inflate_capacity)
+Repeated source IDs fail the audit rather than becoming extra rows. ... ok
+test_five_word_shingles_quarantine_near_duplicates (test_group_capacity.GroupCapacityTests.test_five_word_shingles_quarantine_near_duplicates)
+The frozen Jaccard rule joins similar statements across partitions. ... ok
+test_length_ineligible_row_still_connects_cross_partition_group (test_group_capacity.GroupCapacityTests.test_length_ineligible_row_still_connects_cross_partition_group)
+Filtering before grouping must not conceal a partition conflict. ... ok
+test_rejects_evidence_replacement_and_hash_mismatch (test_group_capacity.GroupCapacityTests.test_rejects_evidence_replacement_and_hash_mismatch)
+Previously recorded artifacts cannot be overwritten or substituted. ... ok
+test_short_independent_statements_do_not_share_empty_shingles (test_group_capacity.GroupCapacityTests.test_short_independent_statements_do_not_share_empty_shingles)
+Empty shingle sets are not evidence of identical task templates. ... ok
+test_solution_source_is_never_executed (test_group_capacity.GroupCapacityTests.test_solution_source_is_never_executed)
+Parsing reference code cannot execute its file-writing side effects. ... ok
+test_unparseable_solution_is_unresolved_not_admitted (test_group_capacity.GroupCapacityTests.test_unparseable_solution_is_unresolved_not_admitted)
+A missing solution audit cannot silently increase eligible capacity. ... ok
+test_commit_prompt_uses_only_prechange_code (test_hf_probe.FeasibilityTests.test_commit_prompt_uses_only_prechange_code)
+A patch request retains the old file without leaking its solution. ... ok
+test_dataset_answers_never_enter_input (test_hf_probe.FeasibilityTests.test_dataset_answers_never_enter_input)
+Scientific answers and synthetic assistant continuations are ignored. ... ok
+test_embedded_chat_controls_require_quarantine (test_hf_probe.FeasibilityTests.test_embedded_chat_controls_require_quarantine)
+Dataset strings cannot silently inject extra formatted turns. ... ok
+test_exact_partial_response_returns_total_size (test_hf_probe.FeasibilityTests.test_exact_partial_response_returns_total_size)
+A valid range exposes object size without acquiring the whole file. ... ok
+test_ignored_or_changed_ranges_fail (test_hf_probe.FeasibilityTests.test_ignored_or_changed_ranges_fail)
+A server or cache cannot substitute a full or unrelated response. ... ok
+test_array_prefix_bounds_record_count (test_original_source_inputs.OriginalSourceTests.test_array_prefix_bounds_record_count)
+Large compressed prefixes cannot silently enlarge the inspected sample. ... ok
+test_incomplete_utf8_tail_does_not_damage_prior_record (test_original_source_inputs.OriginalSourceTests.test_incomplete_utf8_tail_does_not_damage_prior_record)
+A byte-range cut within UTF-8 cannot corrupt an already complete input. ... ok
+test_mapping_prefix_drops_incomplete_document (test_original_source_inputs.OriginalSourceTests.test_mapping_prefix_drops_incomplete_document)
+A clipped record is never repaired into an apparently eligible prompt. ... ok
+test_missing_identity_and_chat_controls_fail (test_original_source_inputs.OriginalSourceTests.test_missing_identity_and_chat_controls_fail)
+Unknown identity and extra formatted turns are never silently accepted. ... ok
+test_pubtator_rejects_mismatched_document_ids (test_original_source_inputs.OriginalSourceTests.test_pubtator_rejects_mismatched_document_ids)
+Joining a title to another paper's abstract must fail closed. ... ok
+test_pubtator_retains_pmid_and_full_context_only (test_original_source_inputs.OriginalSourceTests.test_pubtator_retains_pmid_and_full_context_only)
+Annotations and the incomplete final document are not prompt material. ... ok
+test_squad_keeps_article_group_and_upstream_split (test_original_source_inputs.OriginalSourceTests.test_squad_keeps_article_group_and_upstream_split)
+Different questions in the same article cannot masquerade as documents. ... ok
+test_template_rendering_preserves_instruction_not_answer (test_original_source_inputs.OriginalSourceTests.test_template_rendering_preserves_instruction_not_answer)
+Template wording stays intact while the gold output is excluded. ... ok
+test_canonical_assignment_is_permutation_invariant (test_quota_preflight.QuotaTests.test_canonical_assignment_is_permutation_invariant)
+Input ordering cannot change destinations or selected bucket counts. ... ok
+test_duplicate_and_negative_capacity_cannot_inflate_counts (test_quota_preflight.QuotaTests.test_duplicate_and_negative_capacity_cannot_inflate_counts)
+Malformed source counts fail validation instead of proving feasibility. ... ok
+test_exhausted_or_oversized_solve_is_unknown (test_quota_preflight.QuotaTests.test_exhausted_or_oversized_solve_is_unknown)
+No proof can be inferred from a timeout or size cap. ... ok
+test_global_buckets_can_be_supplied_by_different_families (test_quota_preflight.QuotaTests.test_global_buckets_can_be_supplied_by_different_families)
+No extra per-family bucket rule is silently added. ... ok
+test_hash_shortfall_has_legal_quota_aware_witness (test_quota_preflight.QuotaTests.test_hash_shortfall_has_legal_quota_aware_witness)
+Two synthetic groups hashing to train still permit calibration. ... ok
+test_indivisible_group_competition_requires_joint_proof (test_quota_preflight.QuotaTests.test_indivisible_group_competition_requires_joint_proof)
+Per-role capacity can pass while one component cannot fill both roles. ... ok
+test_native_role_and_bucket_shortfalls_are_real (test_quota_preflight.QuotaTests.test_native_role_and_bucket_shortfalls_are_real)
+Native heldout data cannot repair train, nor long rows short buckets. ... ok
+test_only_contributing_groups_count_toward_minimum (test_quota_preflight.QuotaTests.test_only_contributing_groups_count_toward_minimum)
+Assigned but unused components cannot satisfy heldout independence. ... ok
+test_preserves_prompt_and_source_identity (test_read_mbpp.MbppConversionTests.test_preserves_prompt_and_source_identity)
+Keep Unicode and whitespace, excluding code and tests from input. ... ok
+test_rejects_duplicate_source_ids (test_read_mbpp.MbppConversionTests.test_rejects_duplicate_source_ids)
+Duplicates cannot inflate a partition's upper-bound capacity. ... ok
+test_rejects_null_prompt (test_read_mbpp.MbppConversionTests.test_rejects_null_prompt)
+Missing prompts fail conversion instead of becoming empty examples. ... ok
+test_embedded_scripts_do_not_supply_passage_evidence (test_recovery.RecoveryTests.test_embedded_scripts_do_not_supply_passage_evidence)
+Unrendered executable text is neither executed nor matched as prose. ... ok
+test_full_passage_ignores_numeric_citations (test_recovery.RecoveryTests.test_full_passage_ignores_numeric_citations)
+Rendering and numeric references may differ while every word matches. ... ok
+test_short_common_phrase_remains_unresolved (test_recovery.RecoveryTests.test_short_common_phrase_remains_unresolved)
+A ubiquitous short phrase cannot identify an upstream document. ... ok
+test_single_verified_revision_is_not_editor_attestation (test_recovery.RecoveryTests.test_single_verified_revision_is_not_editor_attestation)
+Reconstruction identifies an article without inventing editorial provenance. ... ok
+test_title_and_partial_matches_cannot_establish_identity (test_recovery.RecoveryTests.test_title_and_partial_matches_cannot_establish_identity)
+A title or shared introduction is not the entire source passage. ... ok
+test_two_matching_documents_are_ambiguous (test_recovery.RecoveryTests.test_two_matching_documents_are_ambiguous)
+Duplicate passage evidence cannot arbitrarily choose one document. ... ok
+test_code_delimiter_does_not_exempt_filename_or_code (test_registry_preflight.RegistryTests.test_code_delimiter_does_not_exempt_filename_or_code)
+The delimiter ends before the file path and excludes payload copies. ... ok
+test_generic_match_retains_evidence_and_requires_second_review (test_registry_preflight.RegistryTests.test_generic_match_retains_evidence_and_requires_second_review)
+Even an exact approved candidate is not an activated exemption. ... ok
+test_identity_mismatch_and_bad_coordinates_fail_closed (test_registry_preflight.RegistryTests.test_identity_mismatch_and_bad_coordinates_fail_closed)
+Changed registry/adapters/revisions cannot silently authorize masking. ... ok
+test_unicode_payload_preserves_bytes_and_structural_heading (test_registry_preflight.RegistryTests.test_unicode_payload_preserves_bytes_and_structural_heading)
+Unicode and a payload heading cannot move or create an exemption. ... ok
+test_unlisted_natural_instruction_is_payload (test_registry_preflight.RegistryTests.test_unlisted_natural_instruction_is_payload)
+UltraChat cannot inherit DocRED's exception by containing its wording. ... ok
+test_alpha_renaming_groups_equivalent_simple_templates (test_remaining.RemainingAuditTests.test_alpha_renaming_groups_equivalent_simple_templates)
+Renamed function arguments and locals should share a template ID. ... ok
+test_archive_members_are_read_without_path_extraction (test_remaining.RemainingAuditTests.test_archive_members_are_read_without_path_extraction)
+Even a traversal member name cannot write outside the archive. ... ok
+test_benchmark_witnesses_cover_duplicate_sources_and_spans (test_remaining.RemainingAuditTests.test_benchmark_witnesses_cover_duplicate_sources_and_spans)
+All duplicate tasks inherit exclusion, including a token-only hit. ... ok
+test_extracts_json_answers_and_raw_prompt_literals (test_remaining.RemainingAuditTests.test_extracts_json_answers_and_raw_prompt_literals)
+Generated answers and multiline raw prompts belong to exclusions. ... ok
+test_missing_benchmark_tokens_cannot_clear_exclusions (test_remaining.RemainingAuditTests.test_missing_benchmark_tokens_cannot_clear_exclusions)
+Incomplete tokenizer coverage must fail rather than report clean. ... ok
+test_nested_scope_is_unresolved (test_remaining.RemainingAuditTests.test_nested_scope_is_unresolved)
+Unsupported binding scopes need review rather than false equivalence. ... ok
+test_preserves_constants_and_external_calls (test_remaining.RemainingAuditTests.test_preserves_constants_and_external_calls)
+Different operations must not merge just because locals were renamed. ... ok
+test_span_threshold_and_offset (test_remaining.RemainingAuditTests.test_span_threshold_and_offset)
+A 32-token span matches at any offset; 31 tokens do not satisfy it. ... ok
+
+----------------------------------------------------------------------
+Ran 55 tests in 0.153s
+
+OK

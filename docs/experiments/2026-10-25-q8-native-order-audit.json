@@ -1,0 +1,75 @@
+{
+  "source": "2026-10-25-q8-native-order-http.jsonl",
+  "prefix_source": "2026-10-25-q8-native-order-prefix.jsonl",
+  "checks": {
+    "clean_release": true,
+    "matching_source": true,
+    "explicit_dense_full_context": true,
+    "all_timed_workload_valid": true,
+    "five_complete_pairs": true,
+    "serial_timed_requests": true,
+    "same_actual_512_ids": true,
+    "native_trace_unchanged": true,
+    "all_forced_predictions_match": true,
+    "all_sampled_hidden_match": true,
+    "prefix_cleanup": true,
+    "all_dense_valid_smokes_pass": true,
+    "passes_unchanged_gate": true
+  },
+  "timing_by_variant": [
+    {
+      "model_variant": "control",
+      "median_prefill_ms": 1672.0885480000002,
+      "median_decode_ms": 14300.146387,
+      "median_generation_ms": 15976.203119000002,
+      "median_http_ms": 16018.881621999999,
+      "median_http_tps": 31.962281267927583
+    },
+    {
+      "model_variant": "prepared",
+      "median_prefill_ms": 1576.199575,
+      "median_decode_ms": 12714.412997,
+      "median_generation_ms": 14289.755026,
+      "median_http_ms": 14331.818946,
+      "median_http_tps": 35.72470472374331
+    }
+  ],
+  "comparison": {
+    "bootstrap_gain_ci95": [
+      0.11630836161273561,
+      0.11865990565521622
+    ],
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 0,
+    "candidate": {
+      "mad_over_median": 0.0005509580562906715,
+      "max": 35.767181995840126,
+      "median": 35.72470472374331,
+      "min": 35.705021909867156
+    },
+    "control": {
+      "mad_over_median": 0.0008451374470671177,
+      "max": 32.040593106520426,
+      "median": 31.962281267927583,
+      "min": 31.93281641382828
+    },
+    "gain": 0.11771448427841458,
+    "needs_fresh_confirmation": false,
+    "needs_variation_extension": false,
+    "pairs": 5,
+    "passes_promotion_gate": true,
+    "promotion_threshold": 0.03
+  },
+  "prefix_summary": {
+    "first_different_generated_step": null,
+    "head_probes": 12,
+    "historical_first_difference": 310,
+    "is_performance_measurement": false,
+    "kind": "q8_prefix_drift_summary",
+    "predictions": 317,
+    "prepared_history_mismatches_on_shared_prefix": 1,
+    "qualifies_for_promotion": false,
+    "reference_history_mismatches": 0,
+    "reproduces_historical_first_branch": false
+  }
+}

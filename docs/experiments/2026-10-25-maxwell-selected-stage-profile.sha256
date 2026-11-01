@@ -1,0 +1,7 @@
+93b70693e3249461dc5418723118515e7274bb60ae22803d33258afd62395b80  docs/experiments/2026-10-25-maxwell-selected-stage-profile.md
+fa214a26159b5f19b04f17d020fc97801362c0aa9f67aa7e856df4d3e5c231aa  docs/experiments/2026-10-25-maxwell-selected-stage-http.jsonl
+1467ba0d9ade0008af478c199dcbe35f56e02837ecbdf892ebeaeb444933e248  docs/experiments/2026-10-25-maxwell-selected-stage-events.jsonl
+d31b1cc086cc09ec5fd258b72aa950c787365a4fa5a2bbdb1fcd975a2966c1ab  docs/experiments/2026-10-25-maxwell-selected-stage-audit.json
+c5323ad802cccf47955c954e0079fa5ba8e3f7054c2183e995b3e794a943e135  docs/experiments/2026-10-25-maxwell-selected-stage-audit.jq
+88523dd3d4d0341d94e81395ee91d2a6e9696d57c86d213968eecb5f5b5f1d98  docs/experiments/2026-10-25-maxwell-selected-stage-profile.log.gz
+6799e80c2b722a3e36f2a21dd9e79624dd58eb411dc71e17151c39f454e98dd5  docs/experiments/2026-10-25-maxwell-selected-stage-ollama.log.gz

@@ -1,0 +1,13 @@
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 18.83s
+     Running unittests examples/model_quality/main.rs (target/debug/examples/model_quality-dc44eca642ae934c)
+
+running 3 tests
+test prepared_drift::tests::test_prefix_head_probes_preserve_forced_history_and_reset ... ok
+test prepared_drift::tests::test_prefix_trace_preflight_binds_identity_and_actual_branch ... ok
+test prepared_drift::tests::test_prefix_trace_rejects_malformed_and_oversized_input ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.39s
+

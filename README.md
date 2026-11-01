@@ -79,6 +79,9 @@ curl -sS -X POST http://127.0.0.1:58439/generate \
 
 CLI and server responses contain generated text only; they do not echo the
 prompt. `max_tokens` counts generated token IDs, not decoded characters.
+Buffered requests may add `"include_metrics":true` for token counts, stop reason,
+and wall-clock generation timings. See [HTTP metrics](docs/diagnostics.md#buffered-http-metrics)
+for the timing boundaries.
 
 ## CUDA Toolchain
 
@@ -145,12 +148,24 @@ back for host sampling.
 
 ## Experimental Features
 
-These areas are active research and should be treated as opt-in:
+For the opt-in qualified Q8 compound FFN, joint-only prepared-weight ownership
+is preferred and selected automatically. It saves 1.606 GiB on Qwen2.5-3B
+without a measured performance regression. `M40LLM_Q8_FFN_OWNERSHIP=retain-split`
+keeps the historical reference configuration. See the
+[configuration and storage qualification](docs/q8_execution_weights.md#opt-in-runtime-preparation).
+Weight preparation and the compound kernel remain opt-in.
+
+Research support and opt-in diagnostics:
 
 - Compressed KV-cache modes and long-context quality harness:
   [`docs/kv_compression.md`](docs/kv_compression.md)
 - Runtime diagnostics, profiling flags, and graph debug knobs:
   [`docs/diagnostics.md`](docs/diagnostics.md)
+- Opt-in Q8 execution-weight preparation, ownership, and layout contracts:
+  [`docs/q8_execution_weights.md`](docs/q8_execution_weights.md)
+- Model-variant quality evaluation and opt-in layer masks:
+  [`docs/model_quality.md`](docs/model_quality.md), [`docs/layer_masks.md`](docs/layer_masks.md),
+  [`docs/compact_gguf.md`](docs/compact_gguf.md)
 - M40 performance roadmap, batching, CUDA Graphs, and backend direction:
   [`docs/roadmap.md`](docs/roadmap.md)
 - Current benchmark history:
@@ -158,6 +173,8 @@ These areas are active research and should be treated as opt-in:
 
 ## Useful Docs
 
+- Active research plan, implementation checkpoint, and archived history:
+  [`docs/research_status.md`](docs/research_status.md)
 - CUDA device selection and M40 guardrails:
   [`docs/device_selection.md`](docs/device_selection.md)
 - CUDA parity grid and KV layout:

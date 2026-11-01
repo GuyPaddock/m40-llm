@@ -1,0 +1,11 @@
+{
+   "actual_ids_and_prefix_bits_match" : true,
+   "device_bytes_after" : 0,
+   "executable_sha256" : "bb4bac4876cef280a1204e006e7aae0440e6d50510bc113898fff632534585fd",
+   "full_trials" : 30,
+   "gpu_boundaries" : 140,
+   "is_audit_passed" : true,
+   "profiled_batches" : 15,
+   "rejection_cycles" : 40,
+   "revision" : "6fec43a1826f1e1be1e8e642925408db2e092c11"
+}

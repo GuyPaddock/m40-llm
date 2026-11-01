@@ -1,0 +1,26 @@
+{
+  "kind": "partial_manual_semantic_review",
+  "reviewer": "codex",
+  "source_identity_record_sha256": "a93b19567d1adc234f86fcfa259ba9997341c420f41a6cfc868a583fddb712b0",
+  "review_scope": "Listed source statements and inert reference programs only. No reference code was executed. This is not exhaustive template or benchmark clearance.",
+  "groups": [
+    {"task_ids": [102, 411], "reason": "snake_case_to_camel_case_same_transformation"},
+    {"task_ids": [130, 362, 658], "reason": "most_frequent_list_item_different_implementations_and_return_shape"},
+    {"task_ids": [482, 917], "reason": "same_uppercase_lowercase_regex_different_response_labels"},
+    {"task_ids": [541, 955], "reason": "abundant_number_predicate_different_factor_enumeration"},
+    {"task_ids": [415, 922], "reason": "highest_product_integer_pair_same_nested_search"},
+    {"task_ids": [678, 800], "reason": "whitespace_removal_template_with_different_whitespace_coverage"},
+    {"task_ids": [538, 587], "reason": "list_to_tuple_template_with_optional_whitespace_filter"},
+    {"task_ids": [674, 932], "reason": "stable_global_word_deduplication_string_vs_list_interface"}
+  ],
+  "excluded_task_ids": [674, 932],
+  "exclusion_reason": "Frozen held-code-short benchmark asks for first-occurrence-preserving string deduplication in Rust. These Python tasks implement the same substantive operation. Exclude across languages and propagate through components.",
+  "reviewed_task_ids": [],
+  "partially_reviewed_task_ids": [26, 102, 130, 193, 362, 411, 415, 482, 538, 541, 572, 587, 658, 674, 678, 712, 730, 800, 878, 917, 922, 932, 955],
+  "unresolved_examples": [
+    "26/878 have different quantifier and nesting behavior; textual similarity is not equivalence.",
+    "193/712/730/572 differ from stable global deduplication in ordering or membership. No full semantic clearance is inferred."
+  ],
+  "is_complete_manual_template_audit": false,
+  "is_r1_admitted": false
+}

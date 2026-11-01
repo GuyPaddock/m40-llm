@@ -1,0 +1,2012 @@
+{
+  "probes": [
+    {
+      "case": "fixed72",
+      "version": "quota-aware-rank-v2",
+      "input_order": "reverse",
+      "problem_sha256": "03bf195bbe7926e4b7d17d0255b4437d586749a1fbf6caea82b7082ec7f756de",
+      "result_sha256": "e65028204c524588afd598bee14f240df93c535a9de2b203e34654b9e7f573e4",
+      "witness_sha256": "4a4eb8f7de67eca37fd0c855ee8d472a86737c096fdbc09a266645adb167fef3",
+      "result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "has_canonical_destinations": true,
+        "is_rank_optimal": true,
+        "rank_cost": 220000,
+        "reason": "all V2 objectives proven",
+        "solver_status": "OPTIMAL",
+        "solve_calls": 2,
+        "cpu_seconds": 0.021004941,
+        "wall_seconds": 0.020946975331753492
+      },
+      "independent_audit": {
+        "is_feasible": true,
+        "rank_cost": 220000,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          }
+        ]
+      },
+      "historical_v1_audit": {
+        "is_feasible": true,
+        "rank_cost": 220000,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          }
+        ]
+      },
+      "historical_v1_result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "is_canonical": true,
+        "reason": "canonical optimum verified",
+        "solver_status": "OPTIMAL",
+        "solve_calls": 9,
+        "cpu_seconds": 0.04000097699999999,
+        "wall_seconds": 0.04027330782264471
+      },
+      "selected_group_overlap_with_v1": {
+        "current": 72,
+        "prior": 72,
+        "intersection": 72,
+        "union": 72
+      },
+      "is_reproducible": true,
+      "is_source_selection": false,
+      "has_human_review": false,
+      "cpu_seconds": 0.025427201999999982,
+      "wall_seconds": 0.02548931911587715,
+      "peak_rss_kib": 1745788
+    },
+    {
+      "case": "fixed72",
+      "version": "quota-aware-rank-v2",
+      "input_order": "forward",
+      "problem_sha256": "03bf195bbe7926e4b7d17d0255b4437d586749a1fbf6caea82b7082ec7f756de",
+      "result_sha256": "c6538acae1f6a9f9f4fa5dce698a7a99cb2a0b332f906f97661034458dae644d",
+      "witness_sha256": "4a4eb8f7de67eca37fd0c855ee8d472a86737c096fdbc09a266645adb167fef3",
+      "result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "has_canonical_destinations": true,
+        "is_rank_optimal": true,
+        "rank_cost": 220000,
+        "reason": "all V2 objectives proven",
+        "solver_status": "OPTIMAL",
+        "solve_calls": 2,
+        "cpu_seconds": 0.021987954999999948,
+        "wall_seconds": 0.021937849931418896
+      },
+      "independent_audit": {
+        "is_feasible": true,
+        "rank_cost": 220000,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          }
+        ]
+      },
+      "historical_v1_audit": {
+        "is_feasible": true,
+        "rank_cost": 220000,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 1,
+            "max_group_share": 1.0,
+            "herfindahl": 1.0
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          }
+        ]
+      },
+      "historical_v1_result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "is_canonical": true,
+        "reason": "canonical optimum verified",
+        "solver_status": "OPTIMAL",
+        "solve_calls": 9,
+        "cpu_seconds": 0.04000097699999999,
+        "wall_seconds": 0.04027330782264471
+      },
+      "selected_group_overlap_with_v1": {
+        "current": 72,
+        "prior": 72,
+        "intersection": 72,
+        "union": 72
+      },
+      "is_reproducible": null,
+      "is_source_selection": false,
+      "has_human_review": false,
+      "cpu_seconds": 0.02599892700000006,
+      "wall_seconds": 0.026971394196152687,
+      "peak_rss_kib": 1745788
+    },
+    {
+      "case": "large",
+      "version": "quota-aware-rank-v2",
+      "input_order": "forward",
+      "problem_sha256": "4716dc611a31ccd49e532027a3714387ef54c8619e6fce7d282e714f13828afd",
+      "result_sha256": "617373b54f7dfb84261456f1f663a86f49f33ee8e9ea7de7f7716bccfb6df862",
+      "witness_sha256": "04398c37ecbb5e4ab594a30bed10e0f5c404e512413ae4adda4efa9c1afd7bcd",
+      "result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "has_canonical_destinations": true,
+        "is_rank_optimal": false,
+        "rank_cost": 150136516,
+        "reason": "checked feasible; objectives incomplete",
+        "solver_status": "UNKNOWN",
+        "solve_calls": 2,
+        "cpu_seconds": 90.721843801,
+        "wall_seconds": 90.78761972673237
+      },
+      "independent_audit": {
+        "is_feasible": true,
+        "rank_cost": 150136516,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 131,
+            "max_group_share": 0.01171875,
+            "herfindahl": 0.009002685546875
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 26,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.04600694444444445
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 43,
+            "max_group_share": 0.03125,
+            "herfindahl": 0.024088541666666668
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 3,
+            "max_group_share": 0.3333333333333333,
+            "herfindahl": 0.3333333333333333
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.16666666666666666,
+            "herfindahl": 0.14388020833333334
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          }
+        ]
+      },
+      "historical_v1_audit": {
+        "is_feasible": true,
+        "rank_cost": 150136516,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 131,
+            "max_group_share": 0.01171875,
+            "herfindahl": 0.009002685546875
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 26,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.04600694444444445
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 43,
+            "max_group_share": 0.03125,
+            "herfindahl": 0.024088541666666668
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 3,
+            "max_group_share": 0.3333333333333333,
+            "herfindahl": 0.3333333333333333
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.16666666666666666,
+            "herfindahl": 0.14388020833333334
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          }
+        ]
+      },
+      "historical_v1_result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "is_canonical": false,
+        "reason": "checked feasible; canonical objective incomplete",
+        "solver_status": "UNKNOWN",
+        "solve_calls": 2,
+        "cpu_seconds": 90.458351361,
+        "wall_seconds": 90.46079943329096
+      },
+      "selected_group_overlap_with_v1": {
+        "current": 1035,
+        "prior": 1035,
+        "intersection": 1035,
+        "union": 1035
+      },
+      "is_reproducible": null,
+      "is_source_selection": false,
+      "has_human_review": false,
+      "cpu_seconds": 94.881161283,
+      "wall_seconds": 94.95061102183536,
+      "peak_rss_kib": 1745788
+    },
+    {
+      "case": "medium",
+      "version": "quota-aware-rank-v2",
+      "input_order": "reverse",
+      "problem_sha256": "7ab6ebadd0102f3d7e55d9b9eb60b1afc78625507e446451cf251f4f33447aee",
+      "result_sha256": "b456bbf94826fada9457e134500a6393f5f4bb737ad80b6a5ee4746b2d4a58ff",
+      "witness_sha256": "6fb991d63b4620628a5ba6082579ea730339567700ed05441e13d2076967b561",
+      "result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "has_canonical_destinations": true,
+        "is_rank_optimal": true,
+        "rank_cost": 4691312,
+        "reason": "all V2 objectives proven",
+        "solver_status": "OPTIMAL",
+        "solve_calls": 2,
+        "cpu_seconds": 10.042040073,
+        "wall_seconds": 10.047518806997687
+      },
+      "independent_audit": {
+        "is_feasible": true,
+        "rank_cost": 4691312,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 128,
+            "max_group_share": 0.01171875,
+            "herfindahl": 0.009185791015625
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 23,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.050347222222222224
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 50,
+            "max_group_share": 0.03125,
+            "herfindahl": 0.023220486111111112
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 3,
+            "max_group_share": 0.3333333333333333,
+            "herfindahl": 0.3333333333333333
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.16666666666666666,
+            "herfindahl": 0.14388020833333334
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          }
+        ]
+      },
+      "historical_v1_audit": {
+        "is_feasible": true,
+        "rank_cost": 26167394,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 120,
+            "max_group_share": 0.01171875,
+            "herfindahl": 0.009368896484375
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 22,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.049479166666666664
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 46,
+            "max_group_share": 0.03125,
+            "herfindahl": 0.025607638888888888
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 3,
+            "max_group_share": 0.3333333333333333,
+            "herfindahl": 0.3333333333333333
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.16666666666666666,
+            "herfindahl": 0.14388020833333334
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          }
+        ]
+      },
+      "historical_v1_result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "is_canonical": false,
+        "reason": "checked feasible; canonical objective incomplete",
+        "solver_status": "UNKNOWN",
+        "solve_calls": 91,
+        "cpu_seconds": 90.101529272,
+        "wall_seconds": 90.11709615122527
+      },
+      "selected_group_overlap_with_v1": {
+        "current": 1036,
+        "prior": 1023,
+        "intersection": 118,
+        "union": 1941
+      },
+      "is_reproducible": true,
+      "is_source_selection": false,
+      "has_human_review": false,
+      "cpu_seconds": 10.476311061,
+      "wall_seconds": 10.482090739998966,
+      "peak_rss_kib": 1745788
+    },
+    {
+      "case": "medium",
+      "version": "quota-aware-rank-v2",
+      "input_order": "forward",
+      "problem_sha256": "7ab6ebadd0102f3d7e55d9b9eb60b1afc78625507e446451cf251f4f33447aee",
+      "result_sha256": "5ce8d4226c4d06b8e2ccf8cd9810f6d50f6b0cc7e3ad075c3af8e22b1f223a36",
+      "witness_sha256": "6fb991d63b4620628a5ba6082579ea730339567700ed05441e13d2076967b561",
+      "result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "has_canonical_destinations": true,
+        "is_rank_optimal": true,
+        "rank_cost": 4691312,
+        "reason": "all V2 objectives proven",
+        "solver_status": "OPTIMAL",
+        "solve_calls": 2,
+        "cpu_seconds": 10.002793156,
+        "wall_seconds": 10.005385987926275
+      },
+      "independent_audit": {
+        "is_feasible": true,
+        "rank_cost": 4691312,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 128,
+            "max_group_share": 0.01171875,
+            "herfindahl": 0.009185791015625
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 23,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.050347222222222224
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 50,
+            "max_group_share": 0.03125,
+            "herfindahl": 0.023220486111111112
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 3,
+            "max_group_share": 0.3333333333333333,
+            "herfindahl": 0.3333333333333333
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.16666666666666666,
+            "herfindahl": 0.14388020833333334
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          }
+        ]
+      },
+      "historical_v1_audit": {
+        "is_feasible": true,
+        "rank_cost": 26167394,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 120,
+            "max_group_share": 0.01171875,
+            "herfindahl": 0.009368896484375
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 22,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.049479166666666664
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 46,
+            "max_group_share": 0.03125,
+            "herfindahl": 0.025607638888888888
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 3,
+            "max_group_share": 0.3333333333333333,
+            "herfindahl": 0.3333333333333333
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.16666666666666666,
+            "herfindahl": 0.14388020833333334
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          }
+        ]
+      },
+      "historical_v1_result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "is_canonical": false,
+        "reason": "checked feasible; canonical objective incomplete",
+        "solver_status": "UNKNOWN",
+        "solve_calls": 91,
+        "cpu_seconds": 90.101529272,
+        "wall_seconds": 90.11709615122527
+      },
+      "selected_group_overlap_with_v1": {
+        "current": 1036,
+        "prior": 1023,
+        "intersection": 118,
+        "union": 1941
+      },
+      "is_reproducible": null,
+      "is_source_selection": false,
+      "has_human_review": false,
+      "cpu_seconds": 10.449617623,
+      "wall_seconds": 10.455280235037208,
+      "peak_rss_kib": 1745788
+    },
+    {
+      "case": "small",
+      "version": "quota-aware-rank-v2",
+      "input_order": "reverse",
+      "problem_sha256": "0a13a72c385822e51cb177bf2ab558198b255cef291c5b46a26c6f0d08e522b0",
+      "result_sha256": "484e6f59a0e5d7ea09adba157f5a84bc767541adfdb799ff03c3026ec80faf60",
+      "witness_sha256": "a6d07116140218e2b76a24dae2c814ed43029512e03e1fe0f77b33fffbb67869",
+      "result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "has_canonical_destinations": true,
+        "is_rank_optimal": true,
+        "rank_cost": 4205594,
+        "reason": "all V2 objectives proven",
+        "solver_status": "OPTIMAL",
+        "solve_calls": 2,
+        "cpu_seconds": 1.595951091,
+        "wall_seconds": 1.5963758188299835
+      },
+      "independent_audit": {
+        "is_feasible": true,
+        "rank_cost": 4205594,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 121,
+            "max_group_share": 0.01171875,
+            "herfindahl": 0.00946044921875
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 27,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.041666666666666664
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 47,
+            "max_group_share": 0.03125,
+            "herfindahl": 0.024305555555555556
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 3,
+            "max_group_share": 0.3333333333333333,
+            "herfindahl": 0.3333333333333333
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.16666666666666666,
+            "herfindahl": 0.14388020833333334
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          }
+        ]
+      },
+      "historical_v1_audit": {
+        "is_feasible": true,
+        "rank_cost": 11756303,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 127,
+            "max_group_share": 0.01171875,
+            "herfindahl": 0.009246826171875
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 23,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.050347222222222224
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 52,
+            "max_group_share": 0.03125,
+            "herfindahl": 0.023003472222222224
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 3,
+            "max_group_share": 0.3333333333333333,
+            "herfindahl": 0.3333333333333333
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.16666666666666666,
+            "herfindahl": 0.14388020833333334
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          }
+        ]
+      },
+      "historical_v1_result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "is_canonical": true,
+        "reason": "canonical optimum verified",
+        "solver_status": "OPTIMAL",
+        "solve_calls": 80,
+        "cpu_seconds": 13.425739464000001,
+        "wall_seconds": 13.425343652721494
+      },
+      "selected_group_overlap_with_v1": {
+        "current": 1030,
+        "prior": 1037,
+        "intersection": 303,
+        "union": 1764
+      },
+      "is_reproducible": true,
+      "is_source_selection": false,
+      "has_human_review": false,
+      "cpu_seconds": 1.706124143,
+      "wall_seconds": 1.706439842004329,
+      "peak_rss_kib": 1745788
+    },
+    {
+      "case": "small",
+      "version": "v1",
+      "input_order": "forward",
+      "problem_sha256": "0a13a72c385822e51cb177bf2ab558198b255cef291c5b46a26c6f0d08e522b0",
+      "result_sha256": "372de9c728b7204b60c768272c7cb24b5fc9f90363273f3b16d96a941fe6a33b",
+      "witness_sha256": "e864c5984df8af194a3c5641de1e1c104458059749150da3225fd7fb930912b6",
+      "result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "is_canonical": true,
+        "reason": "canonical optimum verified",
+        "solver_status": "OPTIMAL",
+        "solve_calls": 80,
+        "cpu_seconds": 13.718448637,
+        "wall_seconds": 13.73481713840738
+      },
+      "independent_audit": {
+        "is_feasible": true,
+        "rank_cost": 11756303,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 127,
+            "max_group_share": 0.01171875,
+            "herfindahl": 0.009246826171875
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 23,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.050347222222222224
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 52,
+            "max_group_share": 0.03125,
+            "herfindahl": 0.023003472222222224
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 3,
+            "max_group_share": 0.3333333333333333,
+            "herfindahl": 0.3333333333333333
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.16666666666666666,
+            "herfindahl": 0.14388020833333334
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          }
+        ]
+      },
+      "historical_v1_audit": {
+        "is_feasible": true,
+        "rank_cost": 11756303,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 127,
+            "max_group_share": 0.01171875,
+            "herfindahl": 0.009246826171875
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 23,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.050347222222222224
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 52,
+            "max_group_share": 0.03125,
+            "herfindahl": 0.023003472222222224
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 3,
+            "max_group_share": 0.3333333333333333,
+            "herfindahl": 0.3333333333333333
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.16666666666666666,
+            "herfindahl": 0.14388020833333334
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          }
+        ]
+      },
+      "historical_v1_result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "is_canonical": true,
+        "reason": "canonical optimum verified",
+        "solver_status": "OPTIMAL",
+        "solve_calls": 80,
+        "cpu_seconds": 13.425739464000001,
+        "wall_seconds": 13.425343652721494
+      },
+      "selected_group_overlap_with_v1": {
+        "current": 1037,
+        "prior": 1037,
+        "intersection": 1037,
+        "union": 1037
+      },
+      "is_reproducible": null,
+      "is_source_selection": false,
+      "has_human_review": false,
+      "cpu_seconds": 13.832913368,
+      "wall_seconds": 13.85022818017751,
+      "peak_rss_kib": 1745788
+    },
+    {
+      "case": "small",
+      "version": "quota-aware-rank-v2",
+      "input_order": "forward",
+      "problem_sha256": "0a13a72c385822e51cb177bf2ab558198b255cef291c5b46a26c6f0d08e522b0",
+      "result_sha256": "c345cce4cc69537b910128402b2b9bac3affa3ce68c49a3e26eff71574981158",
+      "witness_sha256": "a6d07116140218e2b76a24dae2c814ed43029512e03e1fe0f77b33fffbb67869",
+      "result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "has_canonical_destinations": true,
+        "is_rank_optimal": true,
+        "rank_cost": 4205594,
+        "reason": "all V2 objectives proven",
+        "solver_status": "OPTIMAL",
+        "solve_calls": 2,
+        "cpu_seconds": 1.6029782039999998,
+        "wall_seconds": 1.6033196421340108
+      },
+      "independent_audit": {
+        "is_feasible": true,
+        "rank_cost": 4205594,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 121,
+            "max_group_share": 0.01171875,
+            "herfindahl": 0.00946044921875
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 27,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.041666666666666664
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 47,
+            "max_group_share": 0.03125,
+            "herfindahl": 0.024305555555555556
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 3,
+            "max_group_share": 0.3333333333333333,
+            "herfindahl": 0.3333333333333333
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.16666666666666666,
+            "herfindahl": 0.14388020833333334
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          }
+        ]
+      },
+      "historical_v1_audit": {
+        "is_feasible": true,
+        "rank_cost": 11756303,
+        "concentration": [
+          {
+            "family": 0,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 0,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 0,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          },
+          {
+            "family": 1,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 127,
+            "max_group_share": 0.01171875,
+            "herfindahl": 0.009246826171875
+          },
+          {
+            "family": 1,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 23,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.050347222222222224
+          },
+          {
+            "family": 1,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 52,
+            "max_group_share": 0.03125,
+            "herfindahl": 0.023003472222222224
+          },
+          {
+            "family": 2,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 16,
+            "max_group_share": 0.0625,
+            "herfindahl": 0.0625
+          },
+          {
+            "family": 2,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 3,
+            "max_group_share": 0.3333333333333333,
+            "herfindahl": 0.3333333333333333
+          },
+          {
+            "family": 2,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 16,
+            "max_group_share": 0.16666666666666666,
+            "herfindahl": 0.14388020833333334
+          },
+          {
+            "family": 3,
+            "role": 0,
+            "rows": 256,
+            "contributing_groups": 256,
+            "max_group_share": 0.00390625,
+            "herfindahl": 0.00390625
+          },
+          {
+            "family": 3,
+            "role": 1,
+            "rows": 48,
+            "contributing_groups": 48,
+            "max_group_share": 0.020833333333333332,
+            "herfindahl": 0.020833333333333332
+          },
+          {
+            "family": 3,
+            "role": 2,
+            "rows": 96,
+            "contributing_groups": 96,
+            "max_group_share": 0.010416666666666666,
+            "herfindahl": 0.010416666666666666
+          }
+        ]
+      },
+      "historical_v1_result": {
+        "feasibility": "feasible",
+        "is_minimum_departure": true,
+        "is_canonical": true,
+        "reason": "canonical optimum verified",
+        "solver_status": "OPTIMAL",
+        "solve_calls": 80,
+        "cpu_seconds": 13.425739464000001,
+        "wall_seconds": 13.425343652721494
+      },
+      "selected_group_overlap_with_v1": {
+        "current": 1030,
+        "prior": 1037,
+        "intersection": 303,
+        "union": 1764
+      },
+      "is_reproducible": null,
+      "is_source_selection": false,
+      "has_human_review": false,
+      "cpu_seconds": 1.7265020469999999,
+      "wall_seconds": 1.726771263871342,
+      "peak_rss_kib": 1745788
+    },
+    {
+      "case": "upper",
+      "version": "quota-aware-rank-v2",
+      "input_order": "forward",
+      "problem_sha256": "717849c5dfd2f7237f24b728384f96ea26c1a13d3bed8eb6304b5ffb5a37d94e",
+      "result_sha256": "d09ebf0f504faf232775e6e3d52ef3e64f9b2540f65d059b99ee5d91a0270357",
+      "witness_sha256": null,
+      "result": {
+        "feasibility": "unknown",
+        "is_minimum_departure": false,
+        "has_canonical_destinations": false,
+        "is_rank_optimal": false,
+        "rank_cost": null,
+        "reason": "memory limit; objectives incomplete",
+        "solver_status": "NOT_RUN",
+        "solve_calls": 1,
+        "cpu_seconds": 72.358917351,
+        "wall_seconds": 72.36848370404914
+      },
+      "independent_audit": null,
+      "historical_v1_audit": null,
+      "historical_v1_result": {
+        "feasibility": "unknown",
+        "is_minimum_departure": false,
+        "is_canonical": false,
+        "reason": "memory limit; canonical objective incomplete",
+        "solver_status": "NOT_RUN",
+        "solve_calls": 1,
+        "cpu_seconds": 70.40450869,
+        "wall_seconds": 70.40681806812063
+      },
+      "selected_group_overlap_with_v1": null,
+      "is_reproducible": null,
+      "is_source_selection": false,
+      "has_human_review": false,
+      "cpu_seconds": 77.187295664,
+      "wall_seconds": 77.19898152304813,
+      "peak_rss_kib": 3792216
+    }
+  ],
+  "total_cpu_seconds": 210.311351318,
+  "total_wall_seconds": 210.42286351928487,
+  "peak_rss_kib": 3792216
+}

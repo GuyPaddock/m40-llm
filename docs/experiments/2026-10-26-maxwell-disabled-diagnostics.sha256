@@ -1,0 +1,11 @@
+9f53882261fd19773e028f64a01154e62ea7a8d0e54493b45b8776a6a3602966  docs/experiments/2026-10-26-maxwell-disabled-diagnostics-audit.jq
+3401fc3e4cc3cb6e609b0468d7ba7add90f087f187c8643fa865026db1ff6e4e  docs/experiments/2026-10-26-maxwell-disabled-diagnostics-audit.json
+230b553be2d00c5a33603ab7df1ad72abf22a48a1a6a23c66a329567a54dccdf  docs/experiments/2026-10-26-maxwell-disabled-diagnostics-behavior.log.gz
+f8f08f3293195b4a808a1ece3aaa28d6d84e15a9343f0ca7df520cc1ba04c0f1  docs/experiments/2026-10-26-maxwell-disabled-diagnostics-build.log.gz
+ed7e0c3334a100f86a386285fdbfbdc9e9b1a6b0ba0bd80fcbb09e09054b1d59  docs/experiments/2026-10-26-maxwell-disabled-diagnostics-clippy.log.gz
+8ac74f861eec32d37468061a9a31457ae0ae612a0a4d1fb945450a9d633050ad  docs/experiments/2026-10-26-maxwell-disabled-diagnostics-cost.jsonl
+16d0a544394e265a7b13fb08aa520f536cf85e9a786a1dc029a2b542e939bf79  docs/experiments/2026-10-26-maxwell-disabled-diagnostics-cost.md
+04c19c7c61ec4ef333aa5b138598424a83bb4ca9ab0650cc9988a27a2037fcc5  docs/experiments/2026-10-26-maxwell-disabled-diagnostics-hypothesis.md
+ac12a7ea146a7c36c06b53575d40db6f4af39e6e77a514e9141d6798bce94962  docs/experiments/2026-10-26-maxwell-disabled-diagnostics-negative-controls.sh
+e94ae8a8928a24e9e0af00454f165426c44189b176491da7604ee03f07aea640  docs/experiments/2026-10-26-maxwell-disabled-diagnostics-noncuda.log.gz
+69456436852c627eb00e1222311ae4573a3cfeef91c35512f4416c2c5fa2f8ab  docs/experiments/2026-10-26-maxwell-disabled-diagnostics-run.log.gz

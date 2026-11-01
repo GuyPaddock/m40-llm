@@ -1,6 +1,12 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
 mod cuda_env;
+#[path = "common/greedy_adapter_cost.rs"]
+mod greedy_adapter_cost;
+#[path = "common/q8_activity.rs"]
+mod q8_activity;
+#[path = "common/q8_kv_stack.rs"]
+mod q8_kv_stack;
 
 use anyhow::{Context, Result};
 use m40_llm::generate::{generate_text, GenerateOptions, PromptFormat};

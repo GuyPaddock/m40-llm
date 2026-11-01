@@ -1,0 +1,408 @@
+{
+  "passes_audit": true,
+  "source": "75ffdf78d37a3ff1fd691b1ab611ac4633818509",
+  "executable_sha256": "db70d00408f9444b753b8b1a81a1692d22d5178c09823e7aae812ce67066c554",
+  "pairs": 15,
+  "stage_comparisons": 9,
+  "serial_primary_intervals": 90,
+  "gpu_boundaries": 30,
+  "has_all_small_order_effects": true,
+  "has_measured_cache_traffic": false,
+  "runtime_integration_allowed": false,
+  "cases": [
+    {
+      "has_intact_inputs_and_guards": true,
+      "has_matching_output_bits": true,
+      "kind": "ffn_reuse_case_complete",
+      "layer_ids": [
+        0,
+        17
+      ],
+      "results": [
+        {
+          "result": {
+            "alternating_latency_change": -0.0008815298974521601,
+            "alternating_median_ms": 0.221230411529541,
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "grouped_median_ms": 0.22142560482025148,
+            "has_bounded_small_order_effect": true,
+            "has_material_order_sensitivity": false,
+            "interpretation": "temporal-order diagnostic, not measured cache cost, inference gain or HTTP qualification",
+            "latency_change_ci95": [
+              -0.0020575657983207263,
+              0.004471394257126615
+            ],
+            "pairs": [
+              [
+                0.22162079811096191,
+                0.221230411529541
+              ],
+              [
+                0.2211375951766968,
+                0.22212638854980468
+              ],
+              [
+                0.22162079811096191,
+                0.22116479873657227
+              ],
+              [
+                0.22119998931884766,
+                0.22173120975494384
+              ],
+              [
+                0.22142560482025148,
+                0.22111198902130128
+              ]
+            ]
+          },
+          "stage": "gate_up_swiglu"
+        },
+        {
+          "result": {
+            "alternating_latency_change": 0.000692912940787771,
+            "alternating_median_ms": 0.13170239925384522,
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "grouped_median_ms": 0.13161120414733887,
+            "has_bounded_small_order_effect": true,
+            "has_material_order_sensitivity": false,
+            "interpretation": "temporal-order diagnostic, not measured cache cost, inference gain or HTTP qualification",
+            "latency_change_ci95": [
+              -0.0005352983295719982,
+              0.0030635809668320135
+            ],
+            "pairs": [
+              [
+                0.13165440559387206,
+                0.13170239925384522
+              ],
+              [
+                0.13161120414733887,
+                0.13201440572738649
+              ],
+              [
+                0.13152480125427246,
+                0.13145439624786376
+              ],
+              [
+                0.13124480247497558,
+                0.1315168023109436
+              ],
+              [
+                0.13162720203399658,
+                0.1317744016647339
+              ]
+            ]
+          },
+          "stage": "isolated_down"
+        },
+        {
+          "result": {
+            "alternating_latency_change": -0.0002091978330437394,
+            "alternating_median_ms": 0.35174560546875,
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "grouped_median_ms": 0.35181920528411864,
+            "has_bounded_small_order_effect": true,
+            "has_material_order_sensitivity": false,
+            "interpretation": "temporal-order diagnostic, not measured cache cost, inference gain or HTTP qualification",
+            "latency_change_ci95": [
+              -0.0005502709440609044,
+              0.0013887485718477866
+            ],
+            "pairs": [
+              [
+                0.35181920528411864,
+                0.3517024040222168
+              ],
+              [
+                0.35188000202178954,
+                0.35196480751037595
+              ],
+              [
+                0.35181920528411864,
+                0.3516256093978882
+              ],
+              [
+                0.35139200687408445,
+                0.35188000202178954
+              ],
+              [
+                0.3512624025344849,
+                0.35174560546875
+              ]
+            ]
+          },
+          "stage": "complete"
+        }
+      ],
+      "runtime_integration_allowed": false,
+      "tracked_bytes_after": 4472455168,
+      "tracked_bytes_before": 4472455168
+    },
+    {
+      "has_intact_inputs_and_guards": true,
+      "has_matching_output_bits": true,
+      "kind": "ffn_reuse_case_complete",
+      "layer_ids": [
+        17,
+        35
+      ],
+      "results": [
+        {
+          "result": {
+            "alternating_latency_change": -0.00040488595424970075,
+            "alternating_median_ms": 0.22120161056518556,
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "grouped_median_ms": 0.2212912082672119,
+            "has_bounded_small_order_effect": true,
+            "has_material_order_sensitivity": false,
+            "interpretation": "temporal-order diagnostic, not measured cache cost, inference gain or HTTP qualification",
+            "latency_change_ci95": [
+              -0.0015609376221501492,
+              0.0021329855106317908
+            ],
+            "pairs": [
+              [
+                0.22153921127319337,
+                0.22120161056518556
+              ],
+              [
+                0.22100160121917725,
+                0.22139999866485596
+              ],
+              [
+                0.2212912082672119,
+                0.22118558883666992
+              ],
+              [
+                0.22128479480743407,
+                0.22175679206848145
+              ],
+              [
+                0.2214128017425537,
+                0.22106719017028809
+              ]
+            ]
+          },
+          "stage": "gate_up_swiglu"
+        },
+        {
+          "result": {
+            "alternating_latency_change": 0.0013770535267589867,
+            "alternating_median_ms": 0.1314703941345215,
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "grouped_median_ms": 0.13128960132598877,
+            "has_bounded_small_order_effect": true,
+            "has_material_order_sensitivity": false,
+            "interpretation": "temporal-order diagnostic, not measured cache cost, inference gain or HTTP qualification",
+            "latency_change_ci95": [
+              -0.0003769326291820363,
+              0.0034025865909539377
+            ],
+            "pairs": [
+              [
+                0.13129760026931764,
+                0.1312608003616333
+              ],
+              [
+                0.13128960132598877,
+                0.13133280277252196
+              ],
+              [
+                0.13119519948959352,
+                0.13164160251617432
+              ],
+              [
+                0.13156479597091675,
+                0.13151520490646362
+              ],
+              [
+                0.13115839958190917,
+                0.1314703941345215
+              ]
+            ]
+          },
+          "stage": "isolated_down"
+        },
+        {
+          "result": {
+            "alternating_latency_change": -0.000059084539269949055,
+            "alternating_median_ms": 0.3518496036529541,
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "grouped_median_ms": 0.35187039375305174,
+            "has_bounded_small_order_effect": true,
+            "has_material_order_sensitivity": false,
+            "interpretation": "temporal-order diagnostic, not measured cache cost, inference gain or HTTP qualification",
+            "latency_change_ci95": [
+              -0.00037728060878594594,
+              0.00038219057019683866
+            ],
+            "pairs": [
+              [
+                0.35199038982391356,
+                0.351857590675354
+              ],
+              [
+                0.35187039375305174,
+                0.3518496036529541
+              ],
+              [
+                0.3517312049865723,
+                0.3517136096954346
+              ],
+              [
+                0.35191519260406495,
+                0.35198240280151366
+              ],
+              [
+                0.3517103910446167,
+                0.3518448114395142
+              ]
+            ]
+          },
+          "stage": "complete"
+        }
+      ],
+      "runtime_integration_allowed": false,
+      "tracked_bytes_after": 4472455168,
+      "tracked_bytes_before": 4472455168
+    },
+    {
+      "has_intact_inputs_and_guards": true,
+      "has_matching_output_bits": true,
+      "kind": "ffn_reuse_case_complete",
+      "layer_ids": [
+        35,
+        0
+      ],
+      "results": [
+        {
+          "result": {
+            "alternating_latency_change": -0.0003543303990378721,
+            "alternating_median_ms": 0.22122879028320314,
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "grouped_median_ms": 0.22130720615386962,
+            "has_bounded_small_order_effect": true,
+            "has_material_order_sensitivity": false,
+            "interpretation": "temporal-order diagnostic, not measured cache cost, inference gain or HTTP qualification",
+            "latency_change_ci95": [
+              -0.0030941984048596938,
+              0.0012521440675332673
+            ],
+            "pairs": [
+              [
+                0.22183680534362793,
+                0.22115039825439453
+              ],
+              [
+                0.22125599384307862,
+                0.22124159336090088
+              ],
+              [
+                0.22130720615386962,
+                0.22116479873657227
+              ],
+              [
+                0.22106399536132812,
+                0.22134079933166503
+              ],
+              [
+                0.22139520645141603,
+                0.22122879028320314
+              ]
+            ]
+          },
+          "stage": "gate_up_swiglu"
+        },
+        {
+          "result": {
+            "alternating_latency_change": -0.00014626784120386205,
+            "alternating_median_ms": 0.131278395652771,
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "grouped_median_ms": 0.13129760026931764,
+            "has_bounded_small_order_effect": true,
+            "has_material_order_sensitivity": false,
+            "interpretation": "temporal-order diagnostic, not measured cache cost, inference gain or HTTP qualification",
+            "latency_change_ci95": [
+              -0.001523051899330219,
+              0.0022578618239486037
+            ],
+            "pairs": [
+              [
+                0.13131359815597535,
+                0.131113600730896
+              ],
+              [
+                0.13131999969482422,
+                0.131494402885437
+              ],
+              [
+                0.13123680353164674,
+                0.13120800256729126
+              ],
+              [
+                0.1310960054397583,
+                0.1313920021057129
+              ],
+              [
+                0.13129760026931764,
+                0.131278395652771
+              ]
+            ]
+          },
+          "stage": "isolated_down"
+        },
+        {
+          "result": {
+            "alternating_latency_change": -0.0006047081868002513,
+            "alternating_median_ms": 0.35167360305786133,
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "grouped_median_ms": 0.3518863916397095,
+            "has_bounded_small_order_effect": true,
+            "has_material_order_sensitivity": false,
+            "interpretation": "temporal-order diagnostic, not measured cache cost, inference gain or HTTP qualification",
+            "latency_change_ci95": [
+              -0.0009908641378296723,
+              0.0006460989462329092
+            ],
+            "pairs": [
+              [
+                0.3520224094390869,
+                0.35167360305786133
+              ],
+              [
+                0.3518863916397095,
+                0.35169119834899903
+              ],
+              [
+                0.35161280632019043,
+                0.3516495943069458
+              ],
+              [
+                0.35191199779510496,
+                0.35157599449157717
+              ],
+              [
+                0.3516319990158081,
+                0.35185918807983396
+              ]
+            ]
+          },
+          "stage": "complete"
+        }
+      ],
+      "runtime_integration_allowed": false,
+      "tracked_bytes_after": 4472455168,
+      "tracked_bytes_before": 4472455168
+    }
+  ],
+  "tracked_device_bytes_after": 0
+}

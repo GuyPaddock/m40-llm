@@ -1,0 +1,255 @@
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.11s
+     Running unittests src/lib.rs (target/debug/deps/m40_llm-a01475ebb6730b26)
+
+running 58 tests
+test cli::tests::parses_dense_reference_override ... ok
+test cli::tests::parses_exact_old_kv_runtime_flags ... ok
+test cli::tests::parses_generate_command ... ok
+test cli::tests::parses_qwen_chat_prompt_format ... ok
+test cli::tests::parses_server_kv_runtime_flags ... ok
+test decode_batch::tests::decode_batch_keeps_active_mixed_lengths ... ok
+test decode_batch::tests::decode_batch_rejects_no_active_requests ... ok
+test decode_batch::tests::decode_batch_rejects_zero_active_kv_len ... ok
+test decode_batch::tests::decode_sequence_pool_leases_and_returns_slots ... ok
+test generate::tests::sanitize_output_drops_nuls_and_byte_markers ... ok
+test generate::tests::sanitize_output_keeps_printable_text ... ok
+test gpu_profile::tests::test_gpu_interval_union_avoids_double_counting ... ok
+test infer::backend::tests::auto_selects_fast_fits_within_budget ... ok
+test infer::backend::tests::auto_selects_large_model_when_over_budget ... ok
+test infer::backend::tests::explicit_large_model_disables_materialization ... ok
+test infer::backend::tests::materialization_env_disable_overrides_fast_fits_request ... ok
+test infer::execution_weights::cache::tests::test_invalid_preparation_plans_do_not_upload ... ok
+test infer::execution_weights::cache::tests::test_partial_cache_preparation_failure_releases_prior_tensors ... ok
+test infer::execution_weights::device::tests::test_partial_device_allocation_failure_frees_uploaded_plane ... ok
+test infer::execution_weights::runtime::tests::test_execution_config_rejects_invalid_modes_and_budgets ... ok
+test infer::execution_weights::runtime::tests::test_layout_policy_preserves_projection_families_and_bounds ... ok
+test infer::execution_weights::tests::test_execution_keys_separate_model_tensor_shape_offset_and_layout ... ok
+test infer::execution_weights::tests::test_gguf_sources_reject_unsupported_shapes_and_dtypes ... ok
+test infer::execution_weights::tests::test_input_tiles_preserve_bytes_and_zero_padding ... ok
+test infer::execution_weights::tests::test_invalid_plans_and_host_regions_are_rejected ... ok
+test infer::execution_weights::tests::test_layout_plans_account_for_tails_alignment_and_planes ... ok
+test infer::execution_weights::tests::test_partial_allocation_failure_releases_prior_planes ... ok
+test infer::execution_weights::tests::test_partial_upload_failure_releases_all_allocated_planes ... ok
+test infer::execution_weights::tests::test_prepared_buffers_own_data_and_release_all_planes ... ok
+test infer::execution_weights::tests::test_separate_launch_accepts_only_fixed_experiment_configs ... ok
+test infer::execution_weights::tests::test_separate_planes_preserve_every_source_byte ... ok
+test infer::execution_weights::tests::test_source_view_bounds_and_lossless_column_copy ... ok
+test infer::execution_weights::tests::test_tiled_launch_accepts_only_retained_vector_configs ... ok
+test infer::sparse_weights::tests::test_sparse_q8_preserves_mask_order_and_signed_extremes ... ok
+test infer::sparse_weights::tests::test_sparse_q8_reconstructs_the_matched_zero_matrix ... ok
+test infer::sparse_weights::tests::test_sparse_q8_rejects_invalid_formats ... ok
+test infer::tensor_views::cuda_tensor_view_tests::device_pointer_matches_base_and_offset ... ok
+test infer::tensor_views::cuda_tensor_view_tests::null_device_base_keeps_tensor_ptr_null ... ok
+test kv_compression::tests::dense_reference_config_is_explicit ... ok
+test kv_compression::tests::preferred_batched_runtime_rejects_diagnostic_variants ... ok
+test kv_compression::tests::rejects_direct_attention_without_matching_backing ... ok
+test kv_compression::tests::rejects_exact_old_backing_outside_block_select_exact ... ok
+test kv_compression::tests::runtime_support_rejects_oversized_recent_window ... ok
+test kv_compression::tests::runtime_support_rejects_top_blocks_above_cuda_limit ... ok
+test kv_compression::tests::runtime_support_rejects_unsupported_head128_combo ... ok
+test kv_compression::tests::scoped_runtime_config_shadows_global_config ... ok
+test kv_compression::tests::validates_direct_fp16_k_q4_v_runtime_config ... ok
+test model::tests::resolve_model_arg_accepts_direct_file ... ok
+test model::tests::resolve_model_arg_accepts_model_dir ... ok
+test profile::tests::benchmark_modes_match_plan_names ... ok
+test profile::tests::counters_accumulate_by_operation ... ok
+test sampling::tests::greedy_picks_max ... ok
+test sampling::tests::nan_logits_fall_back_to_greedy ... ok
+test sampling::tests::sampling_is_deterministic_when_unfiltered ... ok
+test sampling::tests::softmax_temperature_effect ... ok
+test sampling::tests::top_k_limits_candidates ... ok
+test sampling::tests::top_k_one_uses_greedy_even_with_temperature ... ok
+test sampling::tests::top_p_truncates_cumulative ... ok
+
+test result: ok. 58 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/attention_parity_cuda_grid.rs (target/debug/deps/attention_parity_cuda_grid-ede5ab533724ab3e)
+
+running 11 tests
+test attention_block_select_exact_matches_dense_when_all_old_blocks_selected ... ok
+test attention_block_summary_lossy_is_finite_and_deterministic ... ok
+test attention_dense_recent_window_matches_reference ... ok
+test attention_dense_sink_recent_head128_matches_reference ... ok
+test attention_fp16_k_q4_v_direct_handles_partial_old_block ... ok
+test attention_fp16_k_q4_v_direct_supports_head128 ... ok
+test attention_last_token_cuda_gqa_head64_long_parity ... ok
+test attention_last_token_cuda_gqa_parity_grid ... ok
+test attention_last_token_cuda_parity_grid ... ok
+test compressed_kv_recent_ring_matches_dense_window_after_wrap ... ok
+test compressed_kv_recent_window_matches_dense_attention ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.64s
+
+     Running tests/cuda_allocation_errors.rs (target/debug/deps/cuda_allocation_errors-ac7453d908bc9303)
+
+running 2 tests
+test test_allocation_error_preserves_allocator_and_live_buffers ... ok
+test test_uploaded_weights_drop_restores_accounting_after_last_owner ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/cuda_elementwise.rs (target/debug/deps/cuda_elementwise-b841e33dabce1aca)
+
+running 7 tests
+test async_elementwise_wrappers_match_cpu ... ok
+test cuda_graph_replays_cross_stream_decode_gemm_segment ... ok
+test cuda_graph_replays_decode_elementwise_work ... ok
+test cuda_graph_replays_one_layer_projection_gemms ... ok
+test residual_add_kernel_matches_cpu ... ok
+test stream_wait_allows_prefill_gemm_to_consume_decode_swiglu ... ok
+test swiglu_kernel_matches_cpu ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/cuda_transfer_order.rs (target/debug/deps/cuda_transfer_order-ac0d7275a0f01234)
+
+running 5 tests
+test test_explicit_position_append_stays_enqueue_only ... ok
+test test_legacy_append_observes_queued_length_publication ... ok
+test test_native_kv_initialization_precedes_first_decode ... ok
+test test_native_weight_upload_is_ready_for_both_streams ... ok
+test test_pageable_upload_is_ready_for_both_consumer_streams ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.52s
+
+     Running tests/forward_with_layer_smoke.rs (target/debug/deps/forward_with_layer_smoke-deaec1b4e12eb6ff)
+
+running 24 tests
+test compressed_chunked_prefill_matches_sequential_block_select_lossy ... ok
+test compressed_chunked_prefill_matches_sequential_block_summary ... ok
+test cuda_graph_replays_forward_one_token_with_layer ... ok
+test decode_session_graph_diagnostic_sync_records_timed_replay ... ok
+test decode_session_uses_multilayer_graph_when_enabled ... ok
+test decode_session_uses_one_layer_graph_when_enabled ... ok
+test forward_batched_decode_supports_head128_attention ... ok
+test forward_batched_decode_uses_packed_attention ... ok
+test forward_batched_prefill_uses_varlen_attention ... ok
+test forward_one_token_with_layer_smoke ... ok
+test packed_prefill_logits_match_sequential_block_select_exact ... ok
+test packed_prefill_logits_match_sequential_dense ... ok
+test packed_prefill_logits_match_sequential_with_qkv_biases ... ok
+test packed_then_compress_prefill_matches_sequential_block_select_lossy ... ok
+test packed_then_compress_prefill_matches_sequential_block_select_lossy_last_reps ... ok
+test packed_then_compress_prefill_matches_sequential_block_select_lossy_stride_reps ... ok
+test packed_then_compress_prefill_matches_sequential_block_summary ... ok
+test packed_then_compress_prefill_matches_sequential_block_summary_last_reps ... ok
+test packed_then_compress_prefill_matches_sequential_block_summary_stride_reps ... ok
+test qwen_head128_batched_prefill_matches_sequential_with_qkv_biases ... ok
+test qwen_head128_compressed_multirow_prefill_matches_single_row_with_qkv_biases ... ok
+test qwen_head128_compressed_packed_prefill_matches_sequential_with_qkv_biases ... ok
+test qwen_head128_packed_prefill_logits_match_sequential_with_qkv_biases ... ok
+test qwen_head128_real_mixed_prefill_diagnostic ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.20s
+
+     Running tests/gpu_stage_profile.rs (target/debug/deps/gpu_stage_profile-c69dbf8b759fc1cc)
+
+running 3 tests
+test test_buffered_profile_preserves_two_stream_result_and_reuses_events ... ok
+test test_event_query_does_not_synchronize ... ok
+test test_sampled_generation_profile_matches_unprofiled_generation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests/kv_f32_to_f16_append.rs (target/debug/deps/kv_f32_to_f16_append-7701c6ee739040c1)
+
+running 4 tests
+test test_kvcache_append_token_f32_casts_and_stores_fp16 ... ok
+test test_kvcache_append_token_f32_rope_k_at_uses_explicit_position ... ok
+test test_kvcache_append_token_f32_rope_k_matches_separate_rope_append ... ok
+test test_kvcache_reset_restarts_append_position ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/layer_mask_cuda.rs (target/debug/deps/layer_mask_cuda-d996f602ed9ee969)
+
+running 5 tests
+test test_empty_mask_logits_and_setup_validation ... ok
+test test_masked_device_params_and_graph_session_guard ... ok
+test test_masked_forward_matches_manual_layers_and_preserves_kv_ids ... ok
+test test_masked_packed_prefill_and_batched_decode ... ok
+test test_masked_reconstruction_rejects_without_mutating_session ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.60s
+
+     Running tests/mlp_wrappers.rs (target/debug/deps/mlp_wrappers-06192ee172de6e90)
+
+running 1 test
+test mlp_gates_and_down_proj_f32xf16_f32_smoke ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/proj_wrappers.rs (target/debug/deps/proj_wrappers-92bbe4196fa7a6d4)
+
+running 2 tests
+test out_proj_f32xf16_f32_smoke ... ok
+test qkv_project_f32xf16_f32_smoke ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/q8_execution_weights.rs (target/debug/deps/q8_execution_weights-e3b39aed073acc2c)
+
+running 2 tests
+test test_device_execution_planes_round_trip_and_release ... ok
+test test_owned_column_blocks_drive_existing_projection ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/q8_family_selection.rs (target/debug/deps/q8_family_selection-2ce52ae859ff87ce)
+
+running 1 test
+test test_family_selection_preserves_native_consumers_and_accounting ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests/q8_native_mlp_cache.rs (target/debug/deps/q8_native_mlp_cache-093d00b1002fffa1)
+
+running 1 test
+test test_prepared_caches_retain_native_fused_mlp ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+     Running tests/q8_prepared_greedy.rs (target/debug/deps/q8_prepared_greedy-b8c00f538f688e93)
+
+running 1 test
+test test_prepared_greedy_uses_cached_vocabulary_and_one_token_readback ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+     Running tests/q8_prepared_qkv.rs (target/debug/deps/q8_prepared_qkv-ab51cf9656cd0231)
+
+running 1 test
+test test_prepared_fused_qkv_matches_native_without_splitting_launches ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+     Running tests/q8_runtime_weights.rs (target/debug/deps/q8_runtime_weights-43658280e97b1089)
+
+running 1 test
+test test_runtime_cache_prepares_dispatches_and_releases_per_model ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.54s
+
+     Running tests/q8_separate_projection.rs (target/debug/deps/q8_separate_projection-0b49508a77244622)
+
+running 1 test
+test test_separate_projection_matches_source_and_rejects_invalid_buffers ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.90s
+
+     Running tests/q8_tiled_projection.rs (target/debug/deps/q8_tiled_projection-8ae0030159e9c9ff)
+
+running 1 test
+test test_input_tiled_projection_matches_cpu_and_gguf_with_guarded_tails ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.01s
+
+     Running tests/teacher_forced_cuda.rs (target/debug/deps/teacher_forced_cuda-1d44d826ff3a73a5)
+
+running 1 test
+test test_cuda_teacher_forcing_isolated_sessions_and_reset ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s

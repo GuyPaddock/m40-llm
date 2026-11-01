@@ -1,7 +1,7 @@
 #[cfg(feature = "cuda")]
 use super::gemm::{
     decode_cublas_single_stream_enabled, f16_decode_kernel_decode_stream_enabled,
-    q8_decode_kernel_decode_stream_enabled,
+    q4_decode_kernel_decode_stream_enabled, q8_decode_kernel_decode_stream_enabled,
 };
 use super::meta::norm_weight_dtype_code;
 #[cfg(feature = "cuda")]
@@ -12,6 +12,15 @@ use crate::cuda::CudaStream;
 #[cfg(feature = "cuda")]
 use crate::cuda::KVCache;
 use crate::gguf::GgmlDType;
+#[cfg(feature = "cuda")]
+use crate::gpu_profile::{self, GpuStageSpan};
+
+#[cfg(all(test, feature = "cuda"))]
+#[path = "forward_diagnostic_cost.rs"]
+mod diagnostic_cost;
+#[cfg(feature = "cuda")]
+#[path = "direct_verification.rs"]
+mod direct_verification;
 #[cfg(feature = "cuda")]
 use crate::infer::{BatchMetadata, BatchSequence, VarlenPrefillPlan};
 #[cfg(feature = "cuda")]
@@ -25,6 +34,8 @@ use crate::timing;
 #[cfg(feature = "cuda")]
 use anyhow::Context;
 use anyhow::{anyhow, Result};
+#[cfg(feature = "cuda")]
+pub(crate) use direct_verification::DirectVerificationWorkspace;
 use std::ffi::c_void;
 
 #[cfg(feature = "cuda")]
@@ -107,6 +118,23 @@ fn forward_finite_log_enabled() -> bool {
 
 impl LoadedModel {
     #[cfg(feature = "cuda")]
+    fn profiled_projection_stream(&self, weight: *const c_void) -> CudaStream {
+        if self.q8_attention_projection.contains_weight(weight) {
+            return CudaStream::Decode;
+        }
+        let is_decode = match self.gguf_weight_dtype(weight) {
+            GgmlDType::Q8_0 => q8_decode_kernel_decode_stream_enabled(),
+            GgmlDType::Q4_0 | GgmlDType::Q6K => q4_decode_kernel_decode_stream_enabled(),
+            _ => decode_cublas_single_stream_enabled() || f16_decode_kernel_decode_stream_enabled(),
+        };
+        if is_decode {
+            CudaStream::Decode
+        } else {
+            CudaStream::Prefill
+        }
+    }
+
+    #[cfg(feature = "cuda")]
     fn qkv_bias_ptrs(&self, w: &super::StandardLayerWeights) -> Result<Option<QkvBiasPtrs>> {
         let bq_ptr =
             w.bq.as_ref()
@@ -153,6 +181,7 @@ impl LoadedModel {
             CudaStream::Prefill,
             "qkv_project_to_bias_add",
         )?;
+        let gpu_stage = GpuStageSpan::begin("qkv_bias", CudaStream::Decode)?;
         for row in 0..rows {
             let q_row = unsafe { mut_byte_offset(ws.dq, row * bytes_d) };
             let k_row = unsafe { mut_byte_offset(ws.dk, row * bytes_kv) };
@@ -166,6 +195,7 @@ impl LoadedModel {
                     .residual_add_f32_async(v_row as *const c_void, d_bv, v_row, kv_dim)?;
             }
         }
+        gpu_stage.finish()?;
         Ok(())
     }
 
@@ -217,7 +247,7 @@ impl LoadedModel {
         hidden_dim: usize,
         f: impl FnOnce(ForwardWorkspacePtrs) -> Result<R>,
     ) -> Result<R> {
-        self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, 1, f)
+        self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, 1, 0, f)
     }
 
     #[cfg(feature = "cuda")]
@@ -227,6 +257,7 @@ impl LoadedModel {
         kv_dim: usize,
         hidden_dim: usize,
         rows: usize,
+        prefill_weight_bytes: usize,
         f: impl FnOnce(ForwardWorkspacePtrs) -> Result<R>,
     ) -> Result<R> {
         if rows == 0 {
@@ -235,14 +266,29 @@ impl LoadedModel {
         let mut guard = self.forward_workspace.lock().unwrap();
         if !guard
             .as_ref()
-            .map(|ws| ws.matches(d_model, kv_dim, hidden_dim, rows))
+            .map(|ws| {
+                ws.matches(
+                    d_model,
+                    kv_dim,
+                    hidden_dim,
+                    rows,
+                    self.q8_ffn,
+                    prefill_weight_bytes,
+                )
+            })
             .unwrap_or(false)
         {
             if let Some(old) = guard.take() {
                 old.free(&self.cuda);
             }
             *guard = Some(super::workspace::ForwardWorkspace::new_with_rows(
-                &self.cuda, d_model, kv_dim, hidden_dim, rows,
+                &self.cuda,
+                d_model,
+                kv_dim,
+                hidden_dim,
+                rows,
+                self.q8_ffn,
+                prefill_weight_bytes,
             )?);
         }
         let ptrs = guard.as_ref().expect("workspace initialized").ptrs();
@@ -273,6 +319,7 @@ impl LoadedModel {
         if d_model <= 0 || hidden_dim <= 0 {
             anyhow::bail!("forward_one_token_minimal: invalid dims");
         }
+        self.validate_ffn_capture_forward(d_w_gate_f16, seq_id, d_model, hidden_dim)?;
 
         #[cfg(feature = "cuda")]
         {
@@ -313,9 +360,45 @@ impl LoadedModel {
                 ]
                 .iter()
                 .all(|ptr| self.gguf_weight_dtype(*ptr) == GgmlDType::Q8_0);
-            let single_stream_decode = decode_cublas_single_stream_enabled()
-                || f16_decode_kernel_decode_stream_enabled()
-                || q8_decode_single_stream;
+            // Experimental gate/up is always on decode. Elide other producer
+            // waits only when every Q8 projection is also known to be there.
+            let single_stream_decode = q8_decode_single_stream
+                || (self.q8_ffn.is_native()
+                    && (decode_cublas_single_stream_enabled()
+                        || f16_decode_kernel_decode_stream_enabled()));
+            // Profiling follows the producer, not the wait-elision heuristic.
+            let (qkv_stream, output_stream, gate_up_stream, down_stream) =
+                if gpu_profile::is_recording() {
+                    let qkv = self.profiled_projection_stream(d_wq_f16);
+                    let gate = if self.q8_ffn.is_native() {
+                        self.profiled_projection_stream(d_w_gate_f16)
+                    } else {
+                        CudaStream::Decode
+                    };
+                    anyhow::ensure!(
+                        qkv == self.profiled_projection_stream(d_wk_f16)
+                            && qkv == self.profiled_projection_stream(d_wv_f16),
+                        "stage profiling requires Q/K/V projections on one producer stream"
+                    );
+                    anyhow::ensure!(
+                        !self.q8_ffn.is_native()
+                            || gate == self.profiled_projection_stream(d_w_up_f16),
+                        "stage profiling requires gate/up projections on one producer stream"
+                    );
+                    (
+                        qkv,
+                        self.profiled_projection_stream(d_wo_f16),
+                        gate,
+                        self.profiled_projection_stream(d_w_down_f16),
+                    )
+                } else {
+                    (
+                        CudaStream::Decode,
+                        CudaStream::Decode,
+                        CudaStream::Decode,
+                        CudaStream::Decode,
+                    )
+                };
 
             self.with_forward_workspace(
                 d_model as usize,
@@ -332,6 +415,7 @@ impl LoadedModel {
                         };
                     let label = format!("forward.layer.{seq_id}.seq_len.{seq_len}");
                     // Pre-norm (RMSNorm) on x -> xn
+                    let gpu_stage = GpuStageSpan::begin("attn_norm", CudaStream::Decode)?;
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     if let Some((d_weight, dtype)) = attn_norm_weight {
@@ -353,6 +437,7 @@ impl LoadedModel {
                             self.model_config.layer_norm_epsilon,
                         )?;
                     }
+                    gpu_stage.finish()?;
                     log_profiled_op(
                         &label,
                         "attn_norm",
@@ -373,6 +458,7 @@ impl LoadedModel {
                         CudaStream::Decode,
                         "attn_norm_to_qkv_project",
                     )?;
+                    let gpu_stage = GpuStageSpan::begin("qkv_project", qkv_stream)?;
                     let fused_qkv = self.try_qkv_project_f32xf16_gguf_f32_decode_async(
                         ws.d_xn,
                         1,
@@ -391,6 +477,7 @@ impl LoadedModel {
                         ws.dv,
                     )?;
                     if fused_qkv {
+                        gpu_stage.finish()?;
                         log_profiled_op(
                             &label,
                             "qkv_project_fused",
@@ -412,6 +499,7 @@ impl LoadedModel {
                             ws.dk,
                             ws.dv,
                         )?;
+                        gpu_stage.finish()?;
                         self.apply_qkv_bias_async(
                             qkv_bias,
                             1,
@@ -450,6 +538,7 @@ impl LoadedModel {
                         CudaStream::Prefill,
                         "qkv_project_to_rope_kv",
                     )?;
+                    let gpu_stage = GpuStageSpan::begin("rope_q", CudaStream::Decode)?;
                     self.cuda.rope_f32_inplace_layout_async(
                         ws.dq,
                         1,
@@ -460,6 +549,7 @@ impl LoadedModel {
                         self.model_config.rope_freq_scale,
                         self.model_config.rope_layout_code(),
                     )?;
+                    gpu_stage.finish()?;
                     log_profiled_op(
                         &label,
                         "rope_q",
@@ -480,6 +570,7 @@ impl LoadedModel {
                         CudaStream::Prefill,
                         "qkv_project_to_kv_append",
                     )?;
+                    let gpu_stage = GpuStageSpan::begin("kv_append_rope_k", CudaStream::Decode)?;
                     self.append_kv_token_f32_rope_k_at_async(
                         seq_id,
                         ws.dk as *const c_void,
@@ -489,6 +580,7 @@ impl LoadedModel {
                         self.model_config.rope_freq_base,
                         self.model_config.rope_freq_scale,
                     )?;
+                    gpu_stage.finish()?;
                     log_profiled_op(
                         &label,
                         "kv_append_rope_k",
@@ -497,6 +589,7 @@ impl LoadedModel {
                     );
 
                     // Use KV cache layout to validate/run attention
+                    let gpu_stage = GpuStageSpan::begin("attention", CudaStream::Decode)?;
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     self.run_attention_async(
@@ -508,6 +601,7 @@ impl LoadedModel {
                         q_heads,
                         head_dim,
                     )?;
+                    gpu_stage.finish()?;
                     log_profiled_op(
                         &label,
                         "attention",
@@ -528,6 +622,7 @@ impl LoadedModel {
                         CudaStream::Decode,
                         "attention_to_out_project",
                     )?;
+                    let gpu_stage = GpuStageSpan::begin("out_project", output_stream)?;
                     self.out_proj_f32xf16_gguf_f32_async(
                         ws.datt as *const c_void,
                         d_wo_f16,
@@ -536,6 +631,7 @@ impl LoadedModel {
                         d_model,
                         d_model,
                     )?;
+                    gpu_stage.finish()?;
                     log_profiled_op(
                         &label,
                         "out_project",
@@ -556,12 +652,14 @@ impl LoadedModel {
                         CudaStream::Prefill,
                         "out_project_to_attn_residual",
                     )?;
+                    let gpu_stage = GpuStageSpan::begin("attn_residual", CudaStream::Decode)?;
                     self.cuda.residual_add_f32_async(
                         d_x_f32,
                         ws.dy_attn as *const c_void,
                         ws.d_x1,
                         d_model as usize,
                     )?;
+                    gpu_stage.finish()?;
                     log_profiled_op(
                         &label,
                         "attn_residual",
@@ -575,6 +673,7 @@ impl LoadedModel {
                     )?;
 
                     // Post-attention norm: x1n = norm(x1)
+                    let gpu_stage = GpuStageSpan::begin("ffn_norm", CudaStream::Decode)?;
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     if let Some((d_weight, dtype)) = ffn_norm_weight {
@@ -596,6 +695,7 @@ impl LoadedModel {
                             self.model_config.layer_norm_epsilon,
                         )?;
                     }
+                    gpu_stage.finish()?;
                     log_profiled_op(
                         &label,
                         "ffn_norm",
@@ -616,6 +716,7 @@ impl LoadedModel {
                         CudaStream::Decode,
                         "ffn_norm_to_mlp_gate_up",
                     )?;
+                    let gpu_stage = GpuStageSpan::begin("mlp_gate_up", gate_up_stream)?;
                     let fused_mlp = self.try_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
                         ws.d_x1n,
                         1,
@@ -624,8 +725,10 @@ impl LoadedModel {
                         d_w_up_f16,
                         hidden_dim,
                         ws.dhid,
+                        ws.q8_activation,
                     )?;
                     if fused_mlp {
+                        gpu_stage.finish_as("mlp_gate_up_swiglu")?;
                         log_profiled_op(
                             &label,
                             "mlp_gate_up_swiglu",
@@ -643,6 +746,7 @@ impl LoadedModel {
                             ws.dgate,
                             ws.dup,
                         )?;
+                        gpu_stage.finish()?;
                         log_profiled_op(
                             &label,
                             "mlp_gate_up",
@@ -668,12 +772,14 @@ impl LoadedModel {
                             CudaStream::Prefill,
                             "mlp_gate_up_to_swiglu",
                         )?;
+                        let gpu_stage = GpuStageSpan::begin("swiglu", CudaStream::Decode)?;
                         self.cuda.swiglu_f32_async(
                             ws.dgate as *const c_void,
                             ws.dup as *const c_void,
                             ws.dhid,
                             hidden_dim as usize,
                         )?;
+                        gpu_stage.finish()?;
                         log_profiled_op(
                             &label,
                             "swiglu",
@@ -686,6 +792,12 @@ impl LoadedModel {
                         ws.dhid as *const c_void,
                         hidden_dim as usize,
                     )?;
+                    self.observe_ffn_inputs(
+                        d_w_gate_f16,
+                        seq_len.saturating_sub(1),
+                        ws.d_x1n,
+                        ws.dhid,
+                    )?;
 
                     // Down projection
                     let profile_before = profile::snapshot_if_enabled();
@@ -695,14 +807,25 @@ impl LoadedModel {
                         CudaStream::Decode,
                         "swiglu_to_mlp_down",
                     )?;
-                    self.mlp_down_proj_f32xf16_gguf_f32_async(
-                        ws.dhid as *const c_void,
-                        1,
-                        hidden_dim,
+                    let gpu_stage = GpuStageSpan::begin("mlp_down", down_stream)?;
+                    if !self.try_activation_down(
                         d_w_down_f16,
-                        d_model,
+                        ws.dhid,
                         ws.dy_mlp,
-                    )?;
+                        hidden_dim as usize,
+                        d_model as usize,
+                        seq_len.saturating_sub(1),
+                    )? {
+                        self.mlp_down_proj_f32xf16_gguf_f32_async(
+                            ws.dhid as *const c_void,
+                            1,
+                            hidden_dim,
+                            d_w_down_f16,
+                            d_model,
+                            ws.dy_mlp,
+                        )?;
+                    }
+                    gpu_stage.finish()?;
                     log_profiled_op(
                         &label,
                         "mlp_down",
@@ -723,12 +846,14 @@ impl LoadedModel {
                         CudaStream::Prefill,
                         "mlp_down_to_mlp_residual",
                     )?;
+                    let gpu_stage = GpuStageSpan::begin("mlp_residual", CudaStream::Decode)?;
                     self.cuda.residual_add_f32_async(
                         ws.d_x1 as *const c_void,
                         ws.dy_mlp as *const c_void,
                         d_out_f32,
                         d_model as usize,
                     )?;
+                    gpu_stage.finish()?;
                     log_profiled_op(
                         &label,
                         "mlp_residual",
@@ -801,6 +926,16 @@ impl LoadedModel {
         if d_model <= 0 || hidden_dim <= 0 {
             anyhow::bail!("forward_one_token_minimal_graph_params: invalid dims");
         }
+        anyhow::ensure!(
+            self.q8_ffn.is_native(),
+            "experimental Q8 FFN graph capture is not validated; use M40LLM_Q8_FFN_KERNEL=native"
+        );
+        anyhow::ensure!(
+            self.activation_research.is_none()
+                && self.layer_influence.is_none()
+                && self.ffn_capture.is_none(),
+            "model calibration does not support CUDA Graphs"
+        );
         if d_position.is_null() || d_seq_len.is_null() {
             anyhow::bail!("forward_one_token_minimal_graph_params: null device parameter");
         }
@@ -1100,6 +1235,7 @@ impl LoadedModel {
                         d_w_up_f16,
                         hidden_dim,
                         ws.dhid,
+                        ws.q8_activation,
                     )?;
                     if fused_mlp {
                         log_profiled_op(
@@ -1405,7 +1541,16 @@ impl LoadedModel {
             .map_err(|_| anyhow::anyhow!("layer index {} does not fit in u32", layer))?;
         let position = seq_len.saturating_sub(1);
         #[cfg(feature = "cuda")]
-        kv_selection::set_attention_context(Some(layer_id), Some(position));
+        {
+            anyhow::ensure!(
+                self.ffn_capture.is_none()
+                    || (sequence_id == 0
+                        && self.kv_cache.as_ref().is_some_and(|kv| !kv.is_compressed())),
+                "FFN capture requires sequence 0 and explicit dense KV"
+            );
+            kv_selection::set_attention_context(Some(layer_id), Some(position));
+            gpu_profile::set_layer(Some(layer_id));
+        }
         if let Some(kv) = &self.kv_cache {
             if position >= kv.max_seq_len() {
                 anyhow::bail!(
@@ -1714,6 +1859,11 @@ impl LoadedModel {
         d_seq_len: *const u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        anyhow::ensure!(
+            self.ffn_capture.is_none(),
+            "FFN capture does not support CUDA Graphs"
+        );
         if d_position.is_null() || d_seq_len.is_null() {
             anyhow::bail!("forward_one_token_with_layer_graph_params: null device parameter");
         }
@@ -1787,7 +1937,7 @@ impl LoadedModel {
             anyhow::bail!("forward_one_token_with_layer_graph_params requires CUDA")
         }
     }
-    /// Runs one token through every transformer layer.
+    /// Runs one token through every configured active transformer layer.
     ///
     /// The current single-request server path defaults to `sequence_id=0`;
     /// batched callers can use `forward_one_token_all_layers_for_sequence`.
@@ -1804,7 +1954,8 @@ impl LoadedModel {
         unsafe { self.forward_one_token_all_layers_for_sequence(d_x_f32, 0, seq_len, d_out_f32) }
     }
 
-    /// Runs one token through every transformer layer for one logical sequence.
+    /// Runs one token through active layers for one logical sequence, retaining
+    /// original tensor/KV layer IDs and returning the executed layer count.
     ///
     /// # Safety
     /// - `d_x_f32` and `d_out_f32` must be valid device pointers on this model's CUDA context.
@@ -1835,6 +1986,11 @@ impl LoadedModel {
 
         #[cfg(feature = "cuda")]
         {
+            anyhow::ensure!(
+                (self.layer_influence.is_none() && self.ffn_capture.is_none())
+                    || (sequence_id == 0 && !kv.is_compressed()),
+                "model read-only capture requires sequence 0 and explicit dense KV"
+            );
             if layer_count == 1 {
                 self.forward_one_token_with_layer(d_x_f32, 0, sequence_id, seq_len, d_out_f32)?;
                 return Ok(1);
@@ -1846,18 +2002,23 @@ impl LoadedModel {
 
             self.with_forward_workspace(d_model, kv_dim, hidden_dim, |ws| {
                 let mut current = d_x_f32;
-                for layer in 0..layer_count {
+                for (active_index, layer) in self
+                    .layer_mask
+                    .active_layers(self.model_config.block_count)?
+                    .enumerate()
+                {
                     let next = if layer + 1 == layer_count {
                         d_out_f32
-                    } else if layer % 2 == 0 {
+                    } else if active_index % 2 == 0 {
                         ws.scratch_a
                     } else {
                         ws.scratch_b
                     };
                     self.forward_one_token_with_layer(current, layer, sequence_id, seq_len, next)?;
+                    self.observe_layer_influence(layer, seq_len.saturating_sub(1), current, next)?;
                     current = next as *const c_void;
                 }
-                Ok(layer_count)
+                self.active_layer_count()
             })
         }
 
@@ -1868,7 +2029,7 @@ impl LoadedModel {
         }
     }
 
-    /// Runs one decode token for a batch of logical sequences.
+    /// Runs one decode token for a batch through the configured active layers.
     ///
     /// This path keeps projections and MLP row-batched while using the existing
     /// packed variable-length GQA decode attention primitive for the attention
@@ -1883,6 +2044,13 @@ impl LoadedModel {
         &self,
         items: &[ForwardBatchItem],
     ) -> Result<usize> {
+        anyhow::ensure!(self.q8_ffn.is_native(),"experimental Q8 FFN is single-row only; disable batched decode or use M40LLM_Q8_FFN_KERNEL=native");
+        anyhow::ensure!(
+            self.activation_research.is_none()
+                && self.layer_influence.is_none()
+                && self.ffn_capture.is_none(),
+            "model calibration requires single-row sequential forward, not batching"
+        );
         if items.is_empty() {
             anyhow::bail!("batched forward requires at least one item");
         }
@@ -1936,8 +2104,11 @@ impl LoadedModel {
         let bytes_kv = kv_dim
             .checked_mul(std::mem::size_of::<f32>())
             .context("batched forward kv byte size overflow")?;
-        self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, rows, |ws| {
-            for layer in 0..layer_count {
+        self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, rows, 0, |ws| {
+            for layer in self
+                .layer_mask
+                .active_layers(self.model_config.block_count)?
+            {
                 let w = self.map_standard_layer(layer)?;
                 let layer_id: u32 = layer
                     .try_into()
@@ -2306,11 +2477,11 @@ impl LoadedModel {
                     }
                 }
             }
-            Ok(layer_count)
+            self.active_layer_count()
         })
     }
 
-    /// Runs full-prompt prefill for a batch of logical sequences.
+    /// Runs full-prompt prefill through active layers for a batch of logical sequences.
     ///
     /// This is the packed variable-length prefill counterpart to the batched
     /// decode path. Prompt tokens are packed into contiguous workspace rows,
@@ -2337,6 +2508,63 @@ impl LoadedModel {
         items: &[ForwardPrefillSequence<'_>],
         kv: &KVCache,
     ) -> Result<usize> {
+        self.forward_causal_rows(items, kv, None)
+    }
+
+    /// # Safety
+    /// Research-only dense continuation. `output` holds tokens.len()*D f32;
+    /// caller exclusively owns KV sequence zero through completion/rollback.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn forward_verification_rows(
+        &self,
+        tokens: &[u32],
+        start: u32,
+        output: *mut c_void,
+    ) -> Result<usize> {
+        anyhow::ensure!(
+            matches!(tokens.len(), 2 | 4 | 8),
+            "verification requires 2, 4 or 8 actual rows"
+        );
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .context("verification requires explicit dense KV")?;
+        anyhow::ensure!(
+            !kv.is_compressed() && !output.is_null(),
+            "verification requires dense FP16 KV and valid output"
+        );
+        anyhow::ensure!(
+            start
+                .checked_add(tokens.len() as u32)
+                .is_some_and(|end| end <= kv.max_seq_len()),
+            "verification exceeds KV capacity"
+        );
+        self.forward_causal_rows(
+            &[ForwardPrefillSequence {
+                token_ids: tokens,
+                sequence_id: 0,
+                d_out_f32: output,
+            }],
+            kv,
+            Some(start),
+        )
+    }
+
+    #[cfg(feature = "cuda")]
+    unsafe fn forward_causal_rows(
+        &self,
+        items: &[ForwardPrefillSequence<'_>],
+        kv: &KVCache,
+        verification_start: Option<u32>,
+    ) -> Result<usize> {
+        anyhow::ensure!(self.q8_prefill.is_native() || items.len() == 1,
+            "experimental Q8 prefill supports one packed prompt; use M40LLM_Q8_PREFILL_BACKEND=native for server batching");
+        anyhow::ensure!(
+            self.activation_research.is_none()
+                && self.layer_influence.is_none()
+                && self.ffn_capture.is_none(),
+            "model calibration requires sequential prefill, not packed prefill"
+        );
         if items.is_empty() {
             anyhow::bail!("batched prefill requires at least one item");
         }
@@ -2408,9 +2636,15 @@ impl LoadedModel {
         let total_bytes_d = rows
             .checked_mul(bytes_d)
             .context("batched prefill total d_model byte size overflow")?;
-        let prefill_plan = VarlenPrefillPlan::new(&self.cuda, meta.clone(), head_dim)?;
+        let prefill_plan = if verification_start.is_none() {
+            Some(VarlenPrefillPlan::new(&self.cuda, meta.clone(), head_dim)?)
+        } else {
+            None
+        };
 
-        self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, rows, |ws| {
+        let prefill_weight_bytes = self.q8_prefill_weight_bytes()?;
+        self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, rows, prefill_weight_bytes, |ws| {
+            let embedding_stage = GpuStageSpan::begin("prefill_embeddings", CudaStream::Decode)?;
             for (seq_idx, item) in items.iter().enumerate() {
                 let q_offset = meta.offsets()[seq_idx].q_offset as usize;
                 for (tok_idx, &tok_id) in item.token_ids.iter().enumerate() {
@@ -2421,8 +2655,9 @@ impl LoadedModel {
                     }
                 }
             }
+            embedding_stage.finish()?;
 
-            for layer in 0..layer_count {
+            for layer in self.layer_mask.active_layers(self.model_config.block_count)? {
                 let w = self.map_standard_layer(layer)?;
                 let layer_id: u32 = layer
                     .try_into()
@@ -2452,9 +2687,11 @@ impl LoadedModel {
                     })
                     .transpose()?;
 
+                gpu_profile::set_layer(Some(layer_id));
                 let label = format!("forward.prefill.layer.{layer}.rows.{rows}");
                 let profile_before = profile::snapshot_if_enabled();
                 let op_start = std::time::Instant::now();
+                let gpu_stage = GpuStageSpan::begin("prefill_attn_norm", CudaStream::Decode)?;
                 if let Some((d_weight, dtype)) = attn_norm_ptr {
                     self.run_rms_norm_weighted_async(
                         ws.scratch_a,
@@ -2474,6 +2711,7 @@ impl LoadedModel {
                         self.model_config.layer_norm_epsilon,
                     )?;
                 }
+                gpu_stage.finish()?;
                 log_profiled_op(
                     &label,
                     "attn_norm",
@@ -2488,20 +2726,10 @@ impl LoadedModel {
                     CudaStream::Decode,
                     "prefill_attn_norm_to_qkv_project",
                 )?;
-                self.qkv_project_f32xf16_gguf_f32_async(
-                    ws.d_xn,
-                    rows as i32,
-                    d_model as i32,
-                    wq_ptr,
-                    d_model as i32,
-                    wk_ptr,
-                    kv_dim as i32,
-                    wv_ptr,
-                    kv_dim as i32,
-                    ws.dq,
-                    ws.dk,
-                    ws.dv,
-                )?;
+                for (weight, output, width) in [(wq_ptr, ws.dq, d_model), (wk_ptr, ws.dk, kv_dim), (wv_ptr, ws.dv, kv_dim)] {
+                    self.matmul_prefill_f32_gguf_async(ws.d_xn, weight, output,
+                        rows as i32, width as i32, d_model as i32, ws.q8_prefill_weight)?;
+                }
                 self.apply_qkv_bias_async(qkv_bias, rows, d_model, kv_dim, ws)?;
                 log_profiled_op(
                     &label,
@@ -2517,6 +2745,7 @@ impl LoadedModel {
                     CudaStream::Prefill,
                     "prefill_qkv_project_to_rope_kv",
                 )?;
+                let gpu_stage = GpuStageSpan::begin("prefill_rope_kv", CudaStream::Decode)?;
                 for (seq_idx, item) in items.iter().enumerate() {
                     let q_offset = meta.offsets()[seq_idx].q_offset as usize;
                     let kv_slot = kv_physical_slot_for_layer_sequence_in(
@@ -2529,6 +2758,7 @@ impl LoadedModel {
                         let pos: u32 = tok_idx
                             .try_into()
                             .context("batched prefill token position does not fit in u32")?;
+                        let pos = pos + verification_start.unwrap_or(0);
                         let row = q_offset + tok_idx;
                         let q_row = unsafe { mut_byte_offset(ws.dq, row * bytes_d) };
                         let k_row_mut = unsafe { mut_byte_offset(ws.dk, row * bytes_kv) };
@@ -2555,7 +2785,7 @@ impl LoadedModel {
                             self.model_config.rope_freq_scale,
                             self.model_config.rope_layout_code(),
                         )?;
-                        self.cuda.rope_f32_inplace_layout_async(
+                        if verification_start.is_none() { self.cuda.rope_f32_inplace_layout_async(
                             k_row_mut,
                             1,
                             kv_heads,
@@ -2564,9 +2794,10 @@ impl LoadedModel {
                             self.model_config.rope_freq_base,
                             self.model_config.rope_freq_scale,
                             self.model_config.rope_layout_code(),
-                        )?;
+                        )?; }
                     }
                 }
+                gpu_stage.finish()?;
                 log_profiled_op(
                     &label,
                     "rope_q_k_and_kv_append",
@@ -2581,16 +2812,26 @@ impl LoadedModel {
                     CudaStream::Decode,
                     "prefill_rope_kv_to_attention",
                 )?;
+                let gpu_stage = GpuStageSpan::begin("prefill_attention", if verification_start.is_some() {CudaStream::Decode} else {CudaStream::Prefill})?;
                 unsafe {
-                    prefill_plan.dispatch_async(
+                    if let Some(start) = verification_start {
+                        let slot = kv_physical_slot_for_layer_sequence_in(kv,layer_count as u32,layer_id,0)?;
+                        for row in 0..rows {
+                            kv.attention_last_token_f32_gqa_async(&self.cuda,slot,
+                                const_byte_offset(ws.dq,row*bytes_d),q_heads,start+row as u32+1,
+                                mut_byte_offset(ws.datt,row*bytes_d))?;
+                        }
+                        self.cuda.stream_wait_for_stream(CudaStream::Prefill,CudaStream::Decode,"verification_attention_to_output")?;
+                    } else { prefill_plan.as_ref().context("missing packed prefill plan")?.dispatch_async(
                         ws.dq as *const c_void,
                         ws.dk as *const c_void,
                         ws.dv as *const c_void,
                         q_heads,
                         kv_heads,
                         ws.datt,
-                    )?;
+                    )?; }
                 }
+                gpu_stage.finish()?;
                 log_profiled_op(
                     &label,
                     "attention_varlen",
@@ -2600,13 +2841,14 @@ impl LoadedModel {
 
                 let profile_before = profile::snapshot_if_enabled();
                 let op_start = std::time::Instant::now();
-                self.out_proj_f32xf16_gguf_f32_async(
+                self.matmul_prefill_f32_gguf_async(
                     ws.datt as *const c_void,
                     wo_ptr,
                     ws.dy_attn,
                     rows as i32,
                     d_model as i32,
                     d_model as i32,
+                    ws.q8_prefill_weight,
                 )?;
                 log_profiled_op(
                     &label,
@@ -2622,12 +2864,14 @@ impl LoadedModel {
                     CudaStream::Prefill,
                     "prefill_out_project_to_attn_residual",
                 )?;
+                let gpu_stage = GpuStageSpan::begin("prefill_attn_residual", CudaStream::Decode)?;
                 self.cuda.residual_add_f32_async(
                     ws.scratch_a,
                     ws.dy_attn as *const c_void,
                     ws.d_x1,
                     rows * d_model,
                 )?;
+                gpu_stage.finish()?;
                 log_profiled_op(
                     &label,
                     "attn_residual",
@@ -2637,6 +2881,7 @@ impl LoadedModel {
 
                 let profile_before = profile::snapshot_if_enabled();
                 let op_start = std::time::Instant::now();
+                let gpu_stage = GpuStageSpan::begin("prefill_ffn_norm", CudaStream::Decode)?;
                 if let Some((d_weight, dtype)) = ffn_norm_ptr {
                     self.run_rms_norm_weighted_async(
                         ws.d_x1,
@@ -2656,6 +2901,7 @@ impl LoadedModel {
                         self.model_config.layer_norm_epsilon,
                     )?;
                 }
+                gpu_stage.finish()?;
                 log_profiled_op(&label, "ffn_norm", profile_before.as_ref(), op_start.elapsed());
 
                 let profile_before = profile::snapshot_if_enabled();
@@ -2665,16 +2911,10 @@ impl LoadedModel {
                     CudaStream::Decode,
                     "prefill_ffn_norm_to_mlp_gate_up",
                 )?;
-                self.mlp_gates_f32xf16_gguf_f32_async(
-                    ws.d_x1n,
-                    rows as i32,
-                    d_model as i32,
-                    w_gate_ptr,
-                    w_up_ptr,
-                    hidden_dim as i32,
-                    ws.dgate,
-                    ws.dup,
-                )?;
+                for (weight, output) in [(w_gate_ptr, ws.dgate), (w_up_ptr, ws.dup)] {
+                    self.matmul_prefill_f32_gguf_async(ws.d_x1n, weight, output,
+                        rows as i32, hidden_dim as i32, d_model as i32, ws.q8_prefill_weight)?;
+                }
                 log_profiled_op(
                     &label,
                     "mlp_gate_up",
@@ -2689,12 +2929,14 @@ impl LoadedModel {
                     CudaStream::Prefill,
                     "prefill_mlp_gate_up_to_swiglu",
                 )?;
+                let gpu_stage = GpuStageSpan::begin("prefill_swiglu", CudaStream::Decode)?;
                 self.cuda.swiglu_f32_async(
                     ws.dgate as *const c_void,
                     ws.dup as *const c_void,
                     ws.dhid,
                     rows * hidden_dim,
                 )?;
+                gpu_stage.finish()?;
                 log_profiled_op(&label, "swiglu", profile_before.as_ref(), op_start.elapsed());
 
                 let profile_before = profile::snapshot_if_enabled();
@@ -2704,13 +2946,14 @@ impl LoadedModel {
                     CudaStream::Decode,
                     "prefill_swiglu_to_mlp_down",
                 )?;
-                self.mlp_down_proj_f32xf16_gguf_f32_async(
+                self.matmul_prefill_f32_gguf_async(
                     ws.dhid as *const c_void,
-                    rows as i32,
-                    hidden_dim as i32,
                     w_down_ptr,
-                    d_model as i32,
                     ws.dy_mlp,
+                    rows as i32,
+                    d_model as i32,
+                    hidden_dim as i32,
+                    ws.q8_prefill_weight,
                 )?;
                 log_profiled_op(
                     &label,
@@ -2726,12 +2969,14 @@ impl LoadedModel {
                     CudaStream::Prefill,
                     "prefill_mlp_down_to_mlp_residual",
                 )?;
+                let gpu_stage = GpuStageSpan::begin("prefill_mlp_residual", CudaStream::Decode)?;
                 self.cuda.residual_add_f32_async(
                     ws.d_x1 as *const c_void,
                     ws.dy_mlp as *const c_void,
                     ws.scratch_b,
                     rows * d_model,
                 )?;
+                gpu_stage.finish()?;
                 log_profiled_op(
                     &label,
                     "mlp_residual",
@@ -2740,6 +2985,7 @@ impl LoadedModel {
                 );
 
                 if layer + 1 != layer_count {
+                    let gpu_stage = GpuStageSpan::begin("prefill_hidden_copy", CudaStream::Decode)?;
                     unsafe {
                         self.cuda.memcpy_d2d_async(
                             ws.scratch_a,
@@ -2748,6 +2994,7 @@ impl LoadedModel {
                             CudaStream::Decode,
                         )?;
                     }
+                    gpu_stage.finish()?;
                 }
                 if std::env::var("M40LLM_PREFILL_SYNC_EACH_LAYER")
                     .ok()
@@ -2759,20 +3006,23 @@ impl LoadedModel {
                 }
             }
 
+            gpu_profile::set_layer(None);
+            let output_stage = GpuStageSpan::begin("prefill_output_copy", CudaStream::Decode)?;
             for (seq_idx, item) in items.iter().enumerate() {
                 let seq = meta.sequences()[seq_idx];
                 let final_row =
                     meta.offsets()[seq_idx].q_offset as usize + seq.query_len as usize - 1;
-                let src = unsafe { const_byte_offset(ws.scratch_b, final_row * bytes_d) };
+                let src = unsafe { const_byte_offset(ws.scratch_b, if verification_start.is_some() {0} else {final_row * bytes_d}) };
                 unsafe {
                     self.cuda.memcpy_d2d_async(
                         item.d_out_f32,
                         src,
-                        bytes_d,
+                        if verification_start.is_some() {total_bytes_d} else {bytes_d},
                         CudaStream::Decode,
                     )?;
                 }
             }
+            output_stage.finish()?;
 
             if std::env::var("M40LLM_SERVER_BATCH_PREFILL_LOG")
                 .ok()
@@ -2808,11 +3058,11 @@ impl LoadedModel {
                 .synchronize_stream(CudaStream::Prefill)
                 .context("batched prefill prefill stream synchronization failed")?;
 
-            Ok(layer_count)
+            self.active_layer_count()
         })
     }
 
-    /// Runs one token through every transformer layer using device-resident
+    /// Runs one token through active transformer layers using device-resident
     /// position and sequence-length parameters for graph replay.
     ///
     /// # Safety
@@ -2827,6 +3077,11 @@ impl LoadedModel {
         d_seq_len: *const u32,
         d_out_f32: *mut c_void,
     ) -> Result<usize> {
+        #[cfg(feature = "cuda")]
+        anyhow::ensure!(
+            self.ffn_capture.is_none(),
+            "FFN capture does not support CUDA Graphs"
+        );
         if d_position.is_null() || d_seq_len.is_null() {
             anyhow::bail!(
                 "forward_one_token_all_layers_for_sequence_graph_params: null device parameter"
@@ -2869,10 +3124,14 @@ impl LoadedModel {
 
             self.with_forward_workspace(d_model, kv_dim, hidden_dim, |ws| {
                 let mut current = d_x_f32;
-                for layer in 0..layer_count {
+                for (active_index, layer) in self
+                    .layer_mask
+                    .active_layers(self.model_config.block_count)?
+                    .enumerate()
+                {
                     let next = if layer + 1 == layer_count {
                         d_out_f32
-                    } else if layer % 2 == 0 {
+                    } else if active_index % 2 == 0 {
                         ws.scratch_a
                     } else {
                         ws.scratch_b
@@ -2887,7 +3146,7 @@ impl LoadedModel {
                     )?;
                     current = next as *const c_void;
                 }
-                Ok(layer_count)
+                self.active_layer_count()
             })
         }
 

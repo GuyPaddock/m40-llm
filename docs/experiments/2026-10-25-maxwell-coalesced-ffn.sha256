@@ -1,0 +1,14 @@
+9f08056e51e6b4f33d27741a55c1224432ca063fa135b7b41c3de5d80dbb64b4  docs/experiments/2026-10-25-maxwell-coalesced-ffn-audit.json
+ce11b61d10f216e9c35751360c1e76383b4b2134534f7a5712c521acad67be10  docs/experiments/2026-10-25-maxwell-coalesced-ffn-clippy.log.gz
+20f9033824b8dde642f8e00614e1ba86621587a78602ff63fe766fd6331a604e  docs/experiments/2026-10-25-maxwell-coalesced-ffn-cuda-tests.log.gz
+34faca9170515ebbc5b0fa164f48fc9005d0f9524f0f30935e0ae6683764bb12  docs/experiments/2026-10-25-maxwell-coalesced-ffn-instructions.txt
+3134c95665b7ab39318b2dc794198e7ba11ac70a7ac29f21f6e4d6ac26e40a14  docs/experiments/2026-10-25-maxwell-coalesced-ffn-no-cublas.log.gz
+21893805e8aebde5d6b3c0b77978ef9e4cdb5990baaeadfd169118cfcb3b08c1  docs/experiments/2026-10-25-maxwell-coalesced-ffn-noncuda.log.gz
+99f26dae73390c662c337b68b5c9ecd7514c53ad7c6e42ca09f0aae0a3540a5d  docs/experiments/2026-10-25-maxwell-coalesced-ffn-regressions.log.gz
+f0a09d105b399c9ce195b6e3de639b0bc92e2d6dd066271e41038477222408fd  docs/experiments/2026-10-25-maxwell-coalesced-ffn-resources.txt
+cae2a7d03d90869cf3479eb3b916056ce42d4f34cff10d98cbe8e40dfba1ad5f  docs/experiments/2026-10-25-maxwell-coalesced-ffn-sass.txt.gz
+41e85772865a640dd76f941dcd7872f2dd274ee0c11367f2e0df88c2cffae37f  docs/experiments/2026-10-25-maxwell-coalesced-ffn-screen.jsonl
+454441b42ac983351266d581e5b35c48816d3f3a4ea4e13d1188ae575c4a7c2e  docs/experiments/2026-10-25-maxwell-coalesced-ffn-screen.log.gz
+ad44004b6a99c23d9f989f10e2d3e36a639fa09cac715da3a76d84e876ba5df9  docs/experiments/2026-10-25-maxwell-coalesced-ffn-screen.md
+6e3c339a61341bde6f6440c0a8bfa185e776ef473458f34a6f948b072ec505c9  scripts/audit_ffn_followup.jq
+5194002f05887a2e73afe1ddaad8a7c7282971e35c5659a902b38ddbebaf0f7b  docs/experiments/2026-10-25-maxwell-counter-capability-root.txt

@@ -1,0 +1,51 @@
+{
+  "passes_audit": true,
+  "source": "e83d4613b72c2d38deb947f6b9962ef420b2d69e",
+  "executable": "eb6dc69f94a2e67ecd62bc07a02a12e47c26067236ac6f7df40e2c4f78b5b86f",
+  "actual_ids_equal": 512,
+  "profile_off": {
+    "mad_over_median": 0.0009823987174911294,
+    "max": 50.98532793375808,
+    "median": 50.87778184449033,
+    "min": 50.82779957685751
+  },
+  "profile_on": {
+    "mad_over_median": 0.0012564228519132343,
+    "max": 50.50313533046904,
+    "median": 50.379422768087245,
+    "min": 50.274810228358724
+  },
+  "throughput_change": -0.009795220198992483,
+  "latency_change": 0.00989211565001824,
+  "attribution_limit": 0.03,
+  "original_prepared_identities": 109,
+  "joint_pairs": 36,
+  "joint_bytes": 1724645376,
+  "event_rows": 21,
+  "primary_sessions": 5,
+  "primary_samples": 15,
+  "spans_per_sample": 400,
+  "event_pool_capacity": 592,
+  "gpu_boundaries": 20,
+  "clocks": [
+    {
+      "pstate": "P0",
+      "sm_mhz": 1113,
+      "memory_mhz": 3004
+    }
+  ],
+  "processes": [
+    {
+      "uuid": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852",
+      "pid": "611360",
+      "name": "target/release/examples/compare_ollama"
+    },
+    {
+      "uuid": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852",
+      "pid": "612193",
+      "name": "/tmp/m40-llm-tools/ollama-0.40.11/lib/ollama/llama-server"
+    }
+  ],
+  "unchanged_enqueue_counters": true,
+  "is_optimization_claim": false
+}

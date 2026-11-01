@@ -1,0 +1,158 @@
+{
+  "kind": "qualified_ffn_reader_work_ledger",
+  "schema_version": 1,
+  "source": "fad8adcadb02609eadbc6b6246dc9cec7aefa25a",
+  "source_sha256": {
+    "cuda/q8_ffn.cuh": "13a386d19e8804506e8166f5afa9cc8a6c2be7d7df96e0d50a4e0f4a24cf826c",
+    "src/infer/execution_weights/mod.rs": "4df1473626e932fbca1a6afadb0919f966ea4473eceb4a5c366ec41c6403b5e3",
+    "src/infer/q8_ffn.rs": "6f079ce79d311244e747f591264409bff19c2f5a7cccf0bf191e649f4874c2d5"
+  },
+  "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+  "shape": {
+    "k": 2048,
+    "n": 11008,
+    "layers": 36,
+    "rows": 1
+  },
+  "evidence_tensors": [
+    {
+      "layer_id": 0,
+      "family": "gate",
+      "source": {
+        "byte_offset": 354574336,
+        "dtype": "Q8_0",
+        "name": "blk.0.ffn_gate.weight",
+        "shape": [
+          2048,
+          11008
+        ],
+        "source_sha256": "44b0448bc2d0bce7304a52358f2d8d1b745a78d493785d0794d7aece3b916caa"
+      }
+    },
+    {
+      "layer_id": 0,
+      "family": "up",
+      "source": {
+        "byte_offset": 378527744,
+        "dtype": "Q8_0",
+        "name": "blk.0.ffn_up.weight",
+        "shape": [
+          2048,
+          11008
+        ],
+        "source_sha256": "0d1297d157c12969878744422516a2ce5efc2185a281430f9e4cac4daac9f55c"
+      }
+    },
+    {
+      "layer_id": 17,
+      "family": "gate",
+      "source": {
+        "byte_offset": 1091799040,
+        "dtype": "Q8_0",
+        "name": "blk.17.ffn_gate.weight",
+        "shape": [
+          2048,
+          11008
+        ],
+        "source_sha256": "4a5efbdc148ce4834fd94410cddfed52e0284ca898f236425e1f15d03be4cb86"
+      }
+    },
+    {
+      "layer_id": 17,
+      "family": "up",
+      "source": {
+        "byte_offset": 1115752448,
+        "dtype": "Q8_0",
+        "name": "blk.17.ffn_up.weight",
+        "shape": [
+          2048,
+          11008
+        ],
+        "source_sha256": "4c3bbb685fec6bb01af6e556d5470886d768e506f25bc2dfd7fd166ba2dd1f6d"
+      }
+    },
+    {
+      "layer_id": 35,
+      "family": "gate",
+      "source": {
+        "byte_offset": 3221559296,
+        "dtype": "Q8_0",
+        "name": "blk.35.ffn_gate.weight",
+        "shape": [
+          2048,
+          11008
+        ],
+        "source_sha256": "f5ae34585595d817ed33f8e14b58b7af4bf1de57f3a86c5fb48eac13f6853a5a"
+      }
+    },
+    {
+      "layer_id": 35,
+      "family": "up",
+      "source": {
+        "byte_offset": 3245512704,
+        "dtype": "Q8_0",
+        "name": "blk.35.ffn_up.weight",
+        "shape": [
+          2048,
+          11008
+        ],
+        "source_sha256": "a9aed0b02ac0edecff644264ac754ae0242c89a25f3ccbefbfc2f0ba10785e5c"
+      }
+    }
+  ],
+  "geometry": {
+    "threads": 128,
+    "ctas_per_layer": 11008,
+    "tasks_per_cta": 512,
+    "iterations_per_thread": 4,
+    "payload_word_uses_per_projection": 512,
+    "unique_payload_words_per_projection": 512,
+    "scale_uses_per_projection": 512,
+    "unique_scales_per_projection": 64,
+    "uses_per_scale": 8,
+    "unique_scales_per_warp_per_iteration": 4
+  },
+  "one_layer": {
+    "payload_unique_bytes": 45088768,
+    "scale_unique_bytes": 2818048,
+    "weight_unique_bytes": 47906816,
+    "payload_operand_bytes": 45088768,
+    "scale_operand_bytes": 22544384,
+    "activation_unique_bytes": 8192,
+    "activation_operand_bytes": 90177536,
+    "ordinary_output_bytes": 44032,
+    "shared_publication_bytes": 11272192,
+    "block_barriers": 11008,
+    "is_activation_load_shared_between_gate_and_up": true
+  },
+  "preexpanded_f32": {
+    "pair_bytes": 180355072,
+    "all_layers_bytes": 6492782592,
+    "replacement_extra_bytes": 4768137216,
+    "unique_weight_byte_ratio": 3.764705882352941
+  },
+  "middle_token_profile": {
+    "generated_step": 255,
+    "samples": 5,
+    "median_stage_sum_ms": 19.57059198897332,
+    "stages": [
+      {
+        "stage": "mlp_gate_up_swiglu",
+        "median_ms": 8.044864,
+        "median_share": 0.411125484319591
+      },
+      {
+        "stage": "mlp_down",
+        "median_ms": 4.770847999999999,
+        "median_share": 0.24373300305471113
+      }
+    ]
+  },
+  "scope": "source logical operand accounting plus existing profiled intervals; not physical traffic or a new benchmark",
+  "measured_dram_transactions": null,
+  "measured_occupancy": null,
+  "measured_warp_stalls": null,
+  "has_new_kernel": false,
+  "is_performance_measurement": false,
+  "changes_defaults": false
+}

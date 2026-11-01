@@ -1,0 +1,4 @@
+   Compiling m40-llm v0.1.0 (/tmp/m40-m07-parent-cDC8Sb)
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Finished `release` profile [optimized] target(s) in 26.38s

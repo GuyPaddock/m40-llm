@@ -1,0 +1,9 @@
+b1da7a31d5318dbec6ad1d1c26ef6730d88aeeb249b5c8aa6a5c374d30dd9c7a  src/infer/q4_channels.rs
+b56b74d3cadc0ade1df23232f1d5e63dfdcb7676f4da9719935145d3c47826dd  src/cuda/q4_channels.rs
+58fe63382c4004491da438bab3dd34324ddb80e4c0a834d706da9d9d430963bd  cuda/q4_channels.cuh
+60b3d95bc813bac0fc932d914c79d0b1dd480aa183ef97ab4e6ff66913fcd2d6  tests/q4_channels.rs
+109e2ae4c3bcf66c2b1b0228afc761f4170ea0f465befbc2fe2b899be1d210c9  tests/q4_selected_ffn.rs
+66ee206d936b78ecb1f864710d008b13a8a099d00adcc574b7085f0d184845d8  docs/experiments/2026-10-31-q4-carry-clippy.log.gz
+2fa526001210fdb600676801e4c208037b3ba6da64c293206daa45cc55dcc51b  docs/experiments/2026-10-31-q4-carry-noncuda.log.gz
+fd1e1cfa489f0728fb84c5e333ea9fec884677306bfb7f5531b98520f8fe4b7d  docs/experiments/2026-10-31-q4-carry-off.log.gz
+a58149d892d17c9cda50c88d49b96ed742d7fc8fc71352298fab7720790b3dd7  docs/experiments/2026-10-31-q4-carry-on.log.gz

@@ -1,0 +1,81 @@
+{
+  "passes_audit": true,
+  "comparison_kind": "ollama",
+  "source": "c7b2f242ae72c8a333bc0c9e365c69330da4c053",
+  "executable_sha256": "48db57beb05b4738d0ceb54fed3572d743403f534a7aabe244e93f569f5a2960",
+  "primary_pairs": 5,
+  "primary_requests": 10,
+  "gpu_boundary_samples": 20,
+  "observed_clocks": [
+    {
+      "pstate": "P0",
+      "sm_mhz": 1113,
+      "memory_mhz": 3004
+    }
+  ],
+  "observed_compute_processes": [
+    {
+      "uuid": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852",
+      "pid": "1494146",
+      "name": "/tmp/m40-llm-tools/ollama-0.40.11/lib/ollama/llama-server"
+    },
+    {
+      "uuid": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852",
+      "pid": "1522077",
+      "name": "target/release/examples/compare_ollama"
+    }
+  ],
+  "completed_quality_and_actual_ids_bound": true,
+  "prompt_cache_resets_verified": true,
+  "all_existing_prepared_tensor_identities_unchanged": 109,
+  "comparison": {
+    "bootstrap_gain_ci95": [
+      0.09878960522829328,
+      0.10665805256608651
+    ],
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 0,
+    "candidate": {
+      "mad_over_median": 0.00014293277143830928,
+      "max": 47.46495933423061,
+      "median": 47.3789475535876,
+      "min": 47.372175549305936
+    },
+    "control": {
+      "mad_over_median": 0.001145395498089347,
+      "max": 43.14594544844477,
+      "median": 43.09658281650371,
+      "min": 42.80810837032563
+    },
+    "gain": 0.09936668889311506,
+    "needs_fresh_confirmation": false,
+    "needs_variation_extension": false,
+    "pairs": 5,
+    "passes_promotion_gate": true,
+    "promotion_threshold": 0.03,
+    "reaches_original_target": false
+  },
+  "phase_medians": [
+    {
+      "label": "m40-llm",
+      "requests": 5,
+      "http_ms": 10806.487405,
+      "prefill_ms": 494.506013,
+      "decode_ms": 10263.248266
+    },
+    {
+      "label": "ollama",
+      "requests": 5,
+      "http_ms": 11880.292277,
+      "prefill_ms": 229.761,
+      "decode_ms": 11644.989
+    }
+  ],
+  "prepared_bytes": 2917580800,
+  "source_plus_prepared_bytes_per_m40_model": 6197100544,
+  "dense_kv_bytes_per_model": 37748736,
+  "original_absolute_target_http_tps": 53.06,
+  "original_relative_target_http_tps": 56.025557661454826,
+  "reaches_both_original_targets": false,
+  "changes_runtime_defaults": false
+}

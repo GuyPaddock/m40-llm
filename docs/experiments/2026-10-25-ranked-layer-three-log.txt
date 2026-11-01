@@ -1,0 +1,104 @@
+[cuda] upload_weights: 3279519744 bytes (total=3279519744) tag=weights
+[cuda] upload_weights: 3279519744 bytes (total=6559039488) tag=weights
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=33
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=33
+Calibration cal-chat-reminder: dense=true, candidate=true, prefill=2174.8/2019.1 ms decode=555.9/618.5 ms
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=33
+Calibration cal-fact-depot: dense=true, candidate=false, prefill=1859.4/1718.4 ms decode=278.6/335.0 ms
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=33
+Calibration cal-multi-delivery: dense=false, candidate=false, prefill=2535.5/2334.8 ms decode=917.9/1626.2 ms
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=33
+Calibration cal-config-retry: dense=true, candidate=true, prefill=2035.0/1877.7 ms decode=28.1/26.2 ms
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=33
+Calibration cal-arithmetic-invoice: dense=false, candidate=false, prefill=1573.1/1450.6 ms decode=416.9/386.4 ms
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=33
+Calibration cal-long-photo: dense=false, candidate=false, prefill=1765.5/1628.5 ms decode=2171.2/2632.0 ms
+[teacher_forced] full-layer forward enabled layers=36
+[teacher_forced] full-layer forward enabled layers=33
+Calibration cal-passage-clock: reference PPL=Some(38.42250681420884), candidate PPL=Some(34.794513726414365), max drift=10.499237
+[teacher_forced] full-layer forward enabled layers=36
+[teacher_forced] full-layer forward enabled layers=33
+Calibration cal-passage-checklist: reference PPL=Some(26.114979674450915), candidate PPL=Some(32.037314382425265), max drift=11.894620
+[layer_mask_steps] full-layer forward enabled layers=36
+[layer_mask_steps] full-layer forward enabled layers=33
+[layer_mask_steps] full-layer forward enabled layers=33
+[layer_mask_steps] full-layer forward enabled layers=36
+[layer_mask_steps] full-layer forward enabled layers=36
+[layer_mask_steps] full-layer forward enabled layers=33
+[layer_mask_steps] full-layer forward enabled layers=33
+[layer_mask_steps] full-layer forward enabled layers=36
+[layer_mask_steps] full-layer forward enabled layers=36
+[layer_mask_steps] full-layer forward enabled layers=33
+Calibration cal-passage-clock: 5 paired forced-prefix trials, reference=1165.72ms candidate=1080.91ms; not generated/HTTP TPS
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=33
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=33
+HeldOut held-chat-tour: dense=true, candidate=false, prefill=2199.6/2025.6 ms decode=501.1/541.9 ms
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=33
+HeldOut held-fact-observatory: dense=true, candidate=true, prefill=1769.5/1626.3 ms decode=250.5/335.8 ms
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=33
+HeldOut held-multi-workshop: dense=true, candidate=true, prefill=2755.7/2538.4 ms decode=1058.0/980.5 ms
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=33
+HeldOut held-config-cache: dense=true, candidate=true, prefill=1886.8/1738.3 ms decode=55.8/51.9 ms
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=33
+HeldOut held-arithmetic-crates: dense=false, candidate=false, prefill=1502.0/1386.6 ms decode=417.2/387.2 ms
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=33
+HeldOut held-long-garden: dense=false, candidate=true, prefill=1815.9/1670.8 ms decode=2200.4/2427.7 ms
+[teacher_forced] full-layer forward enabled layers=36
+[teacher_forced] full-layer forward enabled layers=33
+HeldOut held-passage-market: reference PPL=Some(38.84188355766254), candidate PPL=Some(50.09628559624058), max drift=9.830132
+[teacher_forced] full-layer forward enabled layers=36
+[teacher_forced] full-layer forward enabled layers=33
+HeldOut held-passage-recovery: reference PPL=Some(40.41357944534787), candidate PPL=Some(48.647277725719995), max drift=12.038500
+[layer_mask_steps] full-layer forward enabled layers=36
+[layer_mask_steps] full-layer forward enabled layers=33
+[layer_mask_steps] full-layer forward enabled layers=33
+[layer_mask_steps] full-layer forward enabled layers=36
+[layer_mask_steps] full-layer forward enabled layers=36
+[layer_mask_steps] full-layer forward enabled layers=33
+[layer_mask_steps] full-layer forward enabled layers=33
+[layer_mask_steps] full-layer forward enabled layers=36
+[layer_mask_steps] full-layer forward enabled layers=36
+[layer_mask_steps] full-layer forward enabled layers=33
+HeldOut held-passage-market: 5 paired forced-prefix trials, reference=1195.59ms candidate=1107.76ms; not generated/HTTP TPS

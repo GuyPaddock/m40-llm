@@ -1,0 +1,9 @@
+90ccea270cc7e56f1b1ef8f56637262fd2cd69923ca56b2dc3428723be7c0d93  tests/q8_kv_scale_reuse.rs
+cb4036249d8a22a92e1187d1602a3f829f1d359386f1ce52a1702bd2cd936fc6  docs/experiments/2026-10-31-q8-scale-affected.log.gz
+9e355f9295a033e1b3bcff1182876f0c079a85f02804e1bcafe65ef5186ea12e  docs/experiments/2026-10-31-q8-scale-clippy-final.log.gz
+bbaa1e9737a06f7a4b014c4cb97e22b601dcb392530214da520aaa204f17bfa8  docs/experiments/2026-10-31-q8-scale-clippy.log.gz
+45e596a25a010f24b4fee9c4cc68de4f9c81227513edc46363bde2f759f02bf5  docs/experiments/2026-10-31-q8-scale-fixed-off.log.gz
+524a241095d1e2ecb2de6e447bed397f5db4561b5b9c4544f264824df0634db7  docs/experiments/2026-10-31-q8-scale-fixed-on.log.gz
+9e182492894273e96e2050ae874b721bcf3992a5fdb0fe1ad88b7a626c14b93a  docs/experiments/2026-10-31-q8-scale-forward.log.gz
+d0de001f8f02240a2517c62ac5d4dad86bd24c79ca95657bd994d800aba6a7d2  docs/experiments/2026-10-31-q8-scale-unfixed.log.gz
+9854dd746b2c391889dd8e3a370f72699558bd62571ac01de2b1eb5706338e8d  docs/experiments/2026-10-31-selector-noncuda.log.gz

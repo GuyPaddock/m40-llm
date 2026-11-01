@@ -1,0 +1,62 @@
+[
+  {
+    "sha256": "e27baf5cae7a8e224d3febe87f1d7a8d49a613fa291e8ef9297ff859244454ea",
+    "path": "target/research-sources/ollama-0.40.11/LLAMA_CPP_VERSION"
+  },
+  {
+    "sha256": "59734d4dd425f9c36ca3fdf081a3233a1edc33fa285350b2f601890ff289560f",
+    "path": "target/research-sources/ollama-0.40.11/llama/server/CMakeLists.txt"
+  },
+  {
+    "sha256": "de62fe6dd48c1b19082ae234e0b21fbc3da326dc18d6c971b93953886bf3ebf7",
+    "path": "target/research-sources/ollama-0.40.11/llama/compat/001-llama-cpp-hooks.patch"
+  },
+  {
+    "sha256": "8c0c8f054af671b4a0750d67959d707f8a8ac12b0de970ed9ea9a21db7a46039",
+    "path": "target/research-sources/ollama-0.40.11/llama/compat/README.md"
+  },
+  {
+    "sha256": "ee23efb755b0aafceda8070cb90ab1124797418ffc017303187a8ac56e382e74",
+    "path": "target/research-sources/ollama-0.40.11/llama/compat/compat.cmake"
+  },
+  {
+    "sha256": "9dbf99715d8d9ca5d4417a0374ea7f31fb1541b9c233f507fd19efaae0bbbddc",
+    "path": "target/research-sources/ollama-0.40.11/llama/compat/llama-ollama-compat-util.cpp"
+  },
+  {
+    "sha256": "88936749149a3f9378858918e738af7f631ea096366ee3dae83cad5057a880d0",
+    "path": "target/research-sources/ollama-0.40.11/llama/compat/llama-ollama-compat-util.h"
+  },
+  {
+    "sha256": "bf0b956f2a4c27a798301f33f87514d7bb2212e2baff3a4e99d0ec22b7b193e8",
+    "path": "target/research-sources/ollama-0.40.11/llama/compat/llama-ollama-compat.cpp"
+  },
+  {
+    "sha256": "07d214fc541440118ab0c219a95e48c21ff824c0cc4e9b1a0441cbef0c576c00",
+    "path": "target/research-sources/ollama-0.40.11/llama/compat/llama-ollama-compat.h"
+  },
+  {
+    "sha256": "71e86c21026e619afac86c58c464a0c983947969a921fbe503a8826ef15d2010",
+    "path": "target/research-sources/llama.cpp-9ff0d7e90f0faaa7c16017e6dcf9cf91c50a100e/ggml/src/ggml-cuda/common.cuh"
+  },
+  {
+    "sha256": "37aa1bbf64367736a65a122ccc49ce2ce8a305eeb4931385156d282c1efbf296",
+    "path": "target/research-sources/llama.cpp-9ff0d7e90f0faaa7c16017e6dcf9cf91c50a100e/ggml/src/ggml-cuda/vecdotq.cuh"
+  },
+  {
+    "sha256": "63dda3d1b8ca90959d596e8d623f60cfed7ed45c0996be995c3bc6a20611dfa3",
+    "path": "target/research-sources/llama.cpp-9ff0d7e90f0faaa7c16017e6dcf9cf91c50a100e/ggml/src/ggml-cuda/mmvq.cu"
+  },
+  {
+    "sha256": "ff7a578d98937554775931f696e25d171eec9d763c445115fc6ef0b119601a0a",
+    "path": "target/research-sources/llama.cpp-9ff0d7e90f0faaa7c16017e6dcf9cf91c50a100e/ggml/src/ggml-cuda/quantize.cu"
+  },
+  {
+    "sha256": "e635a6e8f216c9fde07ba267cd727d0d40fcc8a4a8097bb6d43a3d9eee8a8424",
+    "path": "target/research-sources/llama.cpp-9ff0d7e90f0faaa7c16017e6dcf9cf91c50a100e/ggml/src/ggml-cuda/ggml-cuda.cu"
+  },
+  {
+    "sha256": "513ed8c9f2d4f33dc41a5d9cc066148ac63a6e4772bb487b5c064af9086da22e",
+    "path": "target/research-sources/llama.cpp-9ff0d7e90f0faaa7c16017e6dcf9cf91c50a100e/ggml/src/ggml-cuda/mmq.cu"
+  }
+]

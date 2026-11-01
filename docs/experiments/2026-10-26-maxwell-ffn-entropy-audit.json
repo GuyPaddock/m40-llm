@@ -1,0 +1,328 @@
+{
+  "passes_audit": true,
+  "source": "fc7f377b3bf5dd55fddd76d01c157e5f507542a9",
+  "tensors": 6,
+  "has_created_cuda_context": false,
+  "size_model_eligible_at_all_tensors": [
+    false,
+    false,
+    false
+  ],
+  "tensor_sizes": [
+    {
+      "layer_id": 0,
+      "family": "gate",
+      "source_bytes": 23953408,
+      "entropy_bits_per_payload_symbol": 7.650942070551402,
+      "zero_order_ideal_byte_saving": 0.041065597012333255,
+      "huffman_payload_bits": 173127314,
+      "indexed_size_models": [
+        {
+          "aligned_huffman_payload_bytes": 23332800,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 32,
+          "chunks": 704512,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 27560128,
+          "includes_decoder_storage": false,
+          "index_bytes": 2818048,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": -0.1505723110465116
+        },
+        {
+          "aligned_huffman_payload_bytes": 22525552,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 256,
+          "chunks": 88064,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 24287088,
+          "includes_decoder_storage": false,
+          "index_bytes": 352256,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": -0.013930376838235281
+        },
+        {
+          "aligned_huffman_payload_bytes": 21820128,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 1024,
+          "chunks": 22016,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 23317472,
+          "includes_decoder_storage": false,
+          "index_bytes": 88064,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": 0.026548873546511587
+        }
+      ]
+    },
+    {
+      "layer_id": 0,
+      "family": "up",
+      "source_bytes": 23953408,
+      "entropy_bits_per_payload_symbol": 7.648975275452899,
+      "zero_order_ideal_byte_saving": 0.04129700458490082,
+      "huffman_payload_bits": 173055050,
+      "indexed_size_models": [
+        {
+          "aligned_huffman_payload_bytes": 23307792,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 32,
+          "chunks": 704512,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 27535120,
+          "includes_decoder_storage": false,
+          "index_bytes": 2818048,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": -0.1495282842424761
+        },
+        {
+          "aligned_huffman_payload_bytes": 22523120,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 256,
+          "chunks": 88064,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 24284656,
+          "includes_decoder_storage": false,
+          "index_bytes": 352256,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": -0.013828846400478767
+        },
+        {
+          "aligned_huffman_payload_bytes": 21811744,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 1024,
+          "chunks": 22016,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 23309088,
+          "includes_decoder_storage": false,
+          "index_bytes": 88064,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": 0.026898886371409025
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "family": "gate",
+      "source_bytes": 23953408,
+      "entropy_bits_per_payload_symbol": 7.668867320804239,
+      "zero_order_ideal_byte_saving": 0.03895675304324131,
+      "huffman_payload_bits": 173439502,
+      "indexed_size_models": [
+        {
+          "aligned_huffman_payload_bytes": 23561440,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 32,
+          "chunks": 704512,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 27788768,
+          "includes_decoder_storage": false,
+          "index_bytes": 2818048,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": -0.16011750812243508
+        },
+        {
+          "aligned_huffman_payload_bytes": 22511232,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 256,
+          "chunks": 88064,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 24272768,
+          "includes_decoder_storage": false,
+          "index_bytes": 352256,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": -0.013332549589603282
+        },
+        {
+          "aligned_huffman_payload_bytes": 21847328,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 1024,
+          "chunks": 22016,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 23344672,
+          "includes_decoder_storage": false,
+          "index_bytes": 88064,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": 0.02541333575581395
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "family": "up",
+      "source_bytes": 23953408,
+      "entropy_bits_per_payload_symbol": 7.6625345161771845,
+      "zero_order_ideal_byte_saving": 0.039701782727535107,
+      "huffman_payload_bits": 173277493,
+      "indexed_size_models": [
+        {
+          "aligned_huffman_payload_bytes": 23493888,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 32,
+          "chunks": 704512,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 27721216,
+          "includes_decoder_storage": false,
+          "index_bytes": 2818048,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": -0.15729736662106708
+        },
+        {
+          "aligned_huffman_payload_bytes": 22515008,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 256,
+          "chunks": 88064,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 24276544,
+          "includes_decoder_storage": false,
+          "index_bytes": 352256,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": -0.013490188953488413
+        },
+        {
+          "aligned_huffman_payload_bytes": 21831072,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 1024,
+          "chunks": 22016,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 23328416,
+          "includes_decoder_storage": false,
+          "index_bytes": 88064,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": 0.026091986576607384
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "family": "gate",
+      "source_bytes": 23953408,
+      "entropy_bits_per_payload_symbol": 7.683215165264291,
+      "zero_order_ideal_byte_saving": 0.037268767767826616,
+      "huffman_payload_bits": 173804503,
+      "indexed_size_models": [
+        {
+          "aligned_huffman_payload_bytes": 23607248,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 32,
+          "chunks": 704512,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 27834576,
+          "includes_decoder_storage": false,
+          "index_bytes": 2818048,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": -0.16202988735465107
+        },
+        {
+          "aligned_huffman_payload_bytes": 22533712,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 256,
+          "chunks": 88064,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 24295248,
+          "includes_decoder_storage": false,
+          "index_bytes": 352256,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": -0.014271038175444506
+        },
+        {
+          "aligned_huffman_payload_bytes": 21888976,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 1024,
+          "chunks": 22016,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 23386320,
+          "includes_decoder_storage": false,
+          "index_bytes": 88064,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": 0.02367462700923395
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "family": "up",
+      "source_bytes": 23953408,
+      "entropy_bits_per_payload_symbol": 7.678374273288665,
+      "zero_order_ideal_byte_saving": 0.03783829006711692,
+      "huffman_payload_bits": 173678508,
+      "indexed_size_models": [
+        {
+          "aligned_huffman_payload_bytes": 23529152,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 32,
+          "chunks": 704512,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 27756480,
+          "includes_decoder_storage": false,
+          "index_bytes": 2818048,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": -0.1587695579685362
+        },
+        {
+          "aligned_huffman_payload_bytes": 22534560,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 256,
+          "chunks": 88064,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 24296096,
+          "includes_decoder_storage": false,
+          "index_bytes": 352256,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": -0.014306440235978046
+        },
+        {
+          "aligned_huffman_payload_bytes": 21874896,
+          "chunk_alignment_bytes": 16,
+          "chunk_payload_symbols": 1024,
+          "chunks": 22016,
+          "code_length_table_bytes": 256,
+          "has_materialized_encoded_stream": false,
+          "idealized_stored_bytes": 23372240,
+          "includes_decoder_storage": false,
+          "index_bytes": 88064,
+          "offset_bytes_per_chunk": 4,
+          "scale_bytes": 1409024,
+          "stored_byte_saving": 0.024262434806771593
+        }
+      ]
+    }
+  ],
+  "runtime_integration_allowed": false,
+  "is_e2e_claim": false,
+  "limitations": "zero-order byte models only; no encoder, decoder cost/storage, GPU bandwidth or throughput measurement"
+}

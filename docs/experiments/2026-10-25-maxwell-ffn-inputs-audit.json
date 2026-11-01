@@ -1,0 +1,242 @@
+{
+  "schema_version": 1,
+  "is_performance_measurement": false,
+  "source_revision": "f459c9777d49ffaace6d0fd27a31d5f340919106",
+  "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+  "artifact_sha256": "eb51828ef778189567ae01fdd910659025c92ae6f5b2d76c989c314e650d0687",
+  "checks": {
+    "clean_release": true,
+    "complete": true,
+    "same_generation": true,
+    "original_layers": true,
+    "dense_control": true,
+    "prepared_control": true,
+    "hashes_bind_manifest": true,
+    "all_sources_match": true,
+    "distinct_first_four_rows": true,
+    "rows_and_shapes": true,
+    "cleanup": true,
+    "matches_frozen_dense_reference": true
+  },
+  "generated_token_total": 163,
+  "task_results": [
+    {
+      "id": "cal-chat-reminder",
+      "generated_tokens": 21,
+      "captured_rows_per_layer": 4,
+      "has_identical_generation": true,
+      "score": {
+        "format_valid": true,
+        "matched": [
+          "day",
+          "time"
+        ],
+        "missing": [],
+        "passed": true,
+        "score": 1.0
+      },
+      "output": "{\n  \"day\": \"Wednesday\",\n  \"time\": \"10:00\"\n}"
+    },
+    {
+      "id": "cal-fact-depot",
+      "generated_tokens": 11,
+      "captured_rows_per_layer": 4,
+      "has_identical_generation": true,
+      "score": {
+        "format_valid": true,
+        "matched": [
+          "room"
+        ],
+        "missing": [],
+        "passed": true,
+        "score": 1.0
+      },
+      "output": "{\n  \"room\": 18\n}"
+    },
+    {
+      "id": "cal-multi-delivery",
+      "generated_tokens": 34,
+      "captured_rows_per_layer": 4,
+      "has_identical_generation": true,
+      "score": {
+        "format_valid": true,
+        "matched": [
+          "aster_day",
+          "birch_pier"
+        ],
+        "missing": [
+          "aster_pier"
+        ],
+        "passed": false,
+        "score": 0.6666666666666666
+      },
+      "output": "```json\n{\n  \"aster_pier\": 2,\n  \"aster_day\": \"Tuesday\",\n  \"birch_pier\": 9\n}\n```"
+    },
+    {
+      "id": "cal-config-retry",
+      "generated_tokens": 2,
+      "captured_rows_per_layer": 1,
+      "has_identical_generation": true,
+      "score": {
+        "format_valid": true,
+        "matched": [
+          "answer"
+        ],
+        "missing": [],
+        "passed": true,
+        "score": 1.0
+      },
+      "output": "6"
+    },
+    {
+      "id": "cal-arithmetic-invoice",
+      "generated_tokens": 16,
+      "captured_rows_per_layer": 4,
+      "has_identical_generation": true,
+      "score": {
+        "format_valid": true,
+        "matched": [],
+        "missing": [
+          "answer"
+        ],
+        "passed": false,
+        "score": 0.0
+      },
+      "output": "To find the total cost, we first calculate the cost of the four items and"
+    },
+    {
+      "id": "cal-long-photo",
+      "generated_tokens": 79,
+      "captured_rows_per_layer": 4,
+      "has_identical_generation": true,
+      "score": {
+        "format_valid": false,
+        "matched": [
+          "digitization",
+          "redundancy",
+          "physical-originals"
+        ],
+        "missing": [
+          "description"
+        ],
+        "passed": false,
+        "score": 0.75
+      },
+      "output": "To preserve a box of donated photographs, a local library should scan the originals for digital copies, ensuring high resolution. Each scan should be labeled with detailed information like date, photographer, and context. Libraries should also create backups in secure locations and keep the original prints in a controlled environment to prevent physical damage. This multi-layered approach ensures the photographs are both accessible and safe for future generations."
+    }
+  ],
+  "source_data_offset": 5956512,
+  "source_hashes": [
+    {
+      "tensor": "blk.0.ffn_gate.weight",
+      "relative_byte_offset": 354574336,
+      "source_bytes": 23953408,
+      "expected_sha256": "44b0448bc2d0bce7304a52358f2d8d1b745a78d493785d0794d7aece3b916caa",
+      "actual_sha256": "44b0448bc2d0bce7304a52358f2d8d1b745a78d493785d0794d7aece3b916caa",
+      "is_match": true
+    },
+    {
+      "tensor": "blk.0.ffn_up.weight",
+      "relative_byte_offset": 378527744,
+      "source_bytes": 23953408,
+      "expected_sha256": "0d1297d157c12969878744422516a2ce5efc2185a281430f9e4cac4daac9f55c",
+      "actual_sha256": "0d1297d157c12969878744422516a2ce5efc2185a281430f9e4cac4daac9f55c",
+      "is_match": true
+    },
+    {
+      "tensor": "blk.0.ffn_down.weight",
+      "relative_byte_offset": 330620928,
+      "source_bytes": 23953408,
+      "expected_sha256": "c3f3fdc38b0f2acc383336dbaed77ae0ed81112533f2547efd2e6f92f0c4dca6",
+      "actual_sha256": "c3f3fdc38b0f2acc383336dbaed77ae0ed81112533f2547efd2e6f92f0c4dca6",
+      "is_match": true
+    },
+    {
+      "tensor": "blk.17.ffn_gate.weight",
+      "relative_byte_offset": 1091799040,
+      "source_bytes": 23953408,
+      "expected_sha256": "4a5efbdc148ce4834fd94410cddfed52e0284ca898f236425e1f15d03be4cb86",
+      "actual_sha256": "4a5efbdc148ce4834fd94410cddfed52e0284ca898f236425e1f15d03be4cb86",
+      "is_match": true
+    },
+    {
+      "tensor": "blk.17.ffn_up.weight",
+      "relative_byte_offset": 1115752448,
+      "source_bytes": 23953408,
+      "expected_sha256": "4c3bbb685fec6bb01af6e556d5470886d768e506f25bc2dfd7fd166ba2dd1f6d",
+      "actual_sha256": "4c3bbb685fec6bb01af6e556d5470886d768e506f25bc2dfd7fd166ba2dd1f6d",
+      "is_match": true
+    },
+    {
+      "tensor": "blk.17.ffn_down.weight",
+      "relative_byte_offset": 1067845632,
+      "source_bytes": 23953408,
+      "expected_sha256": "750274a726d9b4498625afd23e51a1e1865afe8d8965a5e6a24ae9b297799989",
+      "actual_sha256": "750274a726d9b4498625afd23e51a1e1865afe8d8965a5e6a24ae9b297799989",
+      "is_match": true
+    },
+    {
+      "tensor": "blk.35.ffn_gate.weight",
+      "relative_byte_offset": 3221559296,
+      "source_bytes": 23953408,
+      "expected_sha256": "f5ae34585595d817ed33f8e14b58b7af4bf1de57f3a86c5fb48eac13f6853a5a",
+      "actual_sha256": "f5ae34585595d817ed33f8e14b58b7af4bf1de57f3a86c5fb48eac13f6853a5a",
+      "is_match": true
+    },
+    {
+      "tensor": "blk.35.ffn_up.weight",
+      "relative_byte_offset": 3245512704,
+      "source_bytes": 23953408,
+      "expected_sha256": "a9aed0b02ac0edecff644264ac754ae0242c89a25f3ccbefbfc2f0ba10785e5c",
+      "actual_sha256": "a9aed0b02ac0edecff644264ac754ae0242c89a25f3ccbefbfc2f0ba10785e5c",
+      "is_match": true
+    },
+    {
+      "tensor": "blk.35.ffn_down.weight",
+      "relative_byte_offset": 3197605888,
+      "source_bytes": 23953408,
+      "expected_sha256": "3b5cff16ee8d836ff178d8dc38b38edcd15de41085ecdefba41b2c016fd53132",
+      "actual_sha256": "3b5cff16ee8d836ff178d8dc38b38edcd15de41085ecdefba41b2c016fd53132",
+      "is_match": true
+    }
+  ],
+  "memory": {
+    "observation_payload_bytes": 3290112,
+    "observation_capacity_bytes": 3760128,
+    "read_scratch_bytes": 52224,
+    "host_payload_budget_bytes": 33554432
+  },
+  "historical_reference": "2026-10-25-model-quality-dense-reference.jsonl",
+  "historical_comparison": [
+    {
+      "id": "cal-chat-reminder",
+      "same_generated_ids": true,
+      "same_output": true
+    },
+    {
+      "id": "cal-fact-depot",
+      "same_generated_ids": true,
+      "same_output": true
+    },
+    {
+      "id": "cal-multi-delivery",
+      "same_generated_ids": true,
+      "same_output": true
+    },
+    {
+      "id": "cal-config-retry",
+      "same_generated_ids": true,
+      "same_output": true
+    },
+    {
+      "id": "cal-arithmetic-invoice",
+      "same_generated_ids": true,
+      "same_output": true
+    },
+    {
+      "id": "cal-long-photo",
+      "same_generated_ids": true,
+      "same_output": true
+    }
+  ]
+}

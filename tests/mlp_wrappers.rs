@@ -47,6 +47,9 @@ fn cpu_rowmajor_gemm_f32(a: &[f32], b: &[f32], m: usize, n: usize, k: usize) -> 
     c
 }
 
+/// Native F16 gate/up and down projections match the row-major CPU reference
+/// without involving the opt-in Q8 execution cache.
+/// Gate/up and down projections preserve FP16-weight products against CPU references.
 #[test]
 fn mlp_gates_and_down_proj_f32xf16_f32_smoke() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
@@ -143,10 +146,22 @@ fn mlp_gates_and_down_proj_f32xf16_f32_smoke() -> Result<()> {
         gguf: GgufModel::new(0),
         cuda: ctx.clone(),
         kv_cache: None,
+        layer_mask: m40_llm::infer::LayerMask::default(),
+        q8_ffn: m40_llm::infer::Q8FfnConfig::native(),
+        q8_prefill: m40_llm::infer::q8_prefill::Q8PrefillBackend::Native,
+        q8_attention_projection: m40_llm::infer::Q8AttentionProjectionState::native(),
         #[cfg(feature = "cuda")]
         forward_workspace: std::sync::Mutex::new(None),
         #[cfg(feature = "cuda")]
         materialized_weights: std::sync::Mutex::new(HashMap::new()),
+        #[cfg(feature = "cuda")]
+        q8_execution: m40_llm::infer::execution_weights::Q8ExecutionCache::disabled(),
+        #[cfg(feature = "cuda")]
+        activation_research: None,
+        #[cfg(feature = "cuda")]
+        layer_influence: None,
+        #[cfg(feature = "cuda")]
+        ffn_capture: None,
         device_tensors: HashMap::new(),
         weights_len: 0,
         #[cfg(feature = "cuda")]

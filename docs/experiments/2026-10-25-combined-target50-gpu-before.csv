@@ -1,0 +1,2 @@
+uuid, temperature.gpu, clocks.current.sm [MHz], clocks.current.memory [MHz], power.draw [W], memory.used [MiB]
+GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, 45, 324 MHz, 405 MHz, 17.71 W, 0 MiB

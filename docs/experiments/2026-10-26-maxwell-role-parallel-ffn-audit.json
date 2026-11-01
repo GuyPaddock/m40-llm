@@ -1,0 +1,946 @@
+{
+  "passes_audit": true,
+  "source": "0d99dc8748cfe0cd36ef2435ab264a620313a141",
+  "executable_sha256": "04347df8f326233e03b172b56d4b3759e1c2373ab3bdb23458ef2658ed37e2ec",
+  "pairs": 30,
+  "gpu_boundaries": 60,
+  "serial_primary_intervals": 180,
+  "validation_records": 18,
+  "qualified_prepared_cache_unchanged": true,
+  "tracked_device_bytes_after": 0,
+  "screens": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.14711388224645583,
+          -0.14520708181540243
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.41194877624511717,
+        "control_median_ms": 0.3517247915267944,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "pairs": [
+          [
+            0.35148160457611083,
+            0.4116703987121582
+          ],
+          [
+            0.3521888017654419,
+            0.41245441436767577
+          ],
+          [
+            0.35169599056243894,
+            0.41143999099731443
+          ],
+          [
+            0.3517247915267944,
+            0.41239361763000487
+          ],
+          [
+            0.35195839405059814,
+            0.41194877624511717
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.14619289628011511
+      }
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.18001098281607708,
+          -0.10233693842290015
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.7812383651733399,
+        "control_median_ms": 1.5874719619750977,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "pairs": [
+          [
+            1.5922240257263183,
+            1.8205696105957032
+          ],
+          [
+            1.5874719619750977,
+            1.8410240173339845
+          ],
+          [
+            1.5948384284973145,
+            1.7766559600830079
+          ],
+          [
+            1.5351519584655762,
+            1.7812383651733399
+          ],
+          [
+            1.4465472221374511,
+            1.7641056060791016
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.10878184918242872
+      }
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.14758269396542512,
+          -0.14479733487056368
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.4124927997589111,
+        "control_median_ms": 0.3520351886749268,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "pairs": [
+          [
+            0.35221760272979735,
+            0.4118527889251709
+          ],
+          [
+            0.3524224042892456,
+            0.41251521110534667
+          ],
+          [
+            0.35161600112915037,
+            0.4124927997589111
+          ],
+          [
+            0.3520351886749268,
+            0.4127359867095947
+          ],
+          [
+            0.3520128011703491,
+            0.41170558929443357
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.14656646399481366
+      }
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.143652913098966,
+          -0.12175057515416177
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.830294418334961,
+        "control_median_ms": 1.597875213623047,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "pairs": [
+          [
+            1.6036479949951172,
+            1.8494623184204102
+          ],
+          [
+            1.5757375717163087,
+            1.8058271408081055
+          ],
+          [
+            1.597875213623047,
+            1.865920066833496
+          ],
+          [
+            1.5904352188110351,
+            1.810915184020996
+          ],
+          [
+            1.6025375366210937,
+            1.830294418334961
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.12698460006415158
+      }
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.14755939283881303,
+          -0.14466611706703758
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.4119264125823975,
+        "control_median_ms": 0.35207359790802,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "pairs": [
+          [
+            0.3516511917114258,
+            0.4119264125823975
+          ],
+          [
+            0.35207359790802,
+            0.41220798492431643
+          ],
+          [
+            0.35209920406341555,
+            0.4116511821746826
+          ],
+          [
+            0.35195839405059814,
+            0.41288318634033205
+          ],
+          [
+            0.3521536111831665,
+            0.41187520027160646
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.14529977405225292
+      }
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.15879166899442287,
+          -0.13082453660476534
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.7835744857788085,
+        "control_median_ms": 1.528719997406006,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "pairs": [
+          [
+            1.5250656127929687,
+            1.7818143844604493
+          ],
+          [
+            1.5340543746948243,
+            1.76495361328125
+          ],
+          [
+            1.5192895889282227,
+            1.8060800552368164
+          ],
+          [
+            1.528719997406006,
+            1.7835744857788085
+          ],
+          [
+            1.5761568069458007,
+            1.8244031906127929
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.14288973654022574
+      }
+    }
+  ],
+  "stages": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "arms": [
+        {
+          "variant": "split-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.3517247915267944
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.22166719436645507
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.1314847946166992
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-role-parallel-256",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.41194877624511717
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.28069119453430175
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.13132480382919312
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "arms": [
+        {
+          "variant": "split-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.5874719619750977
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.9853504180908204
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.5836863994598389
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-role-parallel-256",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.7812383651733399
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 1.2125311851501466
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.5728415966033935
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "arms": [
+        {
+          "variant": "split-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.3520351886749268
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.22163839340209962
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.1319424033164978
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-role-parallel-256",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.4124927997589111
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.28088960647583006
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.13159680366516113
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "arms": [
+        {
+          "variant": "split-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.597875213623047
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.9864800453186036
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.5852191925048829
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-role-parallel-256",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.830294418334961
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 1.2340479850769044
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.587391996383667
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "arms": [
+        {
+          "variant": "split-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.35207359790802
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.22232000827789306
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.13139840364456176
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-role-parallel-256",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 0.4119264125823975
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.28056321144104
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.13127039670944213
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "arms": [
+        {
+          "variant": "split-f32x4-128",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.528719997406006
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 0.9646495819091797
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.5615615844726562
+            }
+          ]
+        },
+        {
+          "variant": "split-f32x4-role-parallel-256",
+          "stages": [
+            {
+              "stage": "complete",
+              "median_gpu_ms": 1.7835744857788085
+            },
+            {
+              "stage": "gate_up_swiglu",
+              "median_gpu_ms": 1.2116064071655273
+            },
+            {
+              "stage": "isolated_down",
+              "median_gpu_ms": 0.5631455898284912
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "candidate_checks": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "checks": {
+        "complete_down_vs_cpu_on_actual_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 2048,
+          "max_abs_diff": 1.5646070361530207E-7,
+          "mean_abs_diff": 2.2629142660112306E-8
+        },
+        "cpu_reference": "scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
+        "gate_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 2.44972170992952E-7,
+          "mean_abs_diff": 2.198084186732687E-8
+        },
+        "guards_and_immutable_inputs": true,
+        "intermediate_capture_matches_normal_kernel": true,
+        "isolated_down_vs_cpu_on_frozen_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 2048,
+          "max_abs_diff": 1.415535168525217E-7,
+          "mean_abs_diff": 2.2800673448911605E-8
+        },
+        "quantization": null,
+        "swiglu_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 3.6750461074319674E-7,
+          "mean_abs_diff": 3.370165233668533E-9
+        },
+        "swiglu_vs_frozen_capture": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 4.76837158203125E-7,
+          "mean_abs_diff": 4.124944608108194E-9
+        },
+        "tolerance": "absolute < 1e-3 + 2e-5 * abs(reference); native/256-thread M=1 captured SwiGLU additionally bit-identical",
+        "up_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 2.027927155090481E-7,
+          "mean_abs_diff": 1.762097750983867E-8
+        },
+        "variant": "split-f32x4-role-parallel-256"
+      },
+      "drift_vs_timing_control": {
+        "complete_down": {
+          "bitwise_equal": true,
+          "compared_values": 2048,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "gate": {
+          "bitwise_equal": true,
+          "compared_values": 11008,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "scope": "FP32 ownership drift, not activation quantization; unchanged CPU bound also enforced",
+        "swiglu": {
+          "bitwise_equal": true,
+          "compared_values": 11008,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "up": {
+          "bitwise_equal": true,
+          "compared_values": 11008,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        }
+      }
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "checks": {
+        "complete_down_vs_cpu_on_actual_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 8192,
+          "max_abs_diff": 2.8319230493956127E-7,
+          "mean_abs_diff": 2.7237673319296574E-8
+        },
+        "cpu_reference": "scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
+        "gate_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 3.3626975159961603E-7,
+          "mean_abs_diff": 2.13350672344926E-8
+        },
+        "guards_and_immutable_inputs": true,
+        "intermediate_capture_matches_normal_kernel": true,
+        "isolated_down_vs_cpu_on_frozen_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 8192,
+          "max_abs_diff": 2.8159688381101944E-7,
+          "mean_abs_diff": 2.782155816795621E-8
+        },
+        "quantization": null,
+        "swiglu_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 3.6750461074319674E-7,
+          "mean_abs_diff": 3.2018082829713845E-9
+        },
+        "swiglu_vs_frozen_capture": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 4.76837158203125E-7,
+          "mean_abs_diff": 3.8949100689682695E-9
+        },
+        "tolerance": "absolute < 1e-3 + 2e-5 * abs(reference); native/256-thread M=1 captured SwiGLU additionally bit-identical",
+        "up_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 2.027927155090481E-7,
+          "mean_abs_diff": 1.7073029204470256E-8
+        },
+        "variant": "split-f32x4-role-parallel-256"
+      },
+      "drift_vs_timing_control": {
+        "complete_down": {
+          "bitwise_equal": true,
+          "compared_values": 8192,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "gate": {
+          "bitwise_equal": true,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "scope": "FP32 ownership drift, not activation quantization; unchanged CPU bound also enforced",
+        "swiglu": {
+          "bitwise_equal": true,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "up": {
+          "bitwise_equal": true,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        }
+      }
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "checks": {
+        "complete_down_vs_cpu_on_actual_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 2048,
+          "max_abs_diff": 2.3298184625986096E-7,
+          "mean_abs_diff": 4.304271672648555E-8
+        },
+        "cpu_reference": "scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
+        "gate_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 4.609460604321214E-7,
+          "mean_abs_diff": 4.8193166669972105E-8
+        },
+        "guards_and_immutable_inputs": true,
+        "intermediate_capture_matches_normal_kernel": true,
+        "isolated_down_vs_cpu_on_frozen_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 2048,
+          "max_abs_diff": 1.9904368064871392E-7,
+          "mean_abs_diff": 4.199777306357411E-8
+        },
+        "quantization": null,
+        "swiglu_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 2.880631768675812E-7,
+          "mean_abs_diff": 1.2892797473281361E-8
+        },
+        "swiglu_vs_frozen_capture": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 4.76837158203125E-7,
+          "mean_abs_diff": 1.608820275966502E-8
+        },
+        "tolerance": "absolute < 1e-3 + 2e-5 * abs(reference); native/256-thread M=1 captured SwiGLU additionally bit-identical",
+        "up_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 2.51790543526198E-7,
+          "mean_abs_diff": 4.141455779447571E-8
+        },
+        "variant": "split-f32x4-role-parallel-256"
+      },
+      "drift_vs_timing_control": {
+        "complete_down": {
+          "bitwise_equal": true,
+          "compared_values": 2048,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "gate": {
+          "bitwise_equal": true,
+          "compared_values": 11008,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "scope": "FP32 ownership drift, not activation quantization; unchanged CPU bound also enforced",
+        "swiglu": {
+          "bitwise_equal": true,
+          "compared_values": 11008,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "up": {
+          "bitwise_equal": true,
+          "compared_values": 11008,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        }
+      }
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "checks": {
+        "complete_down_vs_cpu_on_actual_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 8192,
+          "max_abs_diff": 3.758262059339046E-7,
+          "mean_abs_diff": 5.6368559458302405E-8
+        },
+        "cpu_reference": "scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
+        "gate_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 5.219469603190419E-7,
+          "mean_abs_diff": 4.85802225372737E-8
+        },
+        "guards_and_immutable_inputs": true,
+        "intermediate_capture_matches_normal_kernel": true,
+        "isolated_down_vs_cpu_on_frozen_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 8192,
+          "max_abs_diff": 6.550030406948792E-7,
+          "mean_abs_diff": 5.668995719702274E-8
+        },
+        "quantization": null,
+        "swiglu_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 5.406659613349518E-7,
+          "mean_abs_diff": 1.3325034460402855E-8
+        },
+        "swiglu_vs_frozen_capture": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 7.152557373046875E-7,
+          "mean_abs_diff": 1.671830723665814E-8
+        },
+        "tolerance": "absolute < 1e-3 + 2e-5 * abs(reference); native/256-thread M=1 captured SwiGLU additionally bit-identical",
+        "up_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 6.004521218017089E-7,
+          "mean_abs_diff": 4.2977231321969504E-8
+        },
+        "variant": "split-f32x4-role-parallel-256"
+      },
+      "drift_vs_timing_control": {
+        "complete_down": {
+          "bitwise_equal": true,
+          "compared_values": 8192,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "gate": {
+          "bitwise_equal": true,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "scope": "FP32 ownership drift, not activation quantization; unchanged CPU bound also enforced",
+        "swiglu": {
+          "bitwise_equal": true,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "up": {
+          "bitwise_equal": true,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        }
+      }
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "checks": {
+        "complete_down_vs_cpu_on_actual_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 2048,
+          "max_abs_diff": 0.000010874336084043534,
+          "mean_abs_diff": 2.665120184656446E-7
+        },
+        "cpu_reference": "scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
+        "gate_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 0.000001582799082910924,
+          "mean_abs_diff": 1.2721050410527978E-7
+        },
+        "guards_and_immutable_inputs": true,
+        "intermediate_capture_matches_normal_kernel": true,
+        "isolated_down_vs_cpu_on_frozen_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 2048,
+          "max_abs_diff": 0.000004752742938762822,
+          "mean_abs_diff": 2.6567407240693985E-7
+        },
+        "quantization": null,
+        "swiglu_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 0.00001579878413338065,
+          "mean_abs_diff": 6.748515232187057E-8
+        },
+        "swiglu_vs_frozen_capture": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 0.00002288818359375,
+          "mean_abs_diff": 8.123292475890467E-8
+        },
+        "tolerance": "absolute < 1e-3 + 2e-5 * abs(reference); native/256-thread M=1 captured SwiGLU additionally bit-identical",
+        "up_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 11008,
+          "max_abs_diff": 0.0000034087752425193685,
+          "mean_abs_diff": 1.2434981245447037E-7
+        },
+        "variant": "split-f32x4-role-parallel-256"
+      },
+      "drift_vs_timing_control": {
+        "complete_down": {
+          "bitwise_equal": true,
+          "compared_values": 2048,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "gate": {
+          "bitwise_equal": true,
+          "compared_values": 11008,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "scope": "FP32 ownership drift, not activation quantization; unchanged CPU bound also enforced",
+        "swiglu": {
+          "bitwise_equal": true,
+          "compared_values": 11008,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "up": {
+          "bitwise_equal": true,
+          "compared_values": 11008,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        }
+      }
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "checks": {
+        "complete_down_vs_cpu_on_actual_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 8192,
+          "max_abs_diff": 0.00005007917025068309,
+          "mean_abs_diff": 3.347458919979506E-7
+        },
+        "cpu_reference": "scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
+        "gate_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0000020643176306123223,
+          "mean_abs_diff": 1.1381175071828102E-7
+        },
+        "guards_and_immutable_inputs": true,
+        "intermediate_capture_matches_normal_kernel": true,
+        "isolated_down_vs_cpu_on_frozen_swiglu": {
+          "bitwise_equal": false,
+          "compared_values": 8192,
+          "max_abs_diff": 0.000046605881010464145,
+          "mean_abs_diff": 3.3006958146608084E-7
+        },
+        "quantization": null,
+        "swiglu_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.000017126740516459904,
+          "mean_abs_diff": 5.281295776676649E-8
+        },
+        "swiglu_vs_frozen_capture": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.00003337860107421875,
+          "mean_abs_diff": 6.420671485957798E-8
+        },
+        "tolerance": "absolute < 1e-3 + 2e-5 * abs(reference); native/256-thread M=1 captured SwiGLU additionally bit-identical",
+        "up_vs_cpu": {
+          "bitwise_equal": false,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0000034087752425193685,
+          "mean_abs_diff": 1.038009615425075E-7
+        },
+        "variant": "split-f32x4-role-parallel-256"
+      },
+      "drift_vs_timing_control": {
+        "complete_down": {
+          "bitwise_equal": true,
+          "compared_values": 8192,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "gate": {
+          "bitwise_equal": true,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "scope": "FP32 ownership drift, not activation quantization; unchanged CPU bound also enforced",
+        "swiglu": {
+          "bitwise_equal": true,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        },
+        "up": {
+          "bitwise_equal": true,
+          "compared_values": 44032,
+          "max_abs_diff": 0.0,
+          "mean_abs_diff": 0.0
+        }
+      }
+    }
+  ],
+  "any_micro_gate_passes": false,
+  "runtime_integration_allowed": false,
+  "is_e2e_claim": false,
+  "bootstrap_scope": "benchmark records seeded intervals; raw medians/gains, gates and resample bounds independently checked",
+  "changes_runtime_defaults": false
+}

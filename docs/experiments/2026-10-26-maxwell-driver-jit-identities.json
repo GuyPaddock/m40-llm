@@ -1,0 +1,28 @@
+{
+  "observation_revision": "b266a7329468470957f596a955f3b8de8a21a6bd",
+  "observer_source_sha": "f6d738c4dd65ff39e407ca3b4b7150181d64d9d3d47e8460b49dc4f64efafa43",
+  "observer_binary_sha": "cc155e8fdda002984c2354eac831a0d97be2d699b48244289072efe32a3bda26",
+  "with_cublas_executable_sha": "88e0cd0221bfb739b927f1fabf653dd889d250564bb0b7efa1f3d46c1627ac47",
+  "without_cublas_executable_sha": "7696b754bf3cb9ec70833e6ca265f3dea0f220899a3464402eb138edfbb38189",
+  "native_module": {
+    "sha256": "546639021f37d31d436cb363be529665aba971739ed199de0218572d579468c9",
+    "bytes": 1100416
+  },
+  "forced_module": {
+    "sha256": "475fa3218d0e7114483cef69004cdbbf56e5c321fafb4d437fd8651d71c814ac",
+    "bytes": 1100960
+  },
+  "project_words": {
+    "native_sha256": "7a954317700bf84cdc40440471d00b2dfb2b5b126cfb562e88c5566b8449970a",
+    "forced_sha256": "7a954317700bf84cdc40440471d00b2dfb2b5b126cfb562e88c5566b8449970a",
+    "cublas_enabled_sha256": "7a954317700bf84cdc40440471d00b2dfb2b5b126cfb562e88c5566b8449970a",
+    "word_count": 100400,
+    "functions": 135
+  },
+  "resources": {
+    "native_sha256": "2ea1b13638fb0d47973fd7a402da72d7d15bcc756e795779ea376b0dd8487eb6",
+    "forced_sha256": "2ea1b13638fb0d47973fd7a402da72d7d15bcc756e795779ea376b0dd8487eb6"
+  },
+  "is_timing_measurement": false,
+  "changes_runtime_defaults": false
+}

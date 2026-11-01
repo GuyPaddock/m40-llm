@@ -1,0 +1,17 @@
+{
+  "kind": "combined_zero_control_audit",
+  "revision": "26a3a5dd7a85edf64c4b2f304a33bb78f5ecb841",
+  "worktree": "",
+  "reference_matches_frozen_full_tasks": true,
+  "reference_matches_frozen_full_loss": true,
+  "candidate_matches_frozen_masked_tasks": true,
+  "candidate_matches_frozen_masked_loss": true,
+  "zero_uses_no_prepared_storage": true,
+  "completion": {
+    "compact_equivalence_verified": null,
+    "device_bytes_after": 0,
+    "device_bytes_before": 0,
+    "is_complete": true,
+    "kind": "model_quality_complete"
+  }
+}

@@ -1,0 +1,1509 @@
+{
+  "schema_version": 1,
+  "plan": {
+    "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+    "corpus_sha256": "2a1270959ef105a3ec19e0be0ab888048fb619880fd4f014ce216acfb8710c38",
+    "execution_sha256": "faf6939dfd4c3447858236bd4f76dfe9b12857f6bc0678f4708881ee2c31b890",
+    "split": "calibration",
+    "calibration_task_ids": [
+      "cal-chat-reminder",
+      "cal-fact-depot",
+      "cal-multi-delivery",
+      "cal-config-retry",
+      "cal-arithmetic-invoice",
+      "cal-long-photo"
+    ],
+    "max_generated_rows_per_task": 32
+  },
+  "source_weights_sha256": "c4a944caa8c27c326a7c0a9a1b5da4d3192d905436dc4e614eeed6279361be4d",
+  "tasks": [
+    {
+      "id": "cal-chat-reminder",
+      "prompt_tokens": 86,
+      "generated_tokens": 21,
+      "captured_absolute_positions": [
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        103,
+        104,
+        105
+      ]
+    },
+    {
+      "id": "cal-fact-depot",
+      "prompt_tokens": 73,
+      "generated_tokens": 11,
+      "captured_absolute_positions": [
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82
+      ]
+    },
+    {
+      "id": "cal-multi-delivery",
+      "prompt_tokens": 101,
+      "generated_tokens": 34,
+      "captured_absolute_positions": [
+        101,
+        102,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        110,
+        111,
+        112,
+        113,
+        114,
+        115,
+        116,
+        117,
+        118,
+        119,
+        120,
+        121,
+        122,
+        123,
+        124,
+        125,
+        126,
+        127,
+        128,
+        129,
+        130,
+        131,
+        132
+      ]
+    },
+    {
+      "id": "cal-config-retry",
+      "prompt_tokens": 80,
+      "generated_tokens": 2,
+      "captured_absolute_positions": [
+        80
+      ]
+    },
+    {
+      "id": "cal-arithmetic-invoice",
+      "prompt_tokens": 61,
+      "generated_tokens": 16,
+      "captured_absolute_positions": [
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75
+      ]
+    },
+    {
+      "id": "cal-long-photo",
+      "prompt_tokens": 69,
+      "generated_tokens": 79,
+      "captured_absolute_positions": [
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "source": {
+        "layer_id": 0,
+        "tensor_name": "blk.0.ffn_down.weight",
+        "byte_offset": 330620928,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.004683911,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.009539302,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.0139543675,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.019753827,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 1,
+        "tensor_name": "blk.1.ffn_down.weight",
+        "byte_offset": 412534784,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.000011959535,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.00002114928,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.000034256343,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.00005232807,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 2,
+        "tensor_name": "blk.2.ffn_down.weight",
+        "byte_offset": 1313587200,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.00016400956,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.00022400072,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.00026119093,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.0003057465,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 3,
+        "tensor_name": "blk.3.ffn_down.weight",
+        "byte_offset": 1535375360,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.0002270956,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.00049093994,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.0006462175,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.00094821135,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 4,
+        "tensor_name": "blk.4.ffn_down.weight",
+        "byte_offset": 1617289216,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.0004963406,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.00082591496,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.0010526769,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.0021514068,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 5,
+        "tensor_name": "blk.5.ffn_down.weight",
+        "byte_offset": 1699203072,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.0007141157,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.0018724463,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.0038874145,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.007307156,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 6,
+        "tensor_name": "blk.6.ffn_down.weight",
+        "byte_offset": 1781116928,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.0016704383,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.004492916,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.007667973,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.012327603,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 7,
+        "tensor_name": "blk.7.ffn_down.weight",
+        "byte_offset": 1863030784,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.0023833748,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.007436433,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.0125151565,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.019919312,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 8,
+        "tensor_name": "blk.8.ffn_down.weight",
+        "byte_offset": 1944944640,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.0058071758,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.011698931,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.017350612,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.025481064,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 9,
+        "tensor_name": "blk.9.ffn_down.weight",
+        "byte_offset": 2026858496,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.0064565497,
+          "achieved_sparsity": 0.25000082584566596
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.013519068,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.02054274,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.030743698,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 10,
+        "tensor_name": "blk.10.ffn_down.weight",
+        "byte_offset": 494448640,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.013222234,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.026119668,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.038268328,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.054826964,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 11,
+        "tensor_name": "blk.11.ffn_down.weight",
+        "byte_offset": 576362496,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.026358064,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.047783587,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.06534113,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.08650159,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 12,
+        "tensor_name": "blk.12.ffn_down.weight",
+        "byte_offset": 658276352,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.027157053,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.048708808,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.06628742,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.08756246,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 13,
+        "tensor_name": "blk.13.ffn_down.weight",
+        "byte_offset": 740190208,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.024540199,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.045694534,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.06280143,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.08313289,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 14,
+        "tensor_name": "blk.14.ffn_down.weight",
+        "byte_offset": 822104064,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.024475707,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.04536315,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.06228422,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.08229877,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 15,
+        "tensor_name": "blk.15.ffn_down.weight",
+        "byte_offset": 904017920,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.02110258,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.04001505,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.055539433,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.07416103,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 16,
+        "tensor_name": "blk.16.ffn_down.weight",
+        "byte_offset": 985931776,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.021826671,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.04115118,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.05697709,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.076143,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 17,
+        "tensor_name": "blk.17.ffn_down.weight",
+        "byte_offset": 1067845632,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.02083323,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.039676122,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.05524827,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.074230574,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 18,
+        "tensor_name": "blk.18.ffn_down.weight",
+        "byte_offset": 1149759488,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.020903641,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.039780002,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.055427045,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.07424519,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 19,
+        "tensor_name": "blk.19.ffn_down.weight",
+        "byte_offset": 1231673344,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.018092072,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.03524004,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.049889736,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.06795564,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 20,
+        "tensor_name": "blk.20.ffn_down.weight",
+        "byte_offset": 1395501056,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.02111094,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.040213883,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.056008052,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.07514379,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 21,
+        "tensor_name": "blk.21.ffn_down.weight",
+        "byte_offset": 2108764160,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.022263153,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.042236906,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.058659356,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.078587286,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 22,
+        "tensor_name": "blk.22.ffn_down.weight",
+        "byte_offset": 2132725760,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.023189599,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.04400162,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.061252393,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.08213232,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 23,
+        "tensor_name": "blk.23.ffn_down.weight",
+        "byte_offset": 2214639616,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.023456208,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.045099247,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.063201435,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.08555395,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 24,
+        "tensor_name": "blk.24.ffn_down.weight",
+        "byte_offset": 2296553472,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.024989177,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.047795404,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.06691266,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.090195395,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 25,
+        "tensor_name": "blk.25.ffn_down.weight",
+        "byte_offset": 2378467328,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.027049128,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.051722717,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.07235662,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.09754769,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 26,
+        "tensor_name": "blk.26.ffn_down.weight",
+        "byte_offset": 2460381184,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.030439822,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.057722855,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.08016991,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.10734881,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 27,
+        "tensor_name": "blk.27.ffn_down.weight",
+        "byte_offset": 2542295040,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.033085603,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.062270075,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.08623366,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.11522747,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 28,
+        "tensor_name": "blk.28.ffn_down.weight",
+        "byte_offset": 2624208896,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.034951378,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.065496884,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.0903963,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.12065198,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 29,
+        "tensor_name": "blk.29.ffn_down.weight",
+        "byte_offset": 2706122752,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.038887657,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.07253836,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.100000136,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.13342984,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 30,
+        "tensor_name": "blk.30.ffn_down.weight",
+        "byte_offset": 2788036608,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.046209548,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.08646375,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.11918835,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.15892331,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 31,
+        "tensor_name": "blk.31.ffn_down.weight",
+        "byte_offset": 2869950464,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.051496934,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.09544734,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.13143773,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.17513181,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 32,
+        "tensor_name": "blk.32.ffn_down.weight",
+        "byte_offset": 2951864320,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.047310866,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.08914285,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.12341287,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.16554217,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 33,
+        "tensor_name": "blk.33.ffn_down.weight",
+        "byte_offset": 3033778176,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.04465257,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.086036585,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.120950736,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.16434163,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 34,
+        "tensor_name": "blk.34.ffn_down.weight",
+        "byte_offset": 3115692032,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 8.25845665961945e-7
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.04658718,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.089646384,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.12606972,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.17159039,
+          "achieved_sparsity": 0.6000008258456659
+        }
+      ]
+    },
+    {
+      "source": {
+        "layer_id": 35,
+        "tensor_name": "blk.35.ffn_down.weight",
+        "byte_offset": 3197605888,
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "observed_rows": 110,
+      "thresholds": [
+        {
+          "target_sparsity": 0.0,
+          "magnitude": 0.0,
+          "achieved_sparsity": 0.0
+        },
+        {
+          "target_sparsity": 0.25,
+          "magnitude": 0.04675433,
+          "achieved_sparsity": 0.25
+        },
+        {
+          "target_sparsity": 0.4,
+          "magnitude": 0.087685585,
+          "achieved_sparsity": 0.4
+        },
+        {
+          "target_sparsity": 0.5,
+          "magnitude": 0.122592956,
+          "achieved_sparsity": 0.5
+        },
+        {
+          "target_sparsity": 0.6,
+          "magnitude": 0.16757475,
+          "achieved_sparsity": 0.6
+        }
+      ]
+    }
+  ],
+  "observation_payload_bytes": 174366720,
+  "observation_capacity_bytes": 304349184
+}

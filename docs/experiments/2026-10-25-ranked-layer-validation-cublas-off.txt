@@ -1,0 +1,67 @@
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.58s
+     Running tests/attention_parity_cuda_grid.rs (target/debug/deps/attention_parity_cuda_grid-ede5ab533724ab3e)
+
+running 11 tests
+test attention_block_select_exact_matches_dense_when_all_old_blocks_selected ... ok
+test attention_block_summary_lossy_is_finite_and_deterministic ... ok
+test attention_dense_recent_window_matches_reference ... ok
+test attention_dense_sink_recent_head128_matches_reference ... ok
+test attention_fp16_k_q4_v_direct_handles_partial_old_block ... ok
+test attention_fp16_k_q4_v_direct_supports_head128 ... ok
+test attention_last_token_cuda_gqa_head64_long_parity ... ok
+test attention_last_token_cuda_gqa_parity_grid ... ok
+test attention_last_token_cuda_parity_grid ... ok
+test compressed_kv_recent_ring_matches_dense_window_after_wrap ... ok
+test compressed_kv_recent_window_matches_dense_attention ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.70s
+
+     Running tests/layer_influence_cuda.rs (target/debug/deps/layer_influence_cuda-746b6e12fdae9b33)
+
+running 2 tests
+test test_layer_influence_matches_manual_transitions_without_changing_logits ... ok
+test test_layer_influence_rejects_unsupported_paths_and_incomplete_capture ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s
+
+     Running tests/mlp_wrappers.rs (target/debug/deps/mlp_wrappers-06192ee172de6e90)
+
+running 1 test
+test mlp_gates_and_down_proj_f32xf16_f32_smoke ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/proj_wrappers.rs (target/debug/deps/proj_wrappers-92bbe4196fa7a6d4)
+
+running 2 tests
+test out_proj_f32xf16_f32_smoke ... ok
+test qkv_project_f32xf16_f32_smoke ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/teacher_forced_cuda.rs (target/debug/deps/teacher_forced_cuda-1d44d826ff3a73a5)
+
+running 2 tests
+test test_cuda_teacher_forcing_isolated_sessions_and_reset ... ok
+test test_single_model_cuda_loss_matches_paired_reference ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+
+     Running unittests examples/model_quality/main.rs (target/debug/examples/model_quality-dc44eca642ae934c)
+
+running 10 tests
+test activations::tests::test_model_research_execution_identity_and_sequential_preflight ... ok
+test argument_tests::test_layer_ranking_arguments_are_explicit_and_exclusive ... ok
+test layers::tests::test_ranked_variant_identity_and_frozen_mask_preflight ... ok
+test layers::tests::test_ranking_mask_trials_reset_state_and_preserve_source_allocation ... ok
+test records::tests::test_quality_conclusions_require_passing_reference ... ok
+test records::tests::test_report_keeps_rows_and_refuses_overwrite ... ok
+test run::tests::test_preflight_rejects_truncation_and_tokenizer_mismatch ... ok
+test step_timing::tests::test_paired_step_records_preserve_scope ... ok
+test step_timing::tests::test_step_trace_forces_prefixes_and_resets ... ok
+test tasks::tests::test_task_records_use_explicit_dense_reference ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s

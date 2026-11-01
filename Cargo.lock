@@ -1025,6 +1025,7 @@ dependencies = [
  "half",
  "rand",
  "reqwest",
+ "ring",
  "serde",
  "serde_json",
  "thiserror",

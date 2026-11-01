@@ -1,0 +1,21 @@
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 18.22s
+     Running tests/layer_influence_cuda.rs (target/debug/deps/layer_influence_cuda-746b6e12fdae9b33)
+
+running 1 test
+test test_layer_influence_matches_manual_transitions_without_changing_logits ... FAILED
+
+failures:
+
+---- test_layer_influence_matches_manual_transitions_without_changing_logits stdout ----
+Error: m40llm_create_context returned null
+
+
+failures:
+    test_layer_influence_matches_manual_transitions_without_changing_logits
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--test layer_influence_cuda`

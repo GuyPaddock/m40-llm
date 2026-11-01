@@ -1,0 +1,77 @@
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running tests/forward_with_layer_smoke.rs (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm/target/debug/deps/forward_with_layer_smoke-deaec1b4e12eb6ff)
+
+running 24 tests
+test compressed_chunked_prefill_matches_sequential_block_select_lossy ... ok
+test compressed_chunked_prefill_matches_sequential_block_summary ... ok
+test cuda_graph_replays_forward_one_token_with_layer ... FAILED
+test decode_session_graph_diagnostic_sync_records_timed_replay ... FAILED
+test decode_session_uses_multilayer_graph_when_enabled ... FAILED
+test decode_session_uses_one_layer_graph_when_enabled ... FAILED
+test forward_batched_decode_supports_head128_attention ... ok
+test forward_batched_decode_uses_packed_attention ... ok
+test forward_batched_prefill_uses_varlen_attention ... ok
+test forward_one_token_with_layer_smoke ... ok
+test packed_prefill_logits_match_sequential_block_select_exact ... ok
+test packed_prefill_logits_match_sequential_dense ... ok
+test packed_prefill_logits_match_sequential_with_qkv_biases ... ok
+test packed_then_compress_prefill_matches_sequential_block_select_lossy ... ok
+test packed_then_compress_prefill_matches_sequential_block_select_lossy_last_reps ... ok
+test packed_then_compress_prefill_matches_sequential_block_select_lossy_stride_reps ... ok
+test packed_then_compress_prefill_matches_sequential_block_summary ... ok
+test packed_then_compress_prefill_matches_sequential_block_summary_last_reps ... ok
+test packed_then_compress_prefill_matches_sequential_block_summary_stride_reps ... ok
+test qwen_head128_batched_prefill_matches_sequential_with_qkv_biases ... ok
+test qwen_head128_compressed_multirow_prefill_matches_single_row_with_qkv_biases ... ok
+test qwen_head128_compressed_packed_prefill_matches_sequential_with_qkv_biases ... ok
+test qwen_head128_packed_prefill_logits_match_sequential_with_qkv_biases ... ok
+test qwen_head128_real_mixed_prefill_diagnostic ... ok
+
+failures:
+
+---- cuda_graph_replays_forward_one_token_with_layer stdout ----
+[cuda] upload_weights: 2304 bytes (total=2304) tag=weights
+Error: Q projection async GGUF GEMM failed: m=1 n=8 k=8
+
+Caused by:
+    m40llm_gemm_f32xf16_gguf_f32 failed: -3
+
+---- decode_session_graph_diagnostic_sync_records_timed_replay stdout ----
+[cuda] upload_weights: 2304 bytes (total=2432) tag=weights
+[test_decode_graph_diag] disabling full-token decode CUDA graph after capture failure: Q projection async GGUF GEMM failed: m=1 n=8 k=8: m40llm_gemm_f32xf16_gguf_f32 failed: -3
+[test_decode_graph_diag] full-layer forward enabled layers=1
+Error: lm_head GEMM failed: m=1 n=32 k=8 tensor=output.weight
+
+Caused by:
+    m40llm_gemm_f32xf16_gguf_f32 failed: -2
+
+---- decode_session_uses_multilayer_graph_when_enabled stdout ----
+[cuda] upload_weights: 3584 bytes (total=3712) tag=weights
+[test_decode_multilayer_graph] disabling full-token decode CUDA graph after capture failure: Q projection async GGUF GEMM failed: m=1 n=8 k=8: m40llm_gemm_f32xf16_gguf_f32 failed: -3
+[test_decode_multilayer_graph] full-layer forward enabled layers=2
+Error: lm_head GEMM failed: m=1 n=32 k=8 tensor=output.weight
+
+Caused by:
+    m40llm_gemm_f32xf16_gguf_f32 failed: -2
+
+---- decode_session_uses_one_layer_graph_when_enabled stdout ----
+[cuda] upload_weights: 2304 bytes (total=2432) tag=weights
+[test_decode_graph] disabling full-token decode CUDA graph after capture failure: Q projection async GGUF GEMM failed: m=1 n=8 k=8: m40llm_gemm_f32xf16_gguf_f32 failed: -3
+[test_decode_graph] full-layer forward enabled layers=1
+Error: lm_head GEMM failed: m=1 n=32 k=8 tensor=output.weight
+
+Caused by:
+    m40llm_gemm_f32xf16_gguf_f32 failed: -2
+
+
+failures:
+    cuda_graph_replays_forward_one_token_with_layer
+    decode_session_graph_diagnostic_sync_records_timed_replay
+    decode_session_uses_multilayer_graph_when_enabled
+    decode_session_uses_one_layer_graph_when_enabled
+
+test result: FAILED. 20 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.42s
+
+error: test failed, to rerun pass `--test forward_with_layer_smoke`

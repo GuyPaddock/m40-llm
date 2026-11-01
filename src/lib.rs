@@ -10,9 +10,13 @@ pub mod infer;
 
 pub mod decode;
 pub mod decode_session;
+pub mod evaluation;
 pub mod generate;
+pub mod generation_metrics;
 #[cfg(feature = "gguf_ext")]
 pub mod gguf_ext;
+#[cfg(feature = "cuda")]
+pub mod gpu_profile;
 pub mod kv_compression;
 pub mod kv_selection;
 pub mod model;
@@ -22,3 +26,5 @@ pub mod sampling;
 pub mod server;
 pub(crate) mod timing;
 pub mod tokenizer;
+#[cfg(feature = "cuda")]
+pub mod verification;

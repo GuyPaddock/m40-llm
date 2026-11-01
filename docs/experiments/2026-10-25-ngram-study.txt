@@ -1,0 +1,28 @@
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+    Finished `release` profile [optimized] target(s) in 5.36s
+     Running `target/release/examples/ngram_acceptance study --input docs/experiments/2026-10-25-qwen-exact-checkpoint.jsonl --regression-traces /tmp/m40-c11a-regressions.jsonl --output /tmp/m40-c11a-cpu-study.jsonl`
+browser draft=2: eligible=13.7% positions, accepted/offer=0.489, visited_rounds=489
+browser draft=4: eligible=13.7% positions, accepted/offer=0.578, visited_rounds=487
+browser draft=8: eligible=13.7% positions, accepted/offer=0.651, visited_rounds=485
+browser draft=16: eligible=13.7% positions, accepted/offer=0.651, visited_rounds=485
+arithmetic draft=2: eligible=0.0% positions, accepted/offer=0.000, visited_rounds=2
+arithmetic draft=4: eligible=0.0% positions, accepted/offer=0.000, visited_rounds=2
+arithmetic draft=8: eligible=0.0% positions, accepted/offer=0.000, visited_rounds=2
+arithmetic draft=16: eligible=0.0% positions, accepted/offer=0.000, visited_rounds=2
+exact_ok draft=2: eligible=0.0% positions, accepted/offer=0.000, visited_rounds=2
+exact_ok draft=4: eligible=0.0% positions, accepted/offer=0.000, visited_rounds=2
+exact_ok draft=8: eligible=0.0% positions, accepted/offer=0.000, visited_rounds=2
+exact_ok draft=16: eligible=0.0% positions, accepted/offer=0.000, visited_rounds=2
+config_lookup draft=2: eligible=0.0% positions, accepted/offer=0.000, visited_rounds=3
+config_lookup draft=4: eligible=0.0% positions, accepted/offer=0.000, visited_rounds=3
+config_lookup draft=8: eligible=0.0% positions, accepted/offer=0.000, visited_rounds=3
+config_lookup draft=16: eligible=0.0% positions, accepted/offer=0.000, visited_rounds=3
+explanation draft=2: eligible=1.6% positions, accepted/offer=0.000, visited_rounds=128
+explanation draft=4: eligible=1.6% positions, accepted/offer=0.000, visited_rounds=128
+explanation draft=8: eligible=1.6% positions, accepted/offer=0.000, visited_rounds=128
+explanation draft=16: eligible=1.6% positions, accepted/offer=0.000, visited_rounds=128
+java_code draft=2: eligible=10.2% positions, accepted/offer=0.857, visited_rounds=122
+java_code draft=4: eligible=10.2% positions, accepted/offer=1.167, visited_rounds=121
+java_code draft=8: eligible=10.2% positions, accepted/offer=1.167, visited_rounds=121
+java_code draft=16: eligible=10.2% positions, accepted/offer=1.167, visited_rounds=121
+Best optimistic browser gain=4.949%, screen=false, regressions_present=true

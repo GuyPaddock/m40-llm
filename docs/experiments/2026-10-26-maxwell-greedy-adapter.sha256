@@ -1,0 +1,13 @@
+a0455f9d28a89aa6d947f9bfdce4f6d9f542b10e1ebe1e9289805e877d4302b2  docs/experiments/2026-10-26-maxwell-greedy-adapter-audit.jq
+55e00a2d80c587f8723e0ef79482258cf48015f3e8dfd3efddfeadfd8b1d0b28  docs/experiments/2026-10-26-maxwell-greedy-adapter-audit.json
+46bfcb44dba0b09b8e30443d1324d96e322ab1af3412f2c5e3ebe7d378188806  docs/experiments/2026-10-26-maxwell-greedy-adapter-build.log.gz
+2407cc883d06eb017998b1913983d8403794a193472a4c6dea9cf965f6bff9ff  docs/experiments/2026-10-26-maxwell-greedy-adapter-clippy.log.gz
+905ce6690ce68f55723c9766da8e3c4c7db2114db3bf91bd293e9b1fc977f9b5  docs/experiments/2026-10-26-maxwell-greedy-adapter-cost.jsonl
+38f89d0f68733118e25699e3230f90a377fe45ccc66366e79d5644fdc9d5063a  docs/experiments/2026-10-26-maxwell-greedy-adapter-hypothesis.md
+aae20c24d2dbb81b6cfca3aed6f59ba4ac8f83d064815c0a78449b4528bbd43a  docs/experiments/2026-10-26-maxwell-greedy-adapter-negative-controls.log.gz
+1349e23e29f6a8b72565d95544ed70c48cef530c47f5d9aeeab9c1c21d6fb08b  docs/experiments/2026-10-26-maxwell-greedy-adapter-negative-controls.sh
+ff9a53962a1f3f90264756748a73bb7f5ec0b862b6b00b0a23ac913ffc2507f7  docs/experiments/2026-10-26-maxwell-greedy-adapter-noncuda.log.gz
+40d86c88d4c11591c26f21e7a97181ccf6ef5bd6b73f921a6fd410b0a21ca9ab  docs/experiments/2026-10-26-maxwell-greedy-adapter-run.log.gz
+62c388ae82b4c30e479d988131dd5eef2761e9e2f61cbd312fa7fb369dc55796  docs/experiments/2026-10-26-maxwell-greedy-adapter-scope.md
+ae8b3a453e44548d84d64c794b993938d16841c07f7988a3f4716bf6c0d2347a  docs/experiments/2026-10-26-maxwell-greedy-adapter-tests.log.gz
+fe751b0689b3c1d983fd1198cd82b7474f38088fc2e4d3e978b2dc3cf47ad770  docs/experiments/2026-10-26-maxwell-greedy-adapter-upstream-sources.sha256

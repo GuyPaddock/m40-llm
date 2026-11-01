@@ -1,0 +1,35 @@
+[
+  {
+    "source_split": "flan:train",
+    "n": 126,
+    "minimum": 75,
+    "maximum": 2270,
+    "under65": 0,
+    "eligible65_447": 64,
+    "over447": 62,
+    "median": 443,
+    "p90_nearest_rank": 860
+  },
+  {
+    "source_split": "tablegpt:test",
+    "n": 49,
+    "minimum": 294,
+    "maximum": 3429,
+    "under65": 0,
+    "eligible65_447": 11,
+    "over447": 38,
+    "median": 714,
+    "p90_nearest_rank": 2264
+  },
+  {
+    "source_split": "tablegpt:train",
+    "n": 64,
+    "minimum": 130,
+    "maximum": 1667,
+    "under65": 0,
+    "eligible65_447": 37,
+    "over447": 27,
+    "median": 302.5,
+    "p90_nearest_rank": 1379
+  }
+]

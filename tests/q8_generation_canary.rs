@@ -1,11 +1,13 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
 mod cuda_env;
+#[path = "common/q8_greedy.rs"]
+mod greedy;
 
 use anyhow::{Context, Result};
 use m40_llm::generate::{generate_text, GenerateOptions, PromptFormat};
 use m40_llm::gguf::{self, GgmlDType, GgufModel};
-use m40_llm::infer::{LoadedModel, ModelConfig};
+use m40_llm::infer::{execution_weights::Q8ProjectionGroup, LoadedModel, ModelConfig};
 use m40_llm::kv_compression::KvCompressionConfig;
 use m40_llm::profile;
 use std::collections::BTreeMap;
@@ -245,11 +247,17 @@ fn q8_projection_launches() -> u64 {
     profile::snapshot()
         .by_op
         .iter()
-        .filter(|(op, _)| op.contains("q8_0"))
+        .filter(|(op, _)| {
+            op.contains("q8_0") || op.contains("q8_separate") || op.contains("q8_tiled")
+        })
         .map(|(_, counters)| counters.launches)
         .sum()
 }
 
+/// A supplied supported Q8 model must produce a finite arithmetic answer while
+/// executing Q8 projections, whether native or opt-in prepared layouts are used.
+/// Requested prepared QKV and retained native MLP fusion must execute in the
+/// real forward path, including when the model owns prepared gate/up weights.
 #[test]
 fn q8_0_real_model_generation_canary() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
@@ -300,6 +308,18 @@ fn q8_0_real_model_generation_canary() -> Result<()> {
     let mut model = LoadedModel::from_gguf(gguf_model, gguf_bytes, -1)?;
     model.allocate_kv_cache_for_layers(context_bound)?;
 
+    {
+        let _greedy_head = EnvRestore::set("M40LLM_Q8_LM_HEAD_ARGMAX", "1");
+        let hidden: Vec<f32> = (0..model.model_config.embedding_length)
+            .map(|i| ((i * 13 % 127) as f32 - 63.0) / 128.0)
+            .collect();
+        let (token, _) = greedy::compare_greedy_with_logits(&model, &hidden)?;
+        eprintln!(
+            "[q8-canary] greedy_reference_token={token} greedy_d2h_bytes=4 prepared_vocabulary={}",
+            model.q8_execution_stats().has_prepared_vocabulary
+        );
+    }
+
     profile::reset();
     let generated = generate_text(
         &model,
@@ -315,6 +335,40 @@ fn q8_0_real_model_generation_canary() -> Result<()> {
             ..Default::default()
         },
     )?;
+
+    let prepared_qkv_launches = profile::snapshot()
+        .by_op
+        .get("qkv_f32xq8_separate")
+        .map_or(0, |counts| counts.launches);
+    eprintln!("[q8-canary] prepared_qkv_launches={prepared_qkv_launches}");
+    let native_mlp_launches = profile::snapshot()
+        .by_op
+        .get("mlp_gate_up_swiglu_f32xq8_0_gguf_decode")
+        .map_or(0, |counts| counts.launches);
+    eprintln!("[q8-canary] native_mlp_launches={native_mlp_launches}");
+    if matches!(
+        std::env::var("M40LLM_FUSED_Q8_MLP_SWIGLU").ok().as_deref(),
+        Some("1" | "true" | "TRUE")
+    ) {
+        assert!(
+            native_mlp_launches > 0,
+            "requested native fused MLP must execute"
+        );
+    }
+    if model
+        .q8_execution_stats()
+        .families
+        .contains(Q8ProjectionGroup::Qkv)
+        && matches!(
+            std::env::var("M40LLM_FUSED_Q8_QKV").ok().as_deref(),
+            Some("1" | "true" | "TRUE")
+        )
+    {
+        assert!(
+            prepared_qkv_launches > 0,
+            "requested prepared fused QKV must execute"
+        );
+    }
 
     eprintln!(
         "[q8-canary] output={:?} prompt_tokens={} total_tokens={} prefill_ms={} decode_ms={} total_ms={} q8_projection_launches={}",

@@ -1,0 +1,48 @@
+[cuda] upload_weights: 3279519744 bytes (total=3279519744) tag=weights
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[screen pair 0] m40=31.936 ollama=43.024 HTTP E2E tok/s
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[screen pair 1] m40=31.886 ollama=43.032 HTTP E2E tok/s
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[screen pair 2] m40=31.832 ollama=42.616 HTTP E2E tok/s
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[screen pair 3] m40=31.819 ollama=43.067 HTTP E2E tok/s
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[screen pair 4] m40=31.850 ollama=43.064 HTTP E2E tok/s
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+{
+  "pairs": 5,
+  "control": {
+    "median": 43.03198204874543,
+    "min": 42.616303241545516,
+    "max": 43.067437561798464,
+    "mad_over_median": 0.0007548104413639822
+  },
+  "candidate": {
+    "median": 31.850227127667882,
+    "min": 31.81897780618256,
+    "max": 31.93558062060601,
+    "mad_over_median": 0.0009811333953777927
+  },
+  "gain": -0.2598475456791919,
+  "promotion_threshold": 0.03,
+  "bootstrap_gain_ci95": [
+    -0.2611824708510979,
+    -0.2530543900745663
+  ],
+  "bootstrap_resamples": 10000,
+  "bootstrap_seed": 0,
+  "needs_variation_extension": false,
+  "needs_fresh_confirmation": false,
+  "passes_promotion_gate": false,
+  "reaches_original_target": false
+}
+Raw evidence: /tmp/m40-c11-exact-http.jsonl
