@@ -1,0 +1,10 @@
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Finished `release` profile [optimized] target(s) in 0.12s
+     Running tests/head128_attention_parallel.rs (target/release/deps/head128_attention_parallel-3e32be90d351f4ac)
+
+running 1 test
+test test_runtime_reuses_workspace_and_rejects_invalid_configs ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.13s
+

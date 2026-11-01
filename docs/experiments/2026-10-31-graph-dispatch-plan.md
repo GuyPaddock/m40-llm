@@ -56,3 +56,17 @@ separate measurements even if parity passes. Parallel/partitioned attention has
 a separate API; inspect runtime reachability and document its graph contract.
 Keep graphs and cache experiments opt-in. No changes to supported compressed
 KV defaults or to experimental Q8 graph restrictions are authorized here.
+
+## Validation execution amendment
+
+The first full direct grid was deliberately cancelled during the boundary case
+with SIGTERM, after verifying its process was still live. Build inspection
+showed `DEBUG=true`; the installed `cc` crate adds NVCC `-G` in that profile.
+This makes the scalar long-context fallback costly and does not validate the
+optimized deployment binary. Preserve the partial log as cancelled, not passed.
+Run the identical full grid and full-forward state cases in release mode,
+followed by release CUDA regressions and cuBLAS-disabled parity. No input,
+boundary, guard, expected output or acceptance threshold changes. Earlier debug
+negative controls and the completed five-case debug state result remain valid
+within their recorded build scope. CPU tests and Clippy retain their normal
+profiles. This is a build-profile change, not a shortened boundary experiment.

@@ -189,6 +189,11 @@ impl DecodeSession {
             (model.q8_ffn.is_native() && model.q8_prefill.is_native()) || !decode_graph_enabled(),
             "experimental Q8 backends require M40LLM_DECODE_GRAPH=0; graph capture is not validated"
         );
+        anyhow::ensure!(
+            !decode_graph_enabled()
+                || std::env::var("M40LLM_ATTN_HEAD128_KERNEL").as_deref() != Ok("parallel"),
+            "parallel attention requires M40LLM_DECODE_GRAPH=0; device-length dispatch is unsupported"
+        );
         anyhow::ensure!(!model.layer_mask.has_skipped_layers() || !decode_graph_enabled(),
             "diagnostic layer masks require M40LLM_DECODE_GRAPH=0; masked graph replay is not validated");
         if model.activation_research.is_some() {

@@ -1,0 +1,308 @@
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+   Compiling m40-llm v0.1.0 (/tmp/m40-graph-followup)
+    Finished `release` profile [optimized] target(s) in 2.66s
+     Running tests/attention_batched_varlen.rs (target/release/deps/attention_batched_varlen-7b2d9a8d9324a41f)
+
+running 2 tests
+test batched_fp16_k_q4_v_direct_attention_matches_individual_decode ... ok
+test batched_gqa_attention_matches_individual_varlen_decode ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/attention_last_token.rs (target/release/deps/attention_last_token-d71064923a4b2c8b)
+
+running 1 test
+test attention_last_token_matches_cpu_ref ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/attention_parity_cuda_grid.rs (target/release/deps/attention_parity_cuda_grid-140d48e83df0dd19)
+
+running 11 tests
+test attention_block_select_exact_matches_dense_when_all_old_blocks_selected ... ok
+test attention_block_summary_lossy_is_finite_and_deterministic ... ok
+test attention_dense_recent_window_matches_reference ... ok
+test attention_dense_sink_recent_head128_matches_reference ... ok
+test attention_fp16_k_q4_v_direct_handles_partial_old_block ... ok
+test attention_fp16_k_q4_v_direct_supports_head128 ... ok
+test attention_last_token_cuda_gqa_head64_long_parity ... ok
+test attention_last_token_cuda_gqa_parity_grid ... ok
+test attention_last_token_cuda_parity_grid ... ok
+test compressed_kv_recent_ring_matches_dense_window_after_wrap ... ok
+test compressed_kv_recent_window_matches_dense_attention ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running tests/attention_prefill_varlen.rs (target/release/deps/attention_prefill_varlen-1531fdce71a416d9)
+
+running 3 tests
+test packed_varlen_prefill_gqa_matches_cpu_reference ... ok
+test packed_varlen_prefill_qwen_shape_matches_cpu_reference ... ok
+test varlen_prefill_plan_rejects_unsupported_head_dim ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/cuda_transfer_order.rs (target/release/deps/cuda_transfer_order-ea0222de20827f73)
+
+running 5 tests
+test test_explicit_position_append_stays_enqueue_only ... ok
+test test_legacy_append_observes_queued_length_publication ... ok
+test test_native_kv_initialization_precedes_first_decode ... ok
+test test_native_weight_upload_is_ready_for_both_streams ... [cuda] upload_weights: 65536 bytes (total=196608) tag=weights
+[cuda] upload_weights: freed prev 65536 bytes (total=1409024)
+[cuda] upload_weights: 704512 bytes (total=2113536) tag=weights
+[cuda] upload_weights: freed prev 704512 bytes (total=5636096)
+[cuda] upload_weights: 2818048 bytes (total=8454144) tag=weights
+ok
+test test_pageable_upload_is_ready_for_both_consumer_streams ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/forward_minimal.rs (target/release/deps/forward_minimal-5a23529c91ef3f40)
+
+running 1 test
+test forward_one_token_minimal_smoke ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/forward_parity_toy.rs (target/release/deps/forward_parity_toy-dc55d42871670694)
+
+running 2 tests
+test forward_one_token_minimal_parity_toy ... [cuda] upload_weights: 1792 bytes (total=1792) tag=weights
+ok
+test forward_two_tokens_minimal_parity_toy ... [cuda] upload_weights: 1792 bytes (total=1792) tag=weights
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/forward_with_layer_smoke.rs (target/release/deps/forward_with_layer_smoke-e71bcbbdf7046c0c)
+
+running 24 tests
+test compressed_chunked_prefill_matches_sequential_block_select_lossy ... [cuda] upload_weights: 417792 bytes (total=417792) tag=weights
+[cuda] upload_weights: 417792 bytes (total=835584) tag=weights
+[kv-compress] mode=BlockSelectLossy selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=22584 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=18488 compression_ratio=1.378
+[kv-compress] mode=BlockSelectLossy selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=22584 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=18488 compression_ratio=1.378
+[test_seq_compressed_prefill] full-layer forward enabled layers=2
+[test_chunked_compressed_prefill] compressed chunked prefill enabled chunk_size=3
+ok
+test compressed_chunked_prefill_matches_sequential_block_summary ... [cuda] upload_weights: 417792 bytes (total=417792) tag=weights
+[cuda] upload_weights: 417792 bytes (total=835584) tag=weights
+[kv-compress] mode=BlockSummary selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=22584 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=18488 compression_ratio=1.378
+[kv-compress] mode=BlockSummary selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=22584 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=18488 compression_ratio=1.378
+[test_seq_compressed_prefill] full-layer forward enabled layers=2
+[test_chunked_compressed_prefill] compressed chunked prefill enabled chunk_size=3
+ok
+test cuda_graph_replays_forward_one_token_with_layer ... [cuda] upload_weights: 2304 bytes (total=2304) tag=weights
+ok
+test decode_session_graph_diagnostic_sync_records_timed_replay ... [cuda] upload_weights: 2304 bytes (total=2304) tag=weights
+[test_decode_graph_diag] captured full-token decode CUDA graph layers=1
+[test_decode_graph_diag] decode graph replay gpu_elapsed_ms=0.228
+[test_decode_graph_diag] full-layer forward enabled layers=1
+[test_decode_graph_diag] decode graph replay gpu_elapsed_ms=0.188
+ok
+test decode_session_uses_multilayer_graph_when_enabled ... [cuda] upload_weights: 3584 bytes (total=3584) tag=weights
+[test_decode_multilayer_graph] captured full-token decode CUDA graph layers=2
+[test_decode_multilayer_graph] full-layer forward enabled layers=2
+ok
+test decode_session_uses_one_layer_graph_when_enabled ... [cuda] upload_weights: 2304 bytes (total=2304) tag=weights
+[test_decode_graph] captured full-token decode CUDA graph layers=1
+[test_decode_graph] full-layer forward enabled layers=1
+ok
+test forward_batched_decode_supports_head128_attention ... [cuda] upload_weights: 417792 bytes (total=417792) tag=weights
+ok
+test forward_batched_decode_uses_packed_attention ... [cuda] upload_weights: 417792 bytes (total=417792) tag=weights
+ok
+test forward_batched_prefill_uses_varlen_attention ... [cuda] upload_weights: 417792 bytes (total=417792) tag=weights
+[cuda] upload_weights: 417792 bytes (total=835584) tag=weights
+ok
+test forward_one_token_with_layer_smoke ... [cuda] upload_weights: 1792 bytes (total=1792) tag=weights
+ok
+test packed_prefill_logits_match_sequential_block_select_exact ... [cuda] upload_weights: 417792 bytes (total=417792) tag=weights
+[cuda] upload_weights: 417792 bytes (total=835584) tag=weights
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=2 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=32768 actual_allocated_bytes=68216 recent_fp16_bytes=4096 old_k_fp16_bytes=16384 q4_old_v_payload_bytes=4096 q4_old_v_scale_bytes=512 summary_index_bytes=43128 compression_ratio=2.082
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=2 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=32768 actual_allocated_bytes=68216 recent_fp16_bytes=4096 old_k_fp16_bytes=16384 q4_old_v_payload_bytes=4096 q4_old_v_scale_bytes=512 summary_index_bytes=43128 compression_ratio=2.082
+[test_seq_block_select_prefill] full-layer forward enabled layers=2
+[test_packed_block_select_prefill] packed prefix prefill enabled layers=2
+ok
+test packed_prefill_logits_match_sequential_dense ... [cuda] upload_weights: 417792 bytes (total=417792) tag=weights
+[cuda] upload_weights: 417792 bytes (total=835584) tag=weights
+[test_seq_prefill] full-layer forward enabled layers=2
+[test_packed_prefill] packed prefix prefill enabled layers=2
+ok
+test packed_prefill_logits_match_sequential_with_qkv_biases ... [cuda] upload_weights: 420864 bytes (total=420864) tag=weights
+[cuda] upload_weights: 420864 bytes (total=841728) tag=weights
+[test_seq_bias_prefill] full-layer forward enabled layers=2
+[test_packed_bias_prefill] packed prefix prefill enabled layers=2
+ok
+test packed_then_compress_prefill_matches_sequential_block_select_lossy ... [cuda] upload_weights: 417792 bytes (total=417792) tag=weights
+[cuda] upload_weights: 417792 bytes (total=835584) tag=weights
+[kv-compress] mode=BlockSelectLossy selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=22584 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=18488 compression_ratio=1.378
+[kv-compress] mode=BlockSelectLossy selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=22584 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=18488 compression_ratio=1.378
+[test_seq_packed_then_compress] full-layer forward enabled layers=2
+[test_packed_then_compress] packed-then-compress prefill enabled layers=2 temp_dense_kv_bytes=8192
+ok
+test packed_then_compress_prefill_matches_sequential_block_select_lossy_last_reps ... [cuda] upload_weights: 417792 bytes (total=417792) tag=weights
+[cuda] upload_weights: 417792 bytes (total=835584) tag=weights
+[kv-compress] mode=BlockSelectLossy selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=34968 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=30872 compression_ratio=2.134
+[kv-compress] mode=BlockSelectLossy selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=34968 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=30872 compression_ratio=2.134
+[test_seq_packed_then_compress] full-layer forward enabled layers=2
+[test_packed_then_compress] packed-then-compress prefill enabled layers=2 temp_dense_kv_bytes=8192
+ok
+test packed_then_compress_prefill_matches_sequential_block_select_lossy_stride_reps ... [cuda] upload_weights: 417792 bytes (total=417792) tag=weights
+[cuda] upload_weights: 417792 bytes (total=835584) tag=weights
+[kv-compress] mode=BlockSelectLossy selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=34968 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=30872 compression_ratio=2.134
+[kv-compress] mode=BlockSelectLossy selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=34968 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=30872 compression_ratio=2.134
+[test_seq_packed_then_compress] full-layer forward enabled layers=2
+[test_packed_then_compress] packed-then-compress prefill enabled layers=2 temp_dense_kv_bytes=8192
+ok
+test packed_then_compress_prefill_matches_sequential_block_summary ... [cuda] upload_weights: 417792 bytes (total=417792) tag=weights
+[cuda] upload_weights: 417792 bytes (total=835584) tag=weights
+[kv-compress] mode=BlockSummary selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=22584 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=18488 compression_ratio=1.378
+[kv-compress] mode=BlockSummary selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=22584 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=18488 compression_ratio=1.378
+[test_seq_packed_then_compress] full-layer forward enabled layers=2
+[test_packed_then_compress] packed-then-compress prefill enabled layers=2 temp_dense_kv_bytes=8192
+ok
+test packed_then_compress_prefill_matches_sequential_block_summary_last_reps ... [cuda] upload_weights: 417792 bytes (total=417792) tag=weights
+[cuda] upload_weights: 417792 bytes (total=835584) tag=weights
+[kv-compress] mode=BlockSummary selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=34968 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=30872 compression_ratio=2.134
+[kv-compress] mode=BlockSummary selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=34968 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=30872 compression_ratio=2.134
+[test_seq_packed_then_compress] full-layer forward enabled layers=2
+[test_packed_then_compress] packed-then-compress prefill enabled layers=2 temp_dense_kv_bytes=8192
+ok
+test packed_then_compress_prefill_matches_sequential_block_summary_stride_reps ... [cuda] upload_weights: 417792 bytes (total=417792) tag=weights
+[cuda] upload_weights: 417792 bytes (total=835584) tag=weights
+[kv-compress] mode=BlockSummary selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=34968 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=30872 compression_ratio=2.134
+[kv-compress] mode=BlockSummary selection_policy=topk top_blocks=2 exact_old_backing=dense exact_old_attention=staged dense_equivalent_bytes=16384 actual_allocated_bytes=34968 recent_fp16_bytes=4096 old_k_fp16_bytes=0 q4_old_v_payload_bytes=0 q4_old_v_scale_bytes=0 summary_index_bytes=30872 compression_ratio=2.134
+[test_seq_packed_then_compress] full-layer forward enabled layers=2
+[test_packed_then_compress] packed-then-compress prefill enabled layers=2 temp_dense_kv_bytes=8192
+ok
+test qwen_head128_batched_prefill_matches_sequential_with_qkv_biases ... [cuda] upload_weights: 420864 bytes (total=420864) tag=weights
+[cuda] upload_weights: 420864 bytes (total=841728) tag=weights
+ok
+test qwen_head128_compressed_multirow_prefill_matches_single_row_with_qkv_biases ... [cuda] upload_weights: 35858432 bytes (total=35858432) tag=weights
+[cuda] upload_weights: 35858432 bytes (total=71716864) tag=weights
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=2 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=131072 actual_allocated_bytes=271600 recent_fp16_bytes=16384 old_k_fp16_bytes=65536 q4_old_v_payload_bytes=16384 q4_old_v_scale_bytes=1024 summary_index_bytes=172272 compression_ratio=2.072
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=2 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=131072 actual_allocated_bytes=271600 recent_fp16_bytes=16384 old_k_fp16_bytes=65536 q4_old_v_payload_bytes=16384 q4_old_v_scale_bytes=1024 summary_index_bytes=172272 compression_ratio=2.072
+ok
+test qwen_head128_compressed_packed_prefill_matches_sequential_with_qkv_biases ... [cuda] upload_weights: 420864 bytes (total=420864) tag=weights
+[cuda] upload_weights: 420864 bytes (total=841728) tag=weights
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=2 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=32768 actual_allocated_bytes=67960 recent_fp16_bytes=4096 old_k_fp16_bytes=16384 q4_old_v_payload_bytes=4096 q4_old_v_scale_bytes=256 summary_index_bytes=43128 compression_ratio=2.074
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=2 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=32768 actual_allocated_bytes=67960 recent_fp16_bytes=4096 old_k_fp16_bytes=16384 q4_old_v_payload_bytes=4096 q4_old_v_scale_bytes=256 summary_index_bytes=43128 compression_ratio=2.074
+[test_seq_qwen_head128_compressed_prefill] full-layer forward enabled layers=2
+[test_packed_qwen_head128_compressed_prefill] packed prefix prefill enabled layers=2
+ok
+test qwen_head128_packed_prefill_logits_match_sequential_with_qkv_biases ... [cuda] upload_weights: 420864 bytes (total=420864) tag=weights
+[cuda] upload_weights: 420864 bytes (total=841728) tag=weights
+[test_seq_qwen_head128_prefill] full-layer forward enabled layers=2
+[test_packed_qwen_head128_prefill] packed prefix prefill enabled layers=2
+ok
+test qwen_head128_real_mixed_prefill_diagnostic ... skipping real Qwen mixed prefill diagnostic without M40LLM_QWEN_HEAD128_PREFILL_DIAG_MODEL
+ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.98s
+
+     Running tests/mlp_wrappers.rs (target/release/deps/mlp_wrappers-d34bc8d603fea3de)
+
+running 1 test
+test mlp_gates_and_down_proj_f32xf16_f32_smoke ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/q8_attention_projection_runtime.rs (target/release/deps/q8_attention_projection_runtime-85582d85c624ebf0)
+
+running 4 tests
+test hardware::test_attention_projection_load_captures_and_validates_selection ... [cuda] upload_weights: 50048 bytes (total=50048) tag=weights
+[q8-attn-projections] backend=warp-256 scope=single-row qkv_layers=1 output_layers=1 stream=decode extra_device_bytes=0
+[q8-projection-runtime] full-layer forward enabled layers=1
+[cuda] upload_weights: 94208 bytes (total=94208) tag=weights
+[cuda] upload_weights: 50048 bytes (total=50048) tag=weights
+[q8-attn-projections] backend=packed-warp-256 scope=single-row qkv_layers=1 output_layers=1 stream=decode extra_device_bytes=0
+[q8-projection-runtime] full-layer forward enabled layers=1
+[cuda] upload_weights: 94208 bytes (total=94208) tag=weights
+ok
+test hardware::test_attention_projection_rejects_wrong_spans_and_keeps_prefill ... [cuda] upload_weights: 93568 bytes (total=93568) tag=weights
+[q8-attn-projections] backend=warp-256 scope=single-row qkv_layers=2 output_layers=2 stream=decode extra_device_bytes=0
+[q8-execution] mode=Split families=[GateUp, Down, Vocabulary] tensors=7 layouts=7 prepared_bytes=58752 source_bytes=93568 total_weight_payload_bytes=152320 budget_bytes=16777216 peak_setup_host_payload_bytes=195840 preparation_ms=0.512
+[q8-ffn] kernel=SplitF32x4 ownership=RetainSplit threads=Some(128) scope=single-row activation_bytes=0 numerical_track=false
+[cuda] upload_weights: 50048 bytes (total=206464) tag=weights
+[cuda] upload_weights: 93568 bytes (total=93568) tag=weights
+[q8-attn-projections] backend=packed-warp-256 scope=single-row qkv_layers=2 output_layers=2 stream=decode extra_device_bytes=0
+[q8-execution] mode=Split families=[GateUp, Down, Vocabulary] tensors=7 layouts=7 prepared_bytes=58752 source_bytes=93568 total_weight_payload_bytes=152320 budget_bytes=16777216 peak_setup_host_payload_bytes=195840 preparation_ms=0.446
+[q8-ffn] kernel=SplitF32x4 ownership=RetainSplit threads=Some(128) scope=single-row activation_bytes=0 numerical_track=false
+[cuda] upload_weights: 50048 bytes (total=206464) tag=weights
+ok
+test hardware::test_attention_projection_runtime_preserves_logits_and_dispatch ... [cuda] upload_weights: 93568 bytes (total=93568) tag=weights
+[q8-execution] mode=Split families=[GateUp, Down, Vocabulary] tensors=7 layouts=7 prepared_bytes=58752 source_bytes=93568 total_weight_payload_bytes=152320 budget_bytes=16777216 peak_setup_host_payload_bytes=195840 preparation_ms=0.536
+[q8-ffn] kernel=SplitF32x4 ownership=RetainSplit threads=Some(128) scope=single-row activation_bytes=0 numerical_track=false
+[cuda] upload_weights: 93568 bytes (total=245888) tag=weights
+[q8-attn-projections] backend=warp-256 scope=single-row qkv_layers=2 output_layers=2 stream=decode extra_device_bytes=0
+[q8-execution] mode=Split families=[GateUp, Down, Vocabulary] tensors=7 layouts=7 prepared_bytes=58752 source_bytes=93568 total_weight_payload_bytes=152320 budget_bytes=16777216 peak_setup_host_payload_bytes=195840 preparation_ms=0.430
+[q8-ffn] kernel=SplitF32x4 ownership=RetainSplit threads=Some(128) scope=single-row activation_bytes=0 numerical_track=false
+[q8-projection-runtime] full-layer forward enabled layers=2
+[q8-projection-runtime] full-layer forward enabled layers=2
+[cuda] upload_weights: 1431552 bytes (total=1431552) tag=weights
+[q8-execution] mode=Split families=[GateUp, Down, Vocabulary] tensors=7 layouts=7 prepared_bytes=922624 source_bytes=1431552 total_weight_payload_bytes=2354176 budget_bytes=16777216 peak_setup_host_payload_bytes=3002368 preparation_ms=4.583
+[q8-ffn] kernel=SplitF32x4 ownership=RetainSplit threads=Some(128) scope=single-row activation_bytes=0 numerical_track=false
+[cuda] upload_weights: 1431552 bytes (total=3785728) tag=weights
+[q8-attn-projections] backend=warp-256 scope=single-row qkv_layers=2 output_layers=2 stream=decode extra_device_bytes=0
+[q8-execution] mode=Split families=[GateUp, Down, Vocabulary] tensors=7 layouts=7 prepared_bytes=922624 source_bytes=1431552 total_weight_payload_bytes=2354176 budget_bytes=16777216 peak_setup_host_payload_bytes=3002368 preparation_ms=4.389
+[q8-ffn] kernel=SplitF32x4 ownership=RetainSplit threads=Some(128) scope=single-row activation_bytes=0 numerical_track=false
+[q8-projection-runtime] full-layer forward enabled layers=2
+[q8-projection-runtime] full-layer forward enabled layers=2
+[cuda] upload_weights: 93568 bytes (total=93568) tag=weights
+[q8-attn-projections] backend=warp-256 scope=single-row qkv_layers=2 output_layers=2 stream=decode extra_device_bytes=0
+[q8-execution] mode=Split families=[GateUp, Down, Vocabulary] tensors=7 layouts=7 prepared_bytes=58752 source_bytes=93568 total_weight_payload_bytes=152320 budget_bytes=16777216 peak_setup_host_payload_bytes=195840 preparation_ms=0.488
+[q8-ffn] kernel=SplitF32x4 ownership=RetainSplit threads=Some(128) scope=single-row activation_bytes=0 numerical_track=false
+[cuda] upload_weights: 93568 bytes (total=245888) tag=weights
+[q8-attn-projections] backend=packed-warp-256 scope=single-row qkv_layers=2 output_layers=2 stream=decode extra_device_bytes=0
+[q8-execution] mode=Split families=[GateUp, Down, Vocabulary] tensors=7 layouts=7 prepared_bytes=58752 source_bytes=93568 total_weight_payload_bytes=152320 budget_bytes=16777216 peak_setup_host_payload_bytes=195840 preparation_ms=0.417
+[q8-ffn] kernel=SplitF32x4 ownership=RetainSplit threads=Some(128) scope=single-row activation_bytes=0 numerical_track=false
+[q8-projection-runtime] full-layer forward enabled layers=2
+[q8-projection-runtime] full-layer forward enabled layers=2
+[cuda] upload_weights: 1431552 bytes (total=1431552) tag=weights
+[q8-attn-projections] backend=warp-256 scope=single-row qkv_layers=2 output_layers=2 stream=decode extra_device_bytes=0
+[q8-execution] mode=Split families=[GateUp, Down, Vocabulary] tensors=7 layouts=7 prepared_bytes=922624 source_bytes=1431552 total_weight_payload_bytes=2354176 budget_bytes=16777216 peak_setup_host_payload_bytes=3002368 preparation_ms=4.369
+[q8-ffn] kernel=SplitF32x4 ownership=RetainSplit threads=Some(128) scope=single-row activation_bytes=0 numerical_track=false
+[cuda] upload_weights: 1431552 bytes (total=3785728) tag=weights
+[q8-attn-projections] backend=packed-warp-256 scope=single-row qkv_layers=2 output_layers=2 stream=decode extra_device_bytes=0
+[q8-execution] mode=Split families=[GateUp, Down, Vocabulary] tensors=7 layouts=7 prepared_bytes=922624 source_bytes=1431552 total_weight_payload_bytes=2354176 budget_bytes=16777216 peak_setup_host_payload_bytes=3002368 preparation_ms=4.366
+[q8-ffn] kernel=SplitF32x4 ownership=RetainSplit threads=Some(128) scope=single-row activation_bytes=0 numerical_track=false
+[q8-projection-runtime] full-layer forward enabled layers=2
+[q8-projection-runtime] full-layer forward enabled layers=2
+ok
+test test_attention_projection_config_is_opt_in ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running tests/q8_native_mlp_cache.rs (target/release/deps/q8_native_mlp_cache-373a7782678cbb1b)
+
+running 1 test
+test test_prepared_caches_retain_native_fused_mlp ... [cuda] upload_weights: 32832 bytes (total=32832) tag=weights
+[cuda] upload_weights: 32832 bytes (total=65664) tag=weights
+[cuda] upload_weights: 32832 bytes (total=65664) tag=weights
+[q8-execution] mode=Split families=[Qkv, Output, GateUp, Down, Vocabulary] tensors=8 layouts=8 prepared_bytes=32776 source_bytes=32832 total_weight_payload_bytes=65608 budget_bytes=1048576 peak_setup_host_payload_bytes=74368 preparation_ms=0.286
+[cuda] upload_weights: 32832 bytes (total=65664) tag=weights
+[q8-execution] mode=Mixed families=[Qkv, Output, GateUp, Down, Vocabulary] tensors=8 layouts=11 prepared_bytes=50184 source_bytes=32832 total_weight_payload_bytes=83016 budget_bytes=1048576 peak_setup_host_payload_bytes=74368 preparation_ms=0.349
+[cuda] upload_weights: 36864 bytes (total=36864) tag=weights
+[cuda] upload_weights: 36864 bytes (total=73728) tag=weights
+[cuda] upload_weights: 36864 bytes (total=73728) tag=weights
+[q8-execution] mode=Split families=[Qkv, Output, GateUp, Down, Vocabulary] tensors=8 layouts=8 prepared_bytes=36856 source_bytes=36864 total_weight_payload_bytes=73720 budget_bytes=1048576 peak_setup_host_payload_bytes=82432 preparation_ms=0.300
+[cuda] upload_weights: 36864 bytes (total=73728) tag=weights
+[q8-execution] mode=Mixed families=[Qkv, Output, GateUp, Down, Vocabulary] tensors=8 layouts=11 prepared_bytes=54264 source_bytes=36864 total_weight_payload_bytes=91128 budget_bytes=1048576 peak_setup_host_payload_bytes=82432 preparation_ms=0.433
+[cuda] upload_weights: 41536 bytes (total=41536) tag=weights
+[cuda] upload_weights: 41536 bytes (total=83072) tag=weights
+[cuda] upload_weights: 41536 bytes (total=83072) tag=weights
+[q8-execution] mode=Split families=[Qkv, Output, GateUp, Down, Vocabulary] tensors=8 layouts=8 prepared_bytes=41480 source_bytes=41536 total_weight_payload_bytes=83016 budget_bytes=1048576 peak_setup_host_payload_bytes=91776 preparation_ms=0.343
+[cuda] upload_weights: 41536 bytes (total=83072) tag=weights
+[q8-execution] mode=Mixed families=[Qkv, Output, GateUp, Down, Vocabulary] tensors=8 layouts=11 prepared_bytes=58888 source_bytes=41536 total_weight_payload_bytes=100424 budget_bytes=1048576 peak_setup_host_payload_bytes=91776 preparation_ms=0.353
+[cuda] upload_weights: 50048 bytes (total=50048) tag=weights
+[cuda] upload_weights: 50048 bytes (total=100096) tag=weights
+[cuda] upload_weights: 50048 bytes (total=100096) tag=weights
+[q8-execution] mode=Split families=[Qkv, Output, GateUp, Down, Vocabulary] tensors=8 layouts=8 prepared_bytes=50048 source_bytes=50048 total_weight_payload_bytes=100096 budget_bytes=1048576 peak_setup_host_payload_bytes=108800 preparation_ms=0.323
+[cuda] upload_weights: 50048 bytes (total=100096) tag=weights
+[q8-execution] mode=Mixed families=[Qkv, Output, GateUp, Down, Vocabulary] tensors=8 layouts=11 prepared_bytes=67456 source_bytes=50048 total_weight_payload_bytes=117504 budget_bytes=1048576 peak_setup_host_payload_bytes=108800 preparation_ms=0.380
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+

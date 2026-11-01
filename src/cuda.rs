@@ -6520,9 +6520,11 @@ impl KVCache {
 
     /// # Safety
     /// Enqueues GQA last-token attention on the decode stream using a
-    /// device-resident `seq_len` parameter. The initial implementation uses the
-    /// generic attention kernel so graph replay can vary sequence length without
-    /// host-updated kernel parameters.
+    /// device-resident `seq_len` parameter. Replay preserves ordinary native,
+    /// shared, warp32 and head64 cache-experiment dispatch as the length changes.
+    /// The experimental parallel backend is rejected because its workspace and
+    /// partition dispatch do not support device lengths. Kernel choice is fixed
+    /// at capture time; changing environment settings requires recapture.
     pub unsafe fn attention_last_token_f32_gqa_seq_len_dev_async(
         &self,
         ctx: &CudaContext,
@@ -6532,6 +6534,10 @@ impl KVCache {
         d_seq_len: *const u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
+        anyhow::ensure!(
+            Head128AttentionConfig::from_env()?.is_none(),
+            "parallel attention does not support device-length graph replay"
+        );
         let diag = Q8DecodeEventDiag::start_dynamic(
             ctx,
             "attention_last_token_f32_gqa_seq_len_dev",

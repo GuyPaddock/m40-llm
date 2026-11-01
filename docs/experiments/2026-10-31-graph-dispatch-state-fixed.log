@@ -1,0 +1,89 @@
+   Compiling m40-llm v0.1.0 (/tmp/m40-graph-followup)
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.90s
+     Running unittests src/lib.rs (target/debug/deps/m40_llm-a01475ebb6730b26)
+
+running 5 tests
+test decode_session::graph_tests::test_graph_session_rejects_parallel_attention ... [cuda] upload_weights: 1431552 bytes (total=1431552) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=365568 source_bytes=1431552 total_weight_payload_bytes=1797120 budget_bytes=6442450944 peak_setup_host_payload_bytes=3002368 preparation_ms=7.233
+ok
+test decode_session::graph_tests::test_native_q8_graph_capture_cancellation ... [cuda] upload_weights: 1431552 bytes (total=1431552) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=365568 source_bytes=1431552 total_weight_payload_bytes=1797120 budget_bytes=6442450944 peak_setup_host_payload_bytes=3002368 preparation_ms=5.633
+[cuda] upload_weights: 1431552 bytes (total=3228672) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=365568 source_bytes=1431552 total_weight_payload_bytes=1797120 budget_bytes=6442450944 peak_setup_host_payload_bytes=3002368 preparation_ms=5.763
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] disabling full-token decode CUDA graph after capture failure: test rejection after recording graph operations
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] captured full-token decode CUDA graph layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] disabling full-token decode CUDA graph after capture failure: test rejection after recording graph operations
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] captured full-token decode CUDA graph layers=2
+[graph-qualification] full-layer forward enabled layers=2
+graph qualification failure=Some((Capture, 0)) compared_tokens=32 maximum_logit_error=0 cache_differences=0 maximum_cache_error=0 tracked_cleanup=pass
+ok
+test decode_session::graph_tests::test_native_q8_graph_first_launch_rejection ... [cuda] upload_weights: 1431552 bytes (total=1431552) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=365568 source_bytes=1431552 total_weight_payload_bytes=1797120 budget_bytes=6442450944 peak_setup_host_payload_bytes=3002368 preparation_ms=6.911
+[cuda] upload_weights: 1431552 bytes (total=3228672) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=365568 source_bytes=1431552 total_weight_payload_bytes=1797120 budget_bytes=6442450944 peak_setup_host_payload_bytes=3002368 preparation_ms=6.026
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] captured full-token decode CUDA graph layers=2
+[graph-qualification] disabling full-token decode CUDA graph after launch failure: test rejection before graph submission
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] captured full-token decode CUDA graph layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] captured full-token decode CUDA graph layers=2
+[graph-qualification] disabling full-token decode CUDA graph after launch failure: test rejection before graph submission
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] captured full-token decode CUDA graph layers=2
+[graph-qualification] full-layer forward enabled layers=2
+graph qualification failure=Some((Launch, 0)) compared_tokens=32 maximum_logit_error=0 cache_differences=0 maximum_cache_error=0 tracked_cleanup=pass
+ok
+test decode_session::graph_tests::test_native_q8_graph_later_launch_rejection ... [cuda] upload_weights: 1431552 bytes (total=1431552) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=365568 source_bytes=1431552 total_weight_payload_bytes=1797120 budget_bytes=6442450944 peak_setup_host_payload_bytes=3002368 preparation_ms=5.651
+[cuda] upload_weights: 1431552 bytes (total=3228672) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=365568 source_bytes=1431552 total_weight_payload_bytes=1797120 budget_bytes=6442450944 peak_setup_host_payload_bytes=3002368 preparation_ms=5.911
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] captured full-token decode CUDA graph layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] captured full-token decode CUDA graph layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] disabling full-token decode CUDA graph after launch failure: test rejection before graph submission
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] captured full-token decode CUDA graph layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] captured full-token decode CUDA graph layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] disabling full-token decode CUDA graph after launch failure: test rejection before graph submission
+graph qualification failure=Some((Launch, 3)) compared_tokens=32 maximum_logit_error=0 cache_differences=0 maximum_cache_error=0 tracked_cleanup=pass
+ok
+test decode_session::graph_tests::test_native_q8_graph_sequences ... [cuda] upload_weights: 1431552 bytes (total=1431552) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=365568 source_bytes=1431552 total_weight_payload_bytes=1797120 budget_bytes=6442450944 peak_setup_host_payload_bytes=3002368 preparation_ms=5.753
+[cuda] upload_weights: 1431552 bytes (total=3228672) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=365568 source_bytes=1431552 total_weight_payload_bytes=1797120 budget_bytes=6442450944 peak_setup_host_payload_bytes=3002368 preparation_ms=5.973
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] captured full-token decode CUDA graph layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] captured full-token decode CUDA graph layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] captured full-token decode CUDA graph layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] full-layer forward enabled layers=2
+[graph-qualification] captured full-token decode CUDA graph layers=2
+[graph-qualification] full-layer forward enabled layers=2
+graph qualification failure=None compared_tokens=32 maximum_logit_error=0 cache_differences=0 maximum_cache_error=0 tracked_cleanup=pass
+ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 100 filtered out; finished in 3.12s
+
