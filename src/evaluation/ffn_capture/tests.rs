@@ -237,6 +237,61 @@ fn test_short_generations_use_actual_processed_input_count() -> Result<()> {
     Ok(())
 }
 
+/// Complete capture retains late generated inputs beyond both historical
+/// prefix limits, keeps task boundaries intact and rejects a truncated prefix
+/// as evidence of a complete generation.
+#[test]
+fn test_complete_generations_preserve_late_inputs_and_reject_prefixes() -> Result<()> {
+    let mut plan = plan()?;
+    plan.max_generated_rows_per_task = 160;
+    let budget = 6 * 160 * 2 * (32 + 64) * 4;
+    assert!(FfnCaptureCollector::new(plan.clone(), "5".repeat(64), sources(), budget - 1).is_err());
+    let mut collector = FfnCaptureCollector::new(plan.clone(), "5".repeat(64), sources(), budget)?;
+    let counts = [2, 34, 80, 160, 1, 64];
+    for (index, id) in plan.calibration_task_ids.iter().enumerate() {
+        collector.begin_task(id, &[11, 12, 13])?;
+        for row in 0..counts[index] - 1 {
+            for layer in [0, 3] {
+                let value = (index * 1000 + row * 4 + layer) as f32;
+                collector.observe(layer, (row + 3) as u32, &[value; 32], &[-value; 64])?;
+            }
+        }
+        collector.finish_task(&vec![17; counts[index]])?;
+    }
+    let artifact = collector.finish()?;
+    artifact.validate_complete_generations()?;
+    let decoded = FfnCaptureArtifact::parse(&serde_json::to_string(&artifact)?)?;
+    decoded.validate_complete_generations()?;
+    let expected_rows: usize = counts.iter().map(|count| count - 1).sum();
+    for layer in &decoded.layers {
+        assert_eq!(layer.rows.len(), expected_rows);
+        let mut offset = 0;
+        for (index, &count) in counts.iter().enumerate() {
+            for row in 0..count - 1 {
+                assert_eq!(layer.rows[offset].task_id, plan.calibration_task_ids[index]);
+                assert_eq!(layer.rows[offset].absolute_position, (row + 3) as u32);
+                let value = (index * 1000 + row * 4 + layer.source.layer_id) as f32;
+                assert_eq!(
+                    &layer.normalized_inputs[offset * 32..(offset + 1) * 32],
+                    &[value; 32]
+                );
+                assert_eq!(
+                    &layer.swiglu_inputs[offset * 64..(offset + 1) * 64],
+                    &[-value; 64]
+                );
+                offset += 1;
+            }
+        }
+    }
+    let mut truncated = complete()?;
+    truncated.tasks[0].generated_token_ids.extend([17, 18]);
+    truncated.validate()?;
+    assert!(truncated.validate_complete_generations().is_err());
+    plan.max_generated_rows_per_task = 512;
+    assert!(plan.validate().is_err());
+    Ok(())
+}
+
 /// Pre-reservation enforces the full bounded FP32 budget, and invalid source
 /// geometry/aliasing is rejected before a collector can observe anything.
 #[test]
@@ -307,7 +362,7 @@ fn test_parser_rejects_inconsistent_external_observations() -> Result<()> {
         ("/plan/selected_layer_ids", json!([0, 0])),
         ("/plan/source_layer_count", json!(3)),
         ("/plan/max_generated_rows_per_task", json!(0)),
-        ("/plan/max_generated_rows_per_task", json!(33)),
+        ("/plan/max_generated_rows_per_task", json!(512)),
         ("/plan/d_model", json!(31)),
         ("/tasks/0/id", json!("held-out")),
         ("/tasks/0/prompt_token_ids", json!([])),

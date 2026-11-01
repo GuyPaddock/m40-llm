@@ -24,8 +24,10 @@ API with immutable selections, not dynamic runtime routing. The next research
 priority is causal channel-selection predictability across complete
 generations. The [fixed diagnostic protocol](experiments/2026-10-31-selector-predictability-protocol.md)
 uses the six existing calibration prompts, causal dense-refresh histories and
-16-dimensional sketches. Capture/analyzer implementation and new observations
-are pending. The nine published experiment branches remain unchanged.
+16-dimensional sketches. The [explicit complete-generation observer](experiments/2026-10-31-selector-capture-implementation.md)
+is implemented and passes collector, CLI, CUDA-enabled argument and M40
+observer parity checks. New collection and causal analysis remain pending.
+The nine published experiment branches remain unchanged.
 This follow-up does not reopen the separate V3 data work below.
 
 The authorized **bounded CPU-only V3 engineering follow-up is complete**.

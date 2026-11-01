@@ -103,6 +103,13 @@ struct Args {
     /// control. Requires calibration split and creates a new paired artifact.
     #[arg(long, conflicts_with_all=["q8_prefix_drift","compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target","step_timing_trials"])]
     capture_ffn_inputs: Option<PathBuf>,
+    /// Observe all consumed generated-token inputs in the fixed six-prompt
+    /// selector study, including target-layer predecessors. No selector runs.
+    #[arg(
+        long = "capture-ffn-complete-generations",
+        requires = "capture_ffn_inputs"
+    )]
+    should_capture_complete_ffn_generations: bool,
     /// Diagnose the recorded native/prepared down+vocabulary branch on identical
     /// prefixes. No fitting, free generation or performance promotion occurs.
     #[arg(long, conflicts_with_all=["compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target"])]
@@ -423,6 +430,25 @@ mod argument_tests {
         ] {
             assert!(parse(&[capture.as_slice(), extra.as_slice()].concat()).is_err());
         }
+    }
+
+    /// Complete-generation observation is explicit and requires the existing
+    /// read-only capture mode; ordinary capture retains its four-row default.
+    #[test]
+    fn test_complete_ffn_capture_requires_explicit_capture() {
+        assert!(parse(&["--capture-ffn-complete-generations"]).is_err());
+        let args = parse(&[
+            "--capture-ffn-inputs",
+            "full.json",
+            "--capture-ffn-complete-generations",
+        ])
+        .unwrap();
+        assert!(args.should_capture_complete_ffn_generations);
+        assert!(
+            !parse(&["--capture-ffn-inputs", "prefix.json"])
+                .unwrap()
+                .should_capture_complete_ffn_generations
+        );
     }
 
     /// Compact equivalence has its own checked source mask. Ad-hoc candidate

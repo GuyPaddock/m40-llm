@@ -6,7 +6,7 @@ use anyhow::{ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-const MAX_JSON_BYTES: usize = 64 * 1024 * 1024;
+const MAX_JSON_BYTES: usize = 512 * 1024 * 1024;
 
 pub(super) fn validate_digest(digest: &str) -> Result<()> {
     ensure!(
@@ -100,8 +100,8 @@ impl FfnCapturePlan {
             "FFN capture requires complete Q8_0 input blocks"
         );
         ensure!(
-            (1..=32).contains(&self.max_generated_rows_per_task),
-            "FFN capture accepts 1..32 generated input rows per task"
+            (1..=511).contains(&self.max_generated_rows_per_task),
+            "FFN capture accepts 1..511 generated input rows per task"
         );
         let ids: HashSet<_> = self.calibration_task_ids.iter().collect();
         ensure!(
@@ -280,11 +280,26 @@ impl FfnCaptureArtifact {
     pub fn parse(json: &str) -> Result<Self> {
         ensure!(
             json.len() <= MAX_JSON_BYTES,
-            "FFN capture JSON exceeds 64 MiB"
+            "FFN capture JSON exceeds 512 MiB"
         );
         let artifact: Self = serde_json::from_str(json)?;
         artifact.validate()?;
         Ok(artifact)
+    }
+
+    /// Require every consumed generated-token input, excluding the prompt's
+    /// final state and the unconsumed final emitted token. Prefix captures
+    /// remain valid artifacts but cannot satisfy complete-generation studies.
+    pub fn validate_complete_generations(&self) -> Result<()> {
+        self.validate()?;
+        ensure!(
+            self.tasks.iter().all(|task| {
+                task.generated_token_ids.len().saturating_sub(1)
+                    <= self.plan.max_generated_rows_per_task
+            }),
+            "FFN artifact truncates consumed generated-token inputs"
+        );
+        Ok(())
     }
 
     pub fn validate(&self) -> Result<()> {

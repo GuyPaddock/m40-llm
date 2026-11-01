@@ -19,8 +19,47 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
-const ROW_CAP: usize = 4;
-const HOST_BUDGET: usize = 32 * 1024 * 1024;
+struct CaptureLimits {
+    rows: usize,
+    host_bytes: usize,
+    layers: Vec<usize>,
+}
+
+impl CaptureLimits {
+    fn new(should_capture_complete_generations: bool) -> Self {
+        if should_capture_complete_generations {
+            Self {
+                rows: 160,
+                host_bytes: 256 * 1024 * 1024,
+                layers: vec![0, 16, 17, 34, 35],
+            }
+        } else {
+            Self {
+                rows: 4,
+                host_bytes: 32 * 1024 * 1024,
+                layers: vec![0, 17, 35],
+            }
+        }
+    }
+}
+
+fn validate_complete_study_inputs(
+    model_sha256: &str,
+    corpus_sha256: &str,
+    corpus: &Corpus,
+) -> Result<()> {
+    ensure!(
+        model_sha256 == "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d"
+            && corpus_sha256 == "2a1270959ef105a3ec19e0be0ab888048fb619880fd4f014ce216acfb8710c38"
+            && corpus
+                .calibration
+                .tasks
+                .iter()
+                .all(|task| task.max_tokens <= 160),
+        "complete FFN study requires the frozen original model and diagnostic corpus"
+    );
+    Ok(())
+}
 
 fn validate_request(args: &Args) -> Result<()> {
     ensure!(
@@ -52,7 +91,10 @@ fn validate_request(args: &Args) -> Result<()> {
     Ok(())
 }
 
-fn execution_settings(environment: &BTreeMap<String, String>) -> Result<Value> {
+fn execution_settings(
+    environment: &BTreeMap<String, String>,
+    limits: &CaptureLimits,
+) -> Result<Value> {
     research::validate_execution(environment)?;
     for (key, value) in [
         ("M40LLM_ENABLE_CUBLAS", "1"),
@@ -78,8 +120,8 @@ fn execution_settings(environment: &BTreeMap<String, String>) -> Result<Value> {
         "prepared_weights":{"mode":"split","budget_mib":6144,"families":["down","vocabulary"],
             "single_row_down_columns":4,"single_row_down_threads":256},
         "kv_mode":"off","prefill_mode":"sequential","sampling":"greedy top_k=1 seed=0; actual natural stopping",
-        "task_template":"canonical Qwen system+user ChatML", "source_layer_ids":[0,17,35],
-        "max_generated_input_rows_per_task":ROW_CAP,"capture_host_payload_budget_bytes":HOST_BUDGET}),
+        "task_template":"canonical Qwen system+user ChatML", "source_layer_ids":limits.layers,
+        "max_generated_input_rows_per_task":limits.rows,"capture_host_payload_budget_bytes":limits.host_bytes}),
     )
 }
 
@@ -88,12 +130,16 @@ fn execution_settings(environment: &BTreeMap<String, String>) -> Result<Value> {
 pub(super) fn capture(args: &Args) -> Result<()> {
     validate_request(args)?;
     let environment = run::environment()?;
-    let settings = execution_settings(&environment)?;
+    let limits = CaptureLimits::new(args.should_capture_complete_ffn_generations);
+    let settings = execution_settings(&environment, &limits)?;
     let execution_sha256 = records::sha256(&serde_json::to_vec(&settings)?)?;
     let corpus_bytes = fs::read(&args.corpus)?;
     let corpus = Corpus::parse(std::str::from_utf8(&corpus_bytes)?)?;
     let corpus_sha256 = records::sha256(&corpus_bytes)?;
     let model_sha256 = records::file_sha256(&args.model)?;
+    if args.should_capture_complete_ffn_generations {
+        validate_complete_study_inputs(&model_sha256, &corpus_sha256, &corpus)?;
+    }
     ensure!(
         records::file_sha256(&args.reference_model)? == model_sha256,
         "FFN capture requires the same original reference/model weights"
@@ -122,12 +168,12 @@ pub(super) fn capture(args: &Args) -> Result<()> {
                 execution_sha256.clone(),
                 &corpus,
                 36,
-                vec![0, 17, 35],
+                limits.layers.clone(),
                 2048,
                 11008,
-                ROW_CAP,
+                limits.rows,
             )?;
-            model.begin_ffn_capture(plan, HOST_BUDGET)
+            model.begin_ffn_capture(plan, limits.host_bytes)
         },
     )?;
     let prepared = model.q8_execution_stats();
@@ -154,7 +200,9 @@ pub(super) fn capture(args: &Args) -> Result<()> {
         "host_compiler":records::command_text("g++",&["--version"])?,"cuda_flags":research::CUDA_FLAGS,
         "device":format!("{:?}",model.cuda.current_device_props()?),
         "setup_through_identity_ms":started.elapsed().as_secs_f64()*1000.0,"is_performance_measurement":false,
-        "scope":"calibration-only read-only paired inputs; active capture adds diagnostic D2H and stream drains; no held-out/browser observations"}))?;
+        "should_capture_complete_generations":args.should_capture_complete_ffn_generations,
+        "scope":"calibration-only read-only paired inputs; active capture adds diagnostic D2H and stream drains; no held-out/browser observations",
+        "position_scope":"consumed generated-token inputs only; prompt-terminal forward is dense bootstrap, final emitted token is not consumed"}))?;
     tasks::warmup(&model, &tokenizer)?;
     for task in &corpus.calibration.tasks {
         let (prompt, prompt_ids) = tasks::encode_task(&tokenizer, &task.prompt)?;
@@ -184,16 +232,19 @@ pub(super) fn capture(args: &Args) -> Result<()> {
             "prompt_token_ids":prompt_ids,"max_tokens":task.max_tokens,"scoring_rule":task.scoring,
             "baseline":tasks::generation_record(&baseline,baseline_ms,&model)?,"captured":tasks::generation_record(&captured,capture_ms,&model)?,
             "score":task.scoring.score(&captured.output)?,"has_identical_generation":true,
-            "captured_rows_per_layer":generated_ids.len().saturating_sub(1).min(ROW_CAP),"is_performance_measurement":false}))?;
+            "captured_rows_per_layer":generated_ids.len().saturating_sub(1).min(limits.rows),"is_performance_measurement":false}))?;
         eprintln!(
             "FFN capture {}: {} identical generated IDs, {} input rows/layer",
             task.id,
             generated_ids.len(),
-            generated_ids.len().saturating_sub(1).min(ROW_CAP)
+            generated_ids.len().saturating_sub(1).min(limits.rows)
         );
     }
     let artifact = model.finish_ffn_capture()?;
     artifact.plan.validate_corpus(&corpus, &corpus_sha256)?;
+    if args.should_capture_complete_ffn_generations {
+        artifact.validate_complete_generations()?;
+    }
     ensure!(
         artifact.layers.iter().all(|layer| layer.rows.len() >= 4),
         "FFN capture lacks four genuine rows for benchmark"
@@ -206,7 +257,11 @@ pub(super) fn capture(args: &Args) -> Result<()> {
         .write(true)
         .create_new(true)
         .open(destination)?;
-    serde_json::to_writer_pretty(&mut file, &artifact)?;
+    if args.should_capture_complete_ffn_generations {
+        serde_json::to_writer(&mut file, &artifact)?;
+    } else {
+        serde_json::to_writer_pretty(&mut file, &artifact)?;
+    }
     drop(file);
     drop(model);
     ensure!(
@@ -218,7 +273,7 @@ pub(super) fn capture(args: &Args) -> Result<()> {
         "rows_per_layer":artifact.layers.iter().map(|layer| json!({"layer_id":layer.source.layer_id,"rows":layer.rows.len()})).collect::<Vec<_>>(),
         "observation_payload_bytes":artifact.observation_payload_bytes,"observation_capacity_bytes":artifact.observation_capacity_bytes,
         "read_scratch_bytes":4*(artifact.plan.d_model+artifact.plan.hidden_dim),
-        "host_payload_budget_bytes":HOST_BUDGET,"is_performance_measurement":false,
+        "host_payload_budget_bytes":limits.host_bytes,"is_performance_measurement":false,
         "device_bytes_before":initial_device_bytes,"device_bytes_after":CudaContext::total_device_bytes()}))
 }
 
@@ -297,23 +352,47 @@ mod tests {
             ]
             .map(|(key, value)| (key.to_owned(), value.to_owned())),
         );
-        let settings = execution_settings(&environment)?;
+        let limits = CaptureLimits::new(false);
+        let settings = execution_settings(&environment, &limits)?;
         assert_eq!(
             settings["prepared_weights"]["families"],
             json!(["down", "vocabulary"])
         );
         assert_eq!(settings["max_generated_input_rows_per_task"], 4);
+        let complete = execution_settings(&environment, &CaptureLimits::new(true))?;
+        assert_eq!(complete["max_generated_input_rows_per_task"], 160);
+        assert_eq!(complete["source_layer_ids"], json!([0, 16, 17, 34, 35]));
+        assert_eq!(
+            complete["capture_host_payload_budget_bytes"],
+            256 * 1024 * 1024
+        );
         for key in [
             "M40LLM_ENABLE_CUBLAS",
             "M40LLM_Q8_DECODE_COL_TILE",
             "M40LLM_FUSED_Q8_MLP_SWIGLU",
         ] {
             let original = environment.insert(key.to_owned(), "0".to_owned()).unwrap();
-            assert!(execution_settings(&environment).is_err());
+            assert!(execution_settings(&environment, &limits).is_err());
             environment.insert(key.to_owned(), original);
         }
         environment.insert("M40LLM_PREFILL_CHUNK_SIZE".to_owned(), "64".to_owned());
-        assert!(execution_settings(&environment).is_err());
+        assert!(execution_settings(&environment, &limits).is_err());
+        Ok(())
+    }
+
+    /// The broader observer cannot silently collect a different model, corpus
+    /// or a generation longer than the frozen study's observation bound.
+    #[test]
+    fn test_complete_capture_binds_frozen_inputs_and_lengths() -> Result<()> {
+        let model = "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d";
+        let bytes = include_bytes!("../../data/research_quality/v1.json");
+        let corpus_hash = records::sha256(bytes)?;
+        let mut corpus = Corpus::parse(std::str::from_utf8(bytes)?)?;
+        validate_complete_study_inputs(model, &corpus_hash, &corpus)?;
+        assert!(validate_complete_study_inputs("other", &corpus_hash, &corpus).is_err());
+        assert!(validate_complete_study_inputs(model, "other", &corpus).is_err());
+        corpus.calibration.tasks[0].max_tokens = 161;
+        assert!(validate_complete_study_inputs(model, &corpus_hash, &corpus).is_err());
         Ok(())
     }
 }
