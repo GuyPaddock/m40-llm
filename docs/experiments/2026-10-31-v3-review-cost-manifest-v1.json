@@ -1,0 +1,189 @@
+{
+  "version": "v3-review-cost-1",
+  "is_training_manifest": false,
+  "human_reviewers_available": 0,
+  "rows": [
+    {
+      "id": "ultrachat:train:f0e37e9f7800261167ce91143f98f511f768847236f133f2d0aed60b444ebe57",
+      "source": "ultrachat",
+      "split": "train",
+      "revision": "8049631c405ae6576f93f445c6b8166f76f5505a",
+      "prompt_tokens": 133,
+      "prompt_sha256": "f0e37e9f7800261167ce91143f98f511f768847236f133f2d0aed60b444ebe57",
+      "sample_file": "local-artifacts/2026-10-30-hf-feasibility/ultrachat-train.json",
+      "sample_sha256": "847184b2ba9829a8a921b4416cbba51770939313d765507f51d2368a89bd9c5c",
+      "license_label": null
+    },
+    {
+      "id": "ultrachat:train:1cf08c87f07cc244d329f21e882e926349d39948cce860de3f6960e7fe5d43cc",
+      "source": "ultrachat",
+      "split": "train",
+      "revision": "8049631c405ae6576f93f445c6b8166f76f5505a",
+      "prompt_tokens": 102,
+      "prompt_sha256": "1cf08c87f07cc244d329f21e882e926349d39948cce860de3f6960e7fe5d43cc",
+      "sample_file": "local-artifacts/2026-10-30-hf-feasibility/ultrachat-train.json",
+      "sample_sha256": "847184b2ba9829a8a921b4416cbba51770939313d765507f51d2368a89bd9c5c",
+      "license_label": null
+    },
+    {
+      "id": "ultrachat:test:ef90b0f9adbc3c5302c1384ce26ff16fb88f01c31c9fe09564217709634be5ca",
+      "source": "ultrachat",
+      "split": "test",
+      "revision": "8049631c405ae6576f93f445c6b8166f76f5505a",
+      "prompt_tokens": 88,
+      "prompt_sha256": "ef90b0f9adbc3c5302c1384ce26ff16fb88f01c31c9fe09564217709634be5ca",
+      "sample_file": "local-artifacts/2026-10-30-hf-feasibility/ultrachat-test.json",
+      "sample_sha256": "380d143e93adc3c0175878e90ba85f34d0b49269edd370b53281e8be641a6034",
+      "license_label": null
+    },
+    {
+      "id": "ultrachat:test:65e7f991dc464b5e66b6e25e275a685a3d709ab5d6be4b4b47231d243f9d943a",
+      "source": "ultrachat",
+      "split": "test",
+      "revision": "8049631c405ae6576f93f445c6b8166f76f5505a",
+      "prompt_tokens": 219,
+      "prompt_sha256": "65e7f991dc464b5e66b6e25e275a685a3d709ab5d6be4b4b47231d243f9d943a",
+      "sample_file": "local-artifacts/2026-10-30-hf-feasibility/ultrachat-test.json",
+      "sample_sha256": "380d143e93adc3c0175878e90ba85f34d0b49269edd370b53281e8be641a6034",
+      "license_label": null
+    },
+    {
+      "id": "commitpack:python:e905334869af72025592de586b81650cb3468b8a:sentry/queue/client.py:1",
+      "source": "commitpack",
+      "split": "python",
+      "revision": "fc56fe33c030c6daa414c2b112c932b8eed085e6",
+      "prompt_tokens": 246,
+      "prompt_sha256": "8db353c467d6ec98a4a82e5849953ae435de534eb74c17987b1487f9d88e3c08",
+      "sample_file": "local-artifacts/2026-10-30-hf-feasibility/commitpack-python-prefix.bin",
+      "sample_sha256": "0b7df4a4d9f020c2721444e6d901c16186e5a71d5caf6faf23f9a974ed236e46",
+      "license_label": "bsd-3-clause"
+    },
+    {
+      "id": "commitpack:python:45fc612fdc5a354dbf0bacccd345b1aebcc73e59:tests/test_openweather.py:2",
+      "source": "commitpack",
+      "split": "python",
+      "revision": "fc56fe33c030c6daa414c2b112c932b8eed085e6",
+      "prompt_tokens": 267,
+      "prompt_sha256": "0259150327867d1f4a00062e18293f84326bcafc208fafe35454455373ebf9e6",
+      "sample_file": "local-artifacts/2026-10-30-hf-feasibility/commitpack-python-prefix.bin",
+      "sample_sha256": "0b7df4a4d9f020c2721444e6d901c16186e5a71d5caf6faf23f9a974ed236e46",
+      "license_label": "bsd-3-clause"
+    },
+    {
+      "id": "commitpack:python:22faee82e1f070532c0dfe5777136e842233a1f0:src/dashboard/src/main/templatetags/percentage.py:3",
+      "source": "commitpack",
+      "split": "python",
+      "revision": "fc56fe33c030c6daa414c2b112c932b8eed085e6",
+      "prompt_tokens": 120,
+      "prompt_sha256": "7a4f8355f28e7ce43418a49495b893ed77fafe4a53e492b770808cbda9000d58",
+      "sample_file": "local-artifacts/2026-10-30-hf-feasibility/commitpack-python-prefix.bin",
+      "sample_sha256": "0b7df4a4d9f020c2721444e6d901c16186e5a71d5caf6faf23f9a974ed236e46",
+      "license_label": "agpl-3.0"
+    },
+    {
+      "id": "commitpack:python:462ae981ed5b9cc9a8f46e97dfe7908c0827ea64:account_invoice_line_description/res_config.py:5",
+      "source": "commitpack",
+      "split": "python",
+      "revision": "fc56fe33c030c6daa414c2b112c932b8eed085e6",
+      "prompt_tokens": 332,
+      "prompt_sha256": "9d789a88c2c3512769b85a79dd7ebee799c4c1bed73d466fc23cd4c489c8fba7",
+      "sample_file": "local-artifacts/2026-10-30-hf-feasibility/commitpack-python-prefix.bin",
+      "sample_sha256": "0b7df4a4d9f020c2721444e6d901c16186e5a71d5caf6faf23f9a974ed236e46",
+      "license_label": "agpl-3.0"
+    },
+    {
+      "id": "squad-original:train:5733be284776f41900661182",
+      "source": "squad-original",
+      "split": "train",
+      "revision": "7b6d24c440a36b6815f21b70d25016731768db1f",
+      "prompt_tokens": 197,
+      "prompt_sha256": "4daa616fee3f81bdc6b79fa85651c792c39ebb042928399e50f923a7f7178640",
+      "sample_file": "local-artifacts/2026-10-30-source-selection/squad-train.json",
+      "sample_sha256": "4db93d43285415fc8f5997e1103997d045303a9ebc12265f6937dec17d2ed2c7",
+      "license_label": null
+    },
+    {
+      "id": "squad-original:train:5733a70c4776f41900660f65",
+      "source": "squad-original",
+      "split": "train",
+      "revision": "7b6d24c440a36b6815f21b70d25016731768db1f",
+      "prompt_tokens": 158,
+      "prompt_sha256": "228bcd3a790fcfcc14ee251bfcd991f7d0274328739b0562d80452deb6e5fdf2",
+      "sample_file": "local-artifacts/2026-10-30-source-selection/squad-train.json",
+      "sample_sha256": "4db93d43285415fc8f5997e1103997d045303a9ebc12265f6937dec17d2ed2c7",
+      "license_label": null
+    },
+    {
+      "id": "squad-original:validation:56be4db0acb8001400a502ec",
+      "source": "squad-original",
+      "split": "validation",
+      "revision": "7b6d24c440a36b6815f21b70d25016731768db1f",
+      "prompt_tokens": 197,
+      "prompt_sha256": "fb7b22b4f7c8bc2bdc312c71bb258470790ce3ce27fdc9e6eff4c0958d102015",
+      "sample_file": "local-artifacts/2026-10-30-source-selection/squad-validation.json",
+      "sample_sha256": "4e70d42ac8eb12c1326d88849459dcaad63c83aca3bcb3d074d3890dbfef2158",
+      "license_label": null
+    },
+    {
+      "id": "squad-original:validation:56d20362e7d4791d009025ea",
+      "source": "squad-original",
+      "split": "validation",
+      "revision": "7b6d24c440a36b6815f21b70d25016731768db1f",
+      "prompt_tokens": 191,
+      "prompt_sha256": "ee138690e87825540b79c21a9e1119ffd61cbdf82fa5babb006222ab886f0a68",
+      "sample_file": "local-artifacts/2026-10-30-source-selection/squad-validation.json",
+      "sample_sha256": "4e70d42ac8eb12c1326d88849459dcaad63c83aca3bcb3d074d3890dbfef2158",
+      "license_label": null
+    },
+    {
+      "id": "docred-original:train_annotated:0",
+      "source": "docred-original",
+      "split": "train_annotated",
+      "revision": "7985b4e0371e6c61a756feb41b7b27becf71c666",
+      "prompt_tokens": 254,
+      "prompt_sha256": "dc3eba7fd8949c8823e27dafd28ac5813acc912858cc980052f4600f748fb4d3",
+      "sample_file": "local-artifacts/2026-10-30-source-selection/docred-train_annotated.gzpart",
+      "sample_sha256": "50ffe44b4477efdd2a96312e9c2d0ce73968c9bb962e14061841e30373ebd9eb",
+      "license_label": null
+    },
+    {
+      "id": "docred-original:train_annotated:1",
+      "source": "docred-original",
+      "split": "train_annotated",
+      "revision": "7985b4e0371e6c61a756feb41b7b27becf71c666",
+      "prompt_tokens": 172,
+      "prompt_sha256": "5dec3182a30898005b117fcc1ff128be5873fe1e916743b20ce9efb1ddb8b916",
+      "sample_file": "local-artifacts/2026-10-30-source-selection/docred-train_annotated.gzpart",
+      "sample_sha256": "50ffe44b4477efdd2a96312e9c2d0ce73968c9bb962e14061841e30373ebd9eb",
+      "license_label": null
+    },
+    {
+      "id": "docred-original:dev:0",
+      "source": "docred-original",
+      "split": "dev",
+      "revision": "7985b4e0371e6c61a756feb41b7b27becf71c666",
+      "prompt_tokens": 206,
+      "prompt_sha256": "3b2b4ea3fb7a14a7ca0bcbd390698cb1b513f738faf422069bcb7a44aa2a036d",
+      "sample_file": "local-artifacts/2026-10-30-source-selection/docred-dev.gzpart",
+      "sample_sha256": "5719734fd9db36e2262afceb6e6182b051c078fb9f0ef048dda72fc0a52fa2bb",
+      "license_label": null
+    },
+    {
+      "id": "docred-original:test:0",
+      "source": "docred-original",
+      "split": "test",
+      "revision": "7985b4e0371e6c61a756feb41b7b27becf71c666",
+      "prompt_tokens": 226,
+      "prompt_sha256": "dbf79738210093e3cbc8ed19a1ff78f264f1272f8aa9f5ad16d801aab9950fe3",
+      "sample_file": "local-artifacts/2026-10-30-source-selection/docred-test.gzpart",
+      "sample_sha256": "e602851a24a7ed1c48694490a7c87adf152e0538c899fa158c4768f634dbf1ec",
+      "license_label": null
+    }
+  ],
+  "inputs": {
+    "local-artifacts/2026-10-30-hf-feasibility/sample-inputs.jsonl": "c72f6c3f059055c0bfccd04019dcb1dbea72928e3c924cecfa6412ba571ed8f2",
+    "local-artifacts/2026-10-30-hf-feasibility/sample-tokens.jsonl": "82999981c7185dc2e59131f73982b051f6ed269fcd7dd919d26a938a89229a99",
+    "local-artifacts/2026-10-30-source-selection/sample-inputs.jsonl": "a41ae66cda384431cfd16c1ac37249fd4bfc6f3c2934473c46f70649dd640406",
+    "local-artifacts/2026-10-30-source-selection/sample-tokens.jsonl": "5af8a218909b1a46c61891be30f30877875aeaf3549e6523cb8eddbc8df08ec4"
+  }
+}
