@@ -6,7 +6,7 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The authorized **bounded CPU-only V3 engineering follow-up is complete**.
+The authorized **CPU-only rank-count and review-cost follow-ups are complete**.
 Stop for review; no further implementation search, source sampling, acquisition,
 teacher generation, training, learned evaluation or GPU switch follows. The
 accepted V2 short-context protocol at `2060504` remains planning evidence,
@@ -25,7 +25,30 @@ remain immutable review artifacts. The user approved the four candidates and
 quota-aware methodology, subject to independent second review and validation.
 UltraChat has no exemption; no exemption has been activated.
 
-The [October 31 engineering results](experiments/2026-10-31-v3-engineering-results.md)
+The [October 31 rank-count and review-cost results](experiments/2026-10-31-v3-rank-review-results.md)
+retain **no-go for full census acquisition**. The versioned count amendment
+preserves native restrictions, quotas, seed, minimum departures and canonical
+destinations, replacing only the final count-vector objective. Checked optimal
+witnesses reproduce at 72, 3,200 and 11,776 components; the latter takes 10.003
+allocator CPU seconds versus V1's incomplete 90-second run. At 79,803, rank
+optimality remains unknown; 390,220 still hits the 4 GiB limit without a witness.
+Selection concentration and changed group composition are reported explicitly.
+
+The preregistered sixteen-packet review pilot uses only local evidence. Its
+automated preparation takes 7.425 CPU seconds and expands to 59 distinct local
+records, including 43 unselected dependencies. All packets remain blocked.
+The user confirms there are no independent reviewers: human time, adjudication
+and agreement are unmeasured, and the eight-hour review allowance is unsupported.
+No automated result substitutes for rights, semantic or independent review.
+
+All 72 CPU tests pass. Nine solver probes plus review preparation use 217.736
+CPU seconds, excluding tests; peak process RSS is 3.617 GiB. Preregistration,
+allocator and review tooling/manifest commits are `2c1c735`, `cc5be21`, `5eb63db`.
+Prior 726 checksum entries still verify. No registry exemption, selected training
+manifest, acquisition, GPU work or runtime change follows. Return for review
+before any further infrastructure work or full census authorization.
+
+The earlier [October 31 engineering results](experiments/2026-10-31-v3-engineering-results.md)
 retain a **no-go for full acquisition under the current implementation and review
 allowance**. One global-frequency index preserves all 22 retained overlaps and
 all 19,900 common-passage pairs while avoiding false candidates in a 10,000-row
@@ -43,7 +66,8 @@ The [staged review proposal](experiments/2026-10-31-v3-staged-review.md), `e3200
 keeps unselected dependency links blocking and rejects an unsupported eight-hour
 admission claim. At assumed 2-10 minutes per selected example, content inspection
 alone costs 53.3-266.7 hours; actual human throughput remains unmeasured. A narrow
-count-tie-break alternative is proposed for review only, not implemented.
+count-tie-break alternative was proposed there and evaluated in the separately
+versioned follow-up above; the original evidence remains unchanged.
 No registry, source pin, quota, length rule, target, GPU budget or runtime default
 changed. No selected source manifest or census was produced. Independent human
 review, normalized offsets, rights, semantic and benchmark coverage remain open.

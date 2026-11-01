@@ -2,6 +2,23 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: Rank Counts Improve; Review Cost Unknown
+
+The [bounded CPU-only follow-ups](experiments/2026-10-31-v3-rank-review-results.md)
+pass 72 tests. The amended count objective proves optimal assignments at 11,776
+synthetic components in 10.003 allocator CPU seconds; V1 stopped incomplete at
+90 seconds. Three optimal fixture sizes reproduce their complete witnesses in
+fresh reversed-input runs. The 79,803-component rank solve remains incomplete;
+390,220 hits the unchanged 4 GiB limit without a witness. These are bounded
+single-run comparisons, not population-scale or inference performance claims.
+
+Nine solver probes use 210.311 CPU seconds. Automated preparation of sixteen
+preregistered review packets takes 7.425 CPU seconds and finds 59 distinct local
+dependency records. No independent reviewers are available; human effort,
+agreement and adjudication are unmeasured, not zero. All packets remain blocked.
+Full acquisition remains no-go pending resource and review readiness. No GPU
+work, runtime defaults or qualified performance artifacts changed.
+
 ## 2026-10-31: V3 CPU Engineering Stops Before Census
 
 The [bounded engineering follow-up](experiments/2026-10-31-v3-engineering-results.md)
