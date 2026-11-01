@@ -1,0 +1,12 @@
+completion: jq: error (at /tmp/m40-kv-audit-checks.bW77ZY/changed.jsonl:85): missing/duplicate completion or header
+identity: jq: error (at /tmp/m40-kv-audit-checks.bW77ZY/changed.jsonl:86): source/input identity
+arm: jq: error (at /tmp/m40-kv-audit-checks.bW77ZY/changed.jsonl:86): case arm uniqueness
+count: jq: error (at /tmp/m40-kv-audit-checks.bW77ZY/changed.jsonl:86): generation counts/context
+cache: jq: error (at /tmp/m40-kv-audit-checks.bW77ZY/changed.jsonl:86): layer cache lengths
+score: jq: error (at /tmp/m40-kv-audit-checks.bW77ZY/changed.jsonl:86): independent task scoring
+target: jq: error (at /tmp/m40-kv-audit-checks.bW77ZY/changed.jsonl:86): prefix causality/logit accounting
+dispatch: jq: error (at /tmp/m40-kv-audit-checks.bW77ZY/changed.jsonl:86): packed prefill projection count
+overlap: jq: error (at /tmp/m40-kv-audit-checks.bW77ZY/changed.jsonl:86): prefix causality/logit accounting
+control: jq: error (at /tmp/m40-kv-audit-checks.bW77ZY/changed.jsonl:86): output equality/control
+repetition: jq: error (at /tmp/m40-kv-audit-checks.bW77ZY/changed.jsonl:86): independent repetition diagnostic
+configuration: jq: error (at /tmp/m40-kv-audit-checks.bW77ZY/changed.jsonl:86): configuration scope

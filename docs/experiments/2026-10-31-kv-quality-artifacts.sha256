@@ -1,0 +1,13 @@
+2c536251974e69be66653aff7068d29a74bf9c04e135f331a887e2484fe1b0b3  docs/experiments/2026-10-31-kv-quality-results.jsonl
+ce566f247a920ed12412079816ba788e6d7a506b5435422255871a3fe7935a74  docs/experiments/2026-10-31-kv-quality-audit.jq
+c1b2342ac197f8a5728af45b0927510449b8956121a33fd813f7154902528a51  docs/experiments/2026-10-31-kv-quality-audit.json
+2d98a2fb762e6fc0474fbbaf988d7ca3697ddb83f8e00c4d7a5a16bf6fd3e9b5  docs/experiments/2026-10-31-kv-quality-audit-checks.sh
+db744ace96e7c8dac6db295fdb227e2bd391c5b9c82ebb80ce46417aab4b2801  docs/experiments/2026-10-31-kv-quality-negative.json
+dfb9e360adead44e6fa49c67403706b39b565457d6a2df29782cd927c6228492  docs/experiments/2026-10-31-kv-quality-negative.log
+fb7b23c893e9bad4c5e2b56c114a49a119a088d701023adfbe52c79424b40966  docs/experiments/2026-10-31-kv-quality-audit-functions.jq
+866af3c216155f6f1b5498335299dacb3fe71893a2a37b3257ed6898d24448d8  docs/experiments/2026-10-31-kv-quality-audit-functions.json
+eebf075f5645aac19244cd76c792b126d56defd42224708ae1177728b5a97074  docs/experiments/2026-10-31-kv-quality-jq-slices.json
+15295cb9d766fa4620757c136f1ab4a5a48c3736806ec1e2dc5fbbdf16ca8be4  docs/experiments/2026-10-31-kv-quality-run.log
+185facacd43b2b47152f1040bb6d81a57e8f284965fbf5ff6e6fbf0276871185  docs/experiments/2026-10-31-kv-quality-gpu-after.csv
+2cd0408f1019df978a45a791a3a750fbf5bad1a6a135fba743104b10f3aafea0  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm/local-artifacts/qualified-references/kv-quality/run-01/kv_quality
+49808adf23cf245efe26ef443c58924043816020232bb24266ea3dd7fefd7338  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm/local-artifacts/qualified-references/kv-quality/run-01/source.tar

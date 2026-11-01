@@ -1,0 +1,5 @@
+{
+  "behavioral_checks": 8,
+  "passed": true,
+  "scope": "audit functions only; complete-grid admission remains separate"
+}

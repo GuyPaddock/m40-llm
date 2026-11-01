@@ -1,0 +1,207 @@
+[cuda] upload_weights: 3279519744 bytes (total=3279519744) tag=weights
+[q8-prefill] backend=dequant-sgemm temporary_weight_capacity_bytes=90177536 budget_bytes=134217728 scope=single-prompt-packed-prefix decode=unchanged
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=37 layouts=37 prepared_bytes=1192935424 source_bytes=3279519744 total_weight_payload_bytes=4472455168 budget_bytes=6442450944 peak_setup_host_payload_bytes=6895608736 preparation_ms=9624.053
+kv quality generation case=held-chat-tour-short arm=Dense
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-chat-tour-short arm=QuantizedAll
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-chat-tour-short arm=QuantizedTop8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality prefixes case=held-chat-tour-short dense_tokens=19
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+kv quality generation case=held-chat-tour-long arm=Dense
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-chat-tour-long arm=QuantizedAll
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-chat-tour-long arm=QuantizedTop8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality prefixes case=held-chat-tour-long dense_tokens=19
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+kv quality generation case=held-fact-observatory-short arm=Dense
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-fact-observatory-short arm=QuantizedAll
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-fact-observatory-short arm=QuantizedTop8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality prefixes case=held-fact-observatory-short dense_tokens=10
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+kv quality generation case=held-fact-observatory-long arm=Dense
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-fact-observatory-long arm=QuantizedAll
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-fact-observatory-long arm=QuantizedTop8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality prefixes case=held-fact-observatory-long dense_tokens=10
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+kv quality generation case=held-multi-workshop-short arm=Dense
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-multi-workshop-short arm=QuantizedAll
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-multi-workshop-short arm=QuantizedTop8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality prefixes case=held-multi-workshop-short dense_tokens=39
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+kv quality generation case=held-multi-workshop-long arm=Dense
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-multi-workshop-long arm=QuantizedAll
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-multi-workshop-long arm=QuantizedTop8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality prefixes case=held-multi-workshop-long dense_tokens=35
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+kv quality generation case=held-config-cache-short arm=Dense
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-config-cache-short arm=QuantizedAll
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-config-cache-short arm=QuantizedTop8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality prefixes case=held-config-cache-short dense_tokens=3
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+kv quality generation case=held-config-cache-long arm=Dense
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-config-cache-long arm=QuantizedAll
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-config-cache-long arm=QuantizedTop8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality prefixes case=held-config-cache-long dense_tokens=11
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+kv quality generation case=held-arithmetic-crates-short arm=Dense
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-arithmetic-crates-short arm=QuantizedAll
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-arithmetic-crates-short arm=QuantizedTop8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality prefixes case=held-arithmetic-crates-short dense_tokens=3
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+kv quality generation case=held-arithmetic-crates-long arm=Dense
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-arithmetic-crates-long arm=QuantizedAll
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-arithmetic-crates-long arm=QuantizedTop8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality prefixes case=held-arithmetic-crates-long dense_tokens=16
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+kv quality generation case=held-long-garden-short arm=Dense
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-long-garden-short arm=QuantizedAll
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-long-garden-short arm=QuantizedTop8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality prefixes case=held-long-garden-short dense_tokens=82
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+kv quality generation case=held-long-garden-long arm=Dense
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-long-garden-long arm=QuantizedAll
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality generation case=held-long-garden-long arm=QuantizedTop8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] packed prefix prefill enabled layers=36
+kv quality prefixes case=held-long-garden-long dense_tokens=123
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=113246208 actual_allocated_bytes=116499600 recent_fp16_bytes=37748736 old_k_fp16_bytes=56623104 q4_old_v_payload_bytes=14155776 q4_old_v_scale_bytes=884736 summary_index_bytes=7087248 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=36

@@ -1,0 +1,24 @@
+{
+  "tool": "jq-1.8.1",
+  "left": [
+    1
+  ],
+  "right": [
+    5
+  ],
+  "shared_slice_equal": true,
+  "materialized_equal": false,
+  "shared_slice_unique": [
+    [
+      1
+    ]
+  ],
+  "materialized_unique": [
+    [
+      1
+    ],
+    [
+      5
+    ]
+  ]
+}

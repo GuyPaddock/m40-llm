@@ -1,0 +1,5 @@
+{
+  "positive_passed": true,
+  "rejected_corruptions": 12,
+  "is_complete_grid_check": true
+}

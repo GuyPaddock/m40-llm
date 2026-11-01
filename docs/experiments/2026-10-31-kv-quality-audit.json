@@ -1,0 +1,813 @@
+{
+  "audit": "serialized accounting, task scores, repetition, output equality and recorded top10 overlap; logits not independently recomputed",
+  "source": "421df83e085212b78ca0d2e57b91a20ebb879e1e",
+  "cases": 12,
+  "generated_tokens": 1149,
+  "comparisons": 24,
+  "results": [
+    {
+      "case": "held-chat-tour-short",
+      "context": "short",
+      "outputs": [
+        {
+          "arm": "dense",
+          "count": 19,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"day\": \"Saturday\",\n  \"meeting_point\": \"west entrance\"\n}",
+          "repetition": {
+            "analyzed_tokens": 18,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_all",
+          "count": 19,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"day\": \"Saturday\",\n  \"meeting_point\": \"west entrance\"\n}",
+          "repetition": {
+            "analyzed_tokens": 18,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_top8",
+          "count": 19,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"day\": \"Saturday\",\n  \"meeting_point\": \"west entrance\"\n}",
+          "repetition": {
+            "analyzed_tokens": 18,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        }
+      ],
+      "comparisons": [
+        {
+          "arm": "quantized_all",
+          "quality_conclusion": "preserved",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 4,
+          "max_logit_difference": 0.006024360656738281,
+          "max_kl": 1.985182617904306E-9,
+          "min_top10_overlap": 10
+        },
+        {
+          "arm": "quantized_top8",
+          "quality_conclusion": "preserved",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 4,
+          "max_logit_difference": 0.006024360656738281,
+          "max_kl": 1.985182617904306E-9,
+          "min_top10_overlap": 10
+        }
+      ]
+    },
+    {
+      "case": "held-chat-tour-long",
+      "context": "long",
+      "outputs": [
+        {
+          "arm": "dense",
+          "count": 19,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"day\": \"Saturday\",\n  \"meeting_point\": \"west entrance\"\n}",
+          "repetition": {
+            "analyzed_tokens": 18,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_all",
+          "count": 19,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"day\": \"Saturday\",\n  \"meeting_point\": \"west entrance\"\n}",
+          "repetition": {
+            "analyzed_tokens": 18,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_top8",
+          "count": 19,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"day\": \"Saturday\",\n  \"meeting_point\": \"west entrance\"\n}",
+          "repetition": {
+            "analyzed_tokens": 18,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        }
+      ],
+      "comparisons": [
+        {
+          "arm": "quantized_all",
+          "quality_conclusion": "preserved",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 4,
+          "max_logit_difference": 1.7432587146759033,
+          "max_kl": 0.00009808163269667031,
+          "min_top10_overlap": 9
+        },
+        {
+          "arm": "quantized_top8",
+          "quality_conclusion": "preserved",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 4,
+          "max_logit_difference": 5.447803974151611,
+          "max_kl": 0.0010481371372032795,
+          "min_top10_overlap": 7
+        }
+      ]
+    },
+    {
+      "case": "held-fact-observatory-short",
+      "context": "short",
+      "outputs": [
+        {
+          "arm": "dense",
+          "count": 10,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"deck\": 7\n}",
+          "repetition": {
+            "analyzed_tokens": 9,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_all",
+          "count": 10,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"deck\": 7\n}",
+          "repetition": {
+            "analyzed_tokens": 9,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_top8",
+          "count": 10,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"deck\": 7\n}",
+          "repetition": {
+            "analyzed_tokens": 9,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        }
+      ],
+      "comparisons": [
+        {
+          "arm": "quantized_all",
+          "quality_conclusion": "preserved",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 4,
+          "max_logit_difference": 0.006288290023803711,
+          "max_kl": 2.0903671316590542E-8,
+          "min_top10_overlap": 10
+        },
+        {
+          "arm": "quantized_top8",
+          "quality_conclusion": "preserved",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 4,
+          "max_logit_difference": 0.006288290023803711,
+          "max_kl": 2.0903671316590542E-8,
+          "min_top10_overlap": 10
+        }
+      ]
+    },
+    {
+      "case": "held-fact-observatory-long",
+      "context": "long",
+      "outputs": [
+        {
+          "arm": "dense",
+          "count": 10,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"deck\": 7\n}",
+          "repetition": {
+            "analyzed_tokens": 9,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_all",
+          "count": 10,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"deck\": 7\n}",
+          "repetition": {
+            "analyzed_tokens": 9,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_top8",
+          "count": 10,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"deck\": 7\n}",
+          "repetition": {
+            "analyzed_tokens": 9,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        }
+      ],
+      "comparisons": [
+        {
+          "arm": "quantized_all",
+          "quality_conclusion": "preserved",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 4,
+          "max_logit_difference": 1.9711257219314575,
+          "max_kl": 0.0003787003766861415,
+          "min_top10_overlap": 9
+        },
+        {
+          "arm": "quantized_top8",
+          "quality_conclusion": "preserved",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 4,
+          "max_logit_difference": 4.574418306350708,
+          "max_kl": 0.004417363474128752,
+          "min_top10_overlap": 7
+        }
+      ]
+    },
+    {
+      "case": "held-multi-workshop-short",
+      "context": "short",
+      "outputs": [
+        {
+          "arm": "dense",
+          "count": 39,
+          "stop": "stop",
+          "passed": true,
+          "output": "```json\n{\n  \"indigo_hall\": 12,\n  \"indigo_day\": \"Monday\",\n  \"saffron_hall\": 16\n}\n```",
+          "repetition": {
+            "analyzed_tokens": 38,
+            "repeated_fourgram_fraction": 0.08571428571428572,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_all",
+          "count": 39,
+          "stop": "stop",
+          "passed": true,
+          "output": "```json\n{\n  \"indigo_hall\": 12,\n  \"indigo_day\": \"Monday\",\n  \"saffron_hall\": 16\n}\n```",
+          "repetition": {
+            "analyzed_tokens": 38,
+            "repeated_fourgram_fraction": 0.08571428571428572,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_top8",
+          "count": 39,
+          "stop": "stop",
+          "passed": true,
+          "output": "```json\n{\n  \"indigo_hall\": 12,\n  \"indigo_day\": \"Monday\",\n  \"saffron_hall\": 16\n}\n```",
+          "repetition": {
+            "analyzed_tokens": 38,
+            "repeated_fourgram_fraction": 0.08571428571428572,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        }
+      ],
+      "comparisons": [
+        {
+          "arm": "quantized_all",
+          "quality_conclusion": "preserved",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 5,
+          "max_logit_difference": 0.006048798561096191,
+          "max_kl": 1.876280353202302E-8,
+          "min_top10_overlap": 10
+        },
+        {
+          "arm": "quantized_top8",
+          "quality_conclusion": "preserved",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 5,
+          "max_logit_difference": 0.006048798561096191,
+          "max_kl": 1.876280353202302E-8,
+          "min_top10_overlap": 10
+        }
+      ]
+    },
+    {
+      "case": "held-multi-workshop-long",
+      "context": "long",
+      "outputs": [
+        {
+          "arm": "dense",
+          "count": 35,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"indigo_hall\": 12,\n  \"indigo_day\": \"Monday\",\n  \"saffron_hall\": 16\n}",
+          "repetition": {
+            "analyzed_tokens": 34,
+            "repeated_fourgram_fraction": 0.0967741935483871,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_all",
+          "count": 35,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"indigo_hall\": 12,\n  \"indigo_day\": \"Monday\",\n  \"saffron_hall\": 16\n}",
+          "repetition": {
+            "analyzed_tokens": 34,
+            "repeated_fourgram_fraction": 0.0967741935483871,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_top8",
+          "count": 35,
+          "stop": "stop",
+          "passed": true,
+          "output": "{\n  \"indigo_hall\": 12,\n  \"indigo_day\": \"Monday\",\n  \"saffron_hall\": 16\n}",
+          "repetition": {
+            "analyzed_tokens": 34,
+            "repeated_fourgram_fraction": 0.0967741935483871,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        }
+      ],
+      "comparisons": [
+        {
+          "arm": "quantized_all",
+          "quality_conclusion": "preserved",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 5,
+          "max_logit_difference": 1.8857460021972656,
+          "max_kl": 0.0012047495051799484,
+          "min_top10_overlap": 9
+        },
+        {
+          "arm": "quantized_top8",
+          "quality_conclusion": "preserved",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 5,
+          "max_logit_difference": 9.98412275314331,
+          "max_kl": 0.14679252718710697,
+          "min_top10_overlap": 6
+        }
+      ]
+    },
+    {
+      "case": "held-config-cache-short",
+      "context": "short",
+      "outputs": [
+        {
+          "arm": "dense",
+          "count": 3,
+          "stop": "stop",
+          "passed": true,
+          "output": "14",
+          "repetition": {
+            "analyzed_tokens": 2,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_all",
+          "count": 3,
+          "stop": "stop",
+          "passed": true,
+          "output": "14",
+          "repetition": {
+            "analyzed_tokens": 2,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_top8",
+          "count": 3,
+          "stop": "stop",
+          "passed": true,
+          "output": "14",
+          "repetition": {
+            "analyzed_tokens": 2,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        }
+      ],
+      "comparisons": [
+        {
+          "arm": "quantized_all",
+          "quality_conclusion": "preserved",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 3,
+          "max_logit_difference": 0.002849578857421875,
+          "max_kl": 1.7232803281331747E-12,
+          "min_top10_overlap": 10
+        },
+        {
+          "arm": "quantized_top8",
+          "quality_conclusion": "preserved",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 3,
+          "max_logit_difference": 0.002849578857421875,
+          "max_kl": 1.7232803281331747E-12,
+          "min_top10_overlap": 10
+        }
+      ]
+    },
+    {
+      "case": "held-config-cache-long",
+      "context": "long",
+      "outputs": [
+        {
+          "arm": "dense",
+          "count": 11,
+          "stop": "stop",
+          "passed": false,
+          "output": "The active CACHE_SLOTS is 14.",
+          "repetition": {
+            "analyzed_tokens": 10,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_all",
+          "count": 11,
+          "stop": "stop",
+          "passed": false,
+          "output": "The active CACHE_SLOTS is 14.",
+          "repetition": {
+            "analyzed_tokens": 10,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_top8",
+          "count": 11,
+          "stop": "stop",
+          "passed": false,
+          "output": "The active CACHE_SLOTS is 14.",
+          "repetition": {
+            "analyzed_tokens": 10,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        }
+      ],
+      "comparisons": [
+        {
+          "arm": "quantized_all",
+          "quality_conclusion": "inconclusive",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 4,
+          "max_logit_difference": 1.701063632965088,
+          "max_kl": 0.009185323263358981,
+          "min_top10_overlap": 9
+        },
+        {
+          "arm": "quantized_top8",
+          "quality_conclusion": "inconclusive",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 4,
+          "max_logit_difference": 7.1114678382873535,
+          "max_kl": 0.036769314523291304,
+          "min_top10_overlap": 8
+        }
+      ]
+    },
+    {
+      "case": "held-arithmetic-crates-short",
+      "context": "short",
+      "outputs": [
+        {
+          "arm": "dense",
+          "count": 3,
+          "stop": "stop",
+          "passed": false,
+          "output": "53",
+          "repetition": {
+            "analyzed_tokens": 2,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_all",
+          "count": 3,
+          "stop": "stop",
+          "passed": false,
+          "output": "53",
+          "repetition": {
+            "analyzed_tokens": 2,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_top8",
+          "count": 3,
+          "stop": "stop",
+          "passed": false,
+          "output": "53",
+          "repetition": {
+            "analyzed_tokens": 2,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        }
+      ],
+      "comparisons": [
+        {
+          "arm": "quantized_all",
+          "quality_conclusion": "inconclusive",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 3,
+          "max_logit_difference": 0.0038056373596191406,
+          "max_kl": 3.5444461940280907E-9,
+          "min_top10_overlap": 10
+        },
+        {
+          "arm": "quantized_top8",
+          "quality_conclusion": "inconclusive",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 3,
+          "max_logit_difference": 0.0038056373596191406,
+          "max_kl": 3.5444461940280907E-9,
+          "min_top10_overlap": 10
+        }
+      ]
+    },
+    {
+      "case": "held-arithmetic-crates-long",
+      "context": "long",
+      "outputs": [
+        {
+          "arm": "dense",
+          "count": 16,
+          "stop": "length",
+          "passed": false,
+          "output": "To solve the task, we need to calculate the total number of jars received by",
+          "repetition": {
+            "analyzed_tokens": 16,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_all",
+          "count": 16,
+          "stop": "length",
+          "passed": false,
+          "output": "To solve the task, we need to calculate the total number of jars received by",
+          "repetition": {
+            "analyzed_tokens": 16,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_top8",
+          "count": 16,
+          "stop": "length",
+          "passed": false,
+          "output": "To solve the task, we need to calculate the total number of jars received by",
+          "repetition": {
+            "analyzed_tokens": 16,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        }
+      ],
+      "comparisons": [
+        {
+          "arm": "quantized_all",
+          "quality_conclusion": "inconclusive",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 4,
+          "max_logit_difference": 1.5800385475158691,
+          "max_kl": 0.017489461283537434,
+          "min_top10_overlap": 9
+        },
+        {
+          "arm": "quantized_top8",
+          "quality_conclusion": "inconclusive",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 4,
+          "max_logit_difference": 3.360541820526123,
+          "max_kl": 0.12169916657892968,
+          "min_top10_overlap": 9
+        }
+      ]
+    },
+    {
+      "case": "held-long-garden-short",
+      "context": "short",
+      "outputs": [
+        {
+          "arm": "dense",
+          "count": 82,
+          "stop": "stop",
+          "passed": false,
+          "output": "A neighborhood garden can significantly reduce water use through mulching, which helps retain soil moisture and suppresses weeds. Collecting rainwater in barrels for irrigation is another effective method. Drip irrigation delivers water directly to plant roots, minimizing evaporation and runoff. Watering early in the morning, when temperatures are cooler, ensures that plants absorb the water efficiently before the heat of the day causes excessive evaporation.",
+          "repetition": {
+            "analyzed_tokens": 81,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_all",
+          "count": 82,
+          "stop": "stop",
+          "passed": false,
+          "output": "A neighborhood garden can significantly reduce water use through mulching, which helps retain soil moisture and suppresses weeds. Collecting rainwater in barrels for irrigation is another effective method. Drip irrigation delivers water directly to plant roots, minimizing evaporation and runoff. Watering early in the morning, when temperatures are cooler, ensures that plants absorb the water efficiently before the heat of the day causes excessive evaporation.",
+          "repetition": {
+            "analyzed_tokens": 81,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_top8",
+          "count": 82,
+          "stop": "stop",
+          "passed": false,
+          "output": "A neighborhood garden can significantly reduce water use through mulching, which helps retain soil moisture and suppresses weeds. Collecting rainwater in barrels for irrigation is another effective method. Drip irrigation delivers water directly to plant roots, minimizing evaporation and runoff. Watering early in the morning, when temperatures are cooler, ensures that plants absorb the water efficiently before the heat of the day causes excessive evaporation.",
+          "repetition": {
+            "analyzed_tokens": 81,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        }
+      ],
+      "comparisons": [
+        {
+          "arm": "quantized_all",
+          "quality_conclusion": "inconclusive",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 6,
+          "max_logit_difference": 0.0031185150146484375,
+          "max_kl": 4.6099027681365365E-7,
+          "min_top10_overlap": 10
+        },
+        {
+          "arm": "quantized_top8",
+          "quality_conclusion": "inconclusive",
+          "identical_generated_ids": true,
+          "first_generated_difference": null,
+          "observations": 6,
+          "max_logit_difference": 0.0031185150146484375,
+          "max_kl": 4.6099027681365365E-7,
+          "min_top10_overlap": 10
+        }
+      ]
+    },
+    {
+      "case": "held-long-garden-long",
+      "context": "long",
+      "outputs": [
+        {
+          "arm": "dense",
+          "count": 123,
+          "stop": "stop",
+          "passed": false,
+          "output": "Neighborhood gardens can significantly reduce water use through various strategies. Mulching helps retain soil moisture by reducing evaporation and suppressing weeds, which in turn conserves water. By collecting rainwater in barrels or tanks, gardeners can use this water for irrigation, reducing reliance on municipal water supplies. Drip irrigation is another effective method, delivering water directly to plant roots, minimizing waste and ensuring plants receive the water they need. Additionally, watering plants early in the morning, when temperatures are cooler and evaporation rates are lower, helps maximize the amount of water that reaches the roots and minimizes loss to evaporation.",
+          "repetition": {
+            "analyzed_tokens": 122,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_all",
+          "count": 135,
+          "stop": "stop",
+          "passed": false,
+          "output": "Neighborhood gardens can significantly reduce water use through various strategies. Mulching helps retain soil moisture by reducing evaporation and suppressing weeds, which in turn conserves water. By collecting rainwater in barrels or tanks, gardeners can use this water for irrigation, reducing reliance on municipal water supplies. Drip irrigation is another effective method, delivering water directly to plant roots, minimizing waste and ensuring plants receive the water they need. Additionally, watering plants early in the morning, when temperatures are cooler and the sun is not yet strong, allows more water to be absorbed by the plants rather than evaporating. These practices collectively help in maintaining a lush garden while significantly lowering water consumption.",
+          "repetition": {
+            "analyzed_tokens": 134,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        },
+        {
+          "arm": "quantized_top8",
+          "count": 150,
+          "stop": "stop",
+          "passed": false,
+          "output": "Neighborhood gardens can significantly reduce water use through various strategies. Mulching the soil with organic materials like straw or wood chips helps retain moisture, reducing the need for frequent watering. This method prevents water from evaporating quickly and keeps it in the soil where it's needed. Additionally, collecting rainwater in barrels or tanks can be used to water plants, reducing reliance on municipal water supplies. By using rainwater, the gardeners can avoid the peak water usage times, which are typically during the day. Early morning watering, before the sun is at its peak, is ideal because it minimizes water loss due to evaporation. By combining these practices, a neighborhood garden can greatly reduce its water usage, contributing to both environmental conservation and financial savings.",
+          "repetition": {
+            "analyzed_tokens": 149,
+            "repeated_fourgram_fraction": 0.0,
+            "suffix_pattern_copies": 0,
+            "suffix_pattern_width": 0
+          }
+        }
+      ],
+      "comparisons": [
+        {
+          "arm": "quantized_all",
+          "quality_conclusion": "inconclusive",
+          "identical_generated_ids": false,
+          "first_generated_difference": 98,
+          "observations": 6,
+          "max_logit_difference": 1.296135663986206,
+          "max_kl": 0.03863950569463823,
+          "min_top10_overlap": 9
+        },
+        {
+          "arm": "quantized_top8",
+          "quality_conclusion": "inconclusive",
+          "identical_generated_ids": false,
+          "first_generated_difference": 14,
+          "observations": 6,
+          "max_logit_difference": 3.5074453353881836,
+          "max_kl": 0.1887538703009883,
+          "min_top10_overlap": 8
+        }
+      ]
+    }
+  ]
+}

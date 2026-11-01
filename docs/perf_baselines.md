@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: Real-model KV Quality Grid
+
+The [frozen quality study](experiments/2026-10-31-kv-quality-result.md) completes
+36 generations and 1,149 emitted tokens on Qwen2.5-3B Q8_0. Direct mixed
+FP16-K/Q4-V attention with top64 and top8 preserves all seven dense-passing
+cases. Five dense failures remain inconclusive, including the long garden
+case where top8 loses a concept. Long-prefix differences are larger than
+short controls; this is not broad quality equivalence.
+
+At capacity 3,072, reported cache allocation is 113,246,208 bytes dense and
+116,499,600 mixed. The run measures quality, not throughput. The independent
+audit passes all records and rejects twelve corruptions; eight known audit
+function examples also pass. No policy tuning or default promotion follows.
+
 ## 2026-10-31: Rank Counts Improve; Review Cost Unknown
 
 The [bounded CPU-only follow-ups](experiments/2026-10-31-v3-rank-review-results.md)
