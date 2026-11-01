@@ -1,0 +1,17 @@
+Linux 6.18.35-gentoo-r1-gep (holo-shed) 	10/31/26 	_x86_64_	(64 CPU)
+
+20:20:23     CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
+20:20:24      30    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00  100.00
+20:20:24      62    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00  100.00
+
+20:20:24     CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
+20:20:25      30    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00  100.00
+20:20:25      62    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00  100.00
+
+20:20:25     CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
+20:20:26      30    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00  100.00
+20:20:26      62    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00  100.00
+
+Average:     CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
+Average:      30    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00  100.00
+Average:      62    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00  100.00

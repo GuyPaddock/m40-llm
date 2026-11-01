@@ -1,0 +1,16 @@
+fe8d5e8dd7bc0e12c5c203f9769c7ae850f3614959e0053dba11ee6d36b52d04  docs/experiments/2026-10-31-dualpace-pricing-first-attempt.sh
+60f0916c9f2db6749627acd6c12e20fea1a10f91119a0ff11ef387211cfa0388  docs/experiments/2026-10-31-dualpace-cpu-timing-summary.jq
+d85983f14799574372b184ad11691bddadcec45267af23e39af4176f5656ad8b  docs/experiments/2026-10-31-dualpace-cpu-node0-summary.json
+d65e208c7764be82fa697a1562208feed7be300e867829c79d758fe63d1a5e81  docs/experiments/2026-10-31-dualpace-cpu-node0.jsonl.gz
+ba3530e25dec1177473555a775624611459ba1f76e554e577724d3ab4f842891  docs/experiments/2026-10-31-dualpace-first-cpu-build.log.gz
+5195189d91475a715791bdb98b64defdb803cbd80c38795cf71c142aa0ab9b83  docs/experiments/2026-10-31-dualpace-first-cpu-executables.sha256.gz
+1e94be1c83073cbc9d02def4188d0177b3451768eda2f0e806d811fd088adf1a  docs/experiments/2026-10-31-dualpace-first-cpu-node0-load.txt.gz
+95c61ec05909e252a91e17f2c9aa505d4361305c6fe11550f5d42bd748fba6b3  docs/experiments/2026-10-31-dualpace-first-cpu-node0-mpstat.txt.gz
+59869db34853933b239f1e2219cf7d431da006aa919635478511fabbfc8849d2  docs/experiments/2026-10-31-dualpace-first-cpu-node0.log.gz
+1a469b44782a333ca3f156759ecb4d76169129fe948e396f5020dc787fc753cd  docs/experiments/2026-10-31-dualpace-first-cpu-node1-load.txt.gz
+e7bc3e420d13a25331ad3569b89f46aaccf3032fdccc721a9a4c846c48663a51  docs/experiments/2026-10-31-dualpace-first-cpu-node1-mpstat.txt.gz
+de81bd9bf0628a0610a9a3b8655ff9c7220aae342990a91105261ab47ddbea4a  docs/experiments/2026-10-31-dualpace-first-cpu-node1.log.gz
+985daaeb68cd01ecd043224e88d81a30b16d3eb4904ea08bd618ced2ed5797c5  docs/experiments/2026-10-31-dualpace-first-queue.log.gz
+db14f23af82d9d253fcb7b42c107198757964ed1687f9ab16dd1120c9282bae8  docs/experiments/2026-10-31-dualpace-first-revision.txt.gz
+0fffced388bd068d32a66698e9bffd143651928230c754f85f530d2a0068964c  docs/experiments/2026-10-31-dualpace-placement-restriction.txt
+a3ecef57df7949ce000683543487e4de306daf1a8ac03df99584ff85ac9b1117  docs/experiments/2026-10-31-dualpace-replacement-load.txt
