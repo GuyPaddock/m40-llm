@@ -41,6 +41,7 @@ struct M40llmCudaContext {
 
 #include "q8_execution.cuh"
 #include "q8_ffn.cuh"
+#include "q4_channels.cuh"
 #include "decode_reductions.cuh"
 #include "q8_unfused.cuh"
 #include "q8_separate_warp.cuh"
@@ -8018,6 +8019,42 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             return -3;
         }
         return 0;
+    }
+
+    int m40llm_q4_selected_ffn_async(
+        M40llmCudaContext* ctx, const void* input, const void* gate,
+        const void* up, const void* down, const void* scales, const void* codes,
+        const void* indices, void* hidden, void* partial, void* output,
+        int rows, int k, int h, int count, int packed, uint32_t stream_kind) {
+        if (!ctx || !input || !gate || !up || !down || !scales || !codes ||
+            !indices || !hidden || !partial || !output) return -1;
+        if ((rows != 1 && rows != 2 && rows != 4 && rows != 8) ||
+            k <= 0 || h <= 0 || k % 32 || h % 32 ||
+            count <= 0 || count > h || (packed != 0 && packed != 1)) return -2;
+        const cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -3;
+        using namespace m40llm_q4_channels;
+        gate_up<<<dim3(count, rows), 128, 0, stream>>>(
+            static_cast<const float*>(input), static_cast<const unsigned char*>(gate),
+            static_cast<const unsigned char*>(up), static_cast<const unsigned*>(indices),
+            static_cast<float*>(hidden), k, count);
+        if (cudaPeekAtLastError() != cudaSuccess) return -4;
+        const dim3 grid((k + 255) / 256, down_splits, rows);
+        if (packed) {
+            down_partial<true><<<grid, 256, 0, stream>>>(
+                static_cast<const float*>(hidden), static_cast<const unsigned*>(indices),
+                static_cast<const unsigned char*>(down), static_cast<const __half*>(scales),
+                static_cast<const unsigned char*>(codes), static_cast<float*>(partial), k, h, count);
+        } else {
+            down_partial<false><<<grid, 256, 0, stream>>>(
+                static_cast<const float*>(hidden), static_cast<const unsigned*>(indices),
+                static_cast<const unsigned char*>(down), static_cast<const __half*>(scales),
+                static_cast<const unsigned char*>(codes), static_cast<float*>(partial), k, h, count);
+        }
+        if (cudaPeekAtLastError() != cudaSuccess) return -5;
+        down_reduce<<<dim3((k + 255) / 256, rows), 256, 0, stream>>>(
+            static_cast<const float*>(partial), static_cast<float*>(output), k);
+        return cudaPeekAtLastError() == cudaSuccess ? 0 : -6;
     }
 
     int m40llm_mlp_gate_up_swiglu_f32xq4_0_gguf_decode_async(
