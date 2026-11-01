@@ -29,7 +29,9 @@ priced prerequisite report remain pending; the branch is incomplete.
 The [transfer probe](experiments/2026-10-31-dualpace-transfer-probe.md) now exists
 in the worktree. It measures thirteen representative sizes, completed host
 copies, two-copy stream handoffs and idle synchronization, with guarded byte
-checks. The hardware test compiles and links; GPU execution remains pending.
+checks. Its isolated M40 test and seven protocol tests now pass with zero
+ignored cases. Source hashes remain unchanged; tracked allocations retire
+and external residency returns to zero MiB. Full-grid timing is next.
 Both probes share the original CPU/NUMA admission checks. Twelve CPU/protocol
 tests and non-CUDA/CUDA-server all-target Clippy pass. No new timing result
 or scheduler change follows from these implementation checks.

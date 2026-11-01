@@ -1,9 +1,14 @@
 # Completed transfer and stream handoff probe
 
 The `cooperative_transfer_probe` example prices the runtime's existing pageable
-H2D/D2H methods and explicit producer/consumer stream dependencies. Its hardware
-test compiles and links, and CUDA/server all-target Clippy passes. The test has
-not run while the lossless capture owns the M40. No transfer cost is measured yet.
+H2D/D2H methods and explicit producer/consumer stream dependencies. Its isolated
+M40 hardware test and seven protocol tests pass, with no ignored or skipped
+case. Formatting and the previously recorded CUDA/server all-target Clippy
+checks pass. Both probe lifetimes release every tracked allocation; external
+residency returns to zero MiB with no compute process. The
+[qualification manifest](2026-10-31-dualpace-transfer-qualification.sha256)
+retains the executed script, logs and source hashes. Full-grid transfer timing
+remains the next step.
 
 ## Scope and placement
 
@@ -110,6 +115,7 @@ projection pricing and all other hardware experiments.
 The [validation manifest](2026-10-31-dualpace-transfer-probe.sha256) retains twelve
 passing CPU/protocol tests, non-CUDA and CUDA/server all-target Clippy, and the
 hardware executable's compile/link result. The shared placement extraction is
-independent of hardware qualification. The transfer example remains uncommitted pending its M40 test.
+independent of hardware qualification. The transfer example is now qualified
+on M40 and ready for its clean release run.
 Real-grid validation, both NUMA timing sets, sourced simulation inputs and the
 priced full-CPU-decode prerequisite report remain outstanding.
