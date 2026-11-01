@@ -10,7 +10,11 @@ The independent [October 31 selector follow-up](experiments/2026-10-31-selector-
 starts from `a7479ba` on `research/1031-selector-followup`. Dependency/API
 inspection finds direct quantized-KV consumers already present, two missing
 Q8 synchronization barriers, and reusable opt-in Q4 host/CUDA components.
-Carry-forward implementation and validation are pending. The next research
+The [Q8 synchronization carry-forward](experiments/2026-10-31-q8-scale-carry-forward.md)
+passes the streaming regression with cuBLAS on/off, affected CUDA checks,
+CUDA/server Clippy and 220 warning-free non-CUDA tests. The unfixed negative
+control did not reproduce the intermittent race; the dormant bulk builder
+has compilation coverage only. Q4 carry-forward remains pending. The next research
 priority is causal channel-selection predictability across complete
 generations. The nine published experiment branches remain unchanged.
 This follow-up does not reopen the separate V3 data work below.

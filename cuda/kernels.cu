@@ -3187,6 +3187,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             __syncthreads();
         }
         const float max_k = reduce[0];
+        // Every warp must read K's maximum before warp zero reuses reduce[0].
+        __syncthreads();
         reduce[tid] = local_max_v;
         __syncthreads();
         for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
@@ -3248,6 +3250,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             __syncthreads();
         }
         const float max_k = reduce[0];
+        // Every warp must read K's maximum before warp zero reuses reduce[0].
+        __syncthreads();
         reduce[tid] = local_max_v;
         __syncthreads();
         for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
