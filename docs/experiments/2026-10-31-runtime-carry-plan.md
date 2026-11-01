@@ -70,7 +70,23 @@ All three warning-free CPU tests pass on the actual feature worktree: every
 FP16 scale bit pattern/payload is preserved, selected values and odd-output
 padding are correct, and invalid sources are rejected. Formatting and source
 whitespace checks pass. See [the raw test log](2026-10-31-feature-q4-host.log).
-The Q8 synchronization and selected-Q4 CUDA components are still pending.
+The selected-Q4 CUDA component is still pending.
+
+## Q8 synchronization checkpoint
+
+The barriers and regression are unchanged from `6aa52d8`; their Git blobs are
+`feb9df0442243dd4ea66900a97909cc8596cc6f8` for `cuda/kernels.cu` and
+`6204ef232000812793a2689a3d7004bf8eb8c822` for the test at this checkpoint.
+All 26 affected CUDA checks pass with cuBLAS enabled, followed serially by
+the Q8 scale regression with cuBLAS disabled. No test skips; the final GPU
+snapshot is empty. Fresh logs use the `2026-10-31-feature-q8-` prefix.
+The initial compile-only command named a nonexistent test target; it ran no
+tests and is retained as setup-failure evidence before the corrected build.
+
+The imported [original report](2026-10-31-q8-scale-carry-forward.md) and its
+checksums describe the research source and retain its negative-control and
+dormant-builder limits. They are not new throughput measurements. The final
+feature source manifest will include the later Q4 device addition separately.
 
 ## Independent follow-ups
 

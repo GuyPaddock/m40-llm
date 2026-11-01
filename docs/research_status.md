@@ -17,8 +17,11 @@ authorized by this carry-forward work. The V3 stop below remains in force.
 
 The exact Q4 host-packing component from `1e3a6d3` now passes all three CPU
 behavioral tests in this feature worktree; implementation/test blob identities
-match the research source. The CUDA synchronization and device components await
-serial hardware validation after the live KV grid and adaptive CPU timing.
+match the research source. The Q8 synchronization fix now passes 26 affected
+CUDA checks with cuBLAS enabled and its regression with cuBLAS disabled, with
+no skips and an empty final GPU snapshot. The selected-Q4 device component is
+next. The independent KV grid and adaptive CPU timing have both terminated;
+their result audits are being completed on the respective research branches.
 
 The authorized **CPU-only rank-count and review-cost follow-ups are complete**.
 Stop for review; no further implementation search, source sampling, acquisition,

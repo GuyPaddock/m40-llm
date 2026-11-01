@@ -1,0 +1,12 @@
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 19.78s
+  Executable tests/attention_batched_varlen.rs (target/debug/deps/attention_batched_varlen-c884566752768922)
+  Executable tests/attention_parity_cuda_grid.rs (target/debug/deps/attention_parity_cuda_grid-ede5ab533724ab3e)
+  Executable tests/cuda_transfer_order.rs (target/debug/deps/cuda_transfer_order-ac0d7275a0f01234)
+  Executable tests/mlp_wrappers.rs (target/debug/deps/mlp_wrappers-06192ee172de6e90)
+  Executable tests/proj_wrappers.rs (target/debug/deps/proj_wrappers-92bbe4196fa7a6d4)
+  Executable tests/q8_compound_runtime.rs (target/debug/deps/q8_compound_runtime-3acc401ad2bcb90f)
+  Executable tests/q8_kv_scale_reuse.rs (target/debug/deps/q8_kv_scale_reuse-c2211345fbfe4b07)
+  Executable tests/weight_allocation_accounting.rs (target/debug/deps/weight_allocation_accounting-1f4095e7d2fe1ecf)
