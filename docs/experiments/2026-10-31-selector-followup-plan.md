@@ -10,6 +10,14 @@ The separate V3 corpus-admission work remains stopped for review. This work
 does not authorize corpus acquisition, teacher generation, training, learned
 drafter evaluation, or a GPU switch.
 
+At the post-study audit, the main feature branch has independently advanced
+to `b9333e7` with four V3 rank/review commits. Its Rust/CUDA sources, build
+configuration and tests are unchanged from `a7479ba`; a read-only
+`git apply --check` accepts this follow-up's complete source patch against
+that newer HEAD. The main worktree remains clean. Future integration must
+preserve its newer V3 research-status and performance-history entries;
+do not replace those documents with this branch's older V3 snapshot.
+
 The supplied-index Q4 experiment passed twelve complete-FFN comparisons
 against full Q4 and qualified Q8 at 10%/20% retention, using one captured
 input at each of layers 0/17/35. This is an execution upper bound with
