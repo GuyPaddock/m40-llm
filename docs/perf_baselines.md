@@ -2,6 +2,29 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-11-21 Maxwell consolidation
+
+Five alternating short Qwen2.5-3B Q8_0 dense HTTP pairs on the M40 produced
+31.7152 tok/s native and 35.4355 tok/s with prepared down/vocabulary weights.
+All 512 generated IDs matched. The median paired gain was 11.73% with a
+reported 10.44–12.09% interval. Prepared weights added 1,192,935,424 bytes.
+A concurrent Gentoo upgrade makes the host contribution uncertain. The
+same-executable repeat is tracked in the [short HTTP report](experiments/2026-11-21-native-split/README.md).
+
+The October stage replay at `research/1121-q8-projections` commit `110f8c7`
+covers 75 M40 token samples and every layer. At generated position 255 the
+compound FFN configuration spent 7.421 ms in gate/up/SwiGLU and 4.761 ms in
+down projection across 36 layers (median event spans over five requests).
+Configuration-to-configuration differences include changes of revision.
+
+At capacity 3072, the Qwen dense cache accounted for 113,246,208 bytes.
+Both mixed retention budgets allocated 116,499,600 bytes. The excess was
+3,253,392 bytes. The unused historical tail represented at most 23,887,872
+bytes, 0.53% of tracked device allocations in one request. This upper bound
+falls below the 10% memory gate for a tail-only change. The constructor
+breakdown and measured scope are at `research/1121-quantized-kv` commit
+`46b4a46`. Process peak VRAM is a separate measurement.
+
 ## 2026-10-31: Runtime Research Follow-ups Complete
 
 The [final disposition](experiments/2026-10-31-runtime-followup-result.md)

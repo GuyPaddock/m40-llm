@@ -6,13 +6,20 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## November consolidation
 
+Use the [integration matrix](experiments/2026-11-21-integration/README.md)
+for the first 17 dispositions. Graph parity and speculative rollback have
+hardware evidence in both cuBLAS builds. The [evidence audit](experiments/2026-11-21-evidence-audit/README.md)
+includes the original raw logs and verifier source patch. Six
+[source-isolated build checks](experiments/2026-11-21-build-compatibility/README.md)
+passed. The earlier shared-target runs cannot qualify individual revisions.
+
 Phase 4 is pinned at 48c6333 and remote main at e1403e0. The [inventory](experiments/2026-11-21-inventory/README.md) and [measurement protocol](experiments/2026-11-21-protocol/README.md) cover all 13 October branches. Three HTTP inputs are frozen at 65, 2060 and 8197 tokens in b7f4eaf. The first short native/split comparison and its host-load limitation are in [the paired report](experiments/2026-11-21-native-split/README.md). The later HTTP analyzer independently recovered the same median gain and interval.
 
 | Study | November evidence or outstanding decision |
 |---|---|
 | Graph | On research/1121-graph-dispatch, bfae111 records four failing unrepaired paths and e2b4739 passes the exact dispatch and replay checks with cuBLAS on and off. Full-model HTTP and setup diagnostics use 66f21e3. Speed qualification is open. |
-| KV | On research/1121-quantized-kv, c484536 retains the full dense pass. Of 24 tasks per context, 19 short and 10 long pass. Approximation decisions await the complete quantized generations and matched-logit audit. Both historical KV capture artifacts are available. 97102a1 restores the matched consumer harness and 9489bb6 adds independent resident-memory observations. |
-| Prepared Q8 | Research/1121-q8-projections f6aafd1 binds fresh ownership, dataflow, quality and HTTP phases. The November split gain has a different baseline from the compound or portfolio comparisons. |
+| KV | On research/1121-quantized-kv, c484536 retains all dense answers (19/24 short and 10/24 long pass). At 44f15e9, top-8 loses two long dense-passing answers. At 46b4a46 the 3072-position allocation reconciles to the byte. Full generation and logit replay, measured device residency and matched staging remain separate decisions. |
+| Prepared Q8 | Research/1121-q8-projections 110f8c7 recovers all 36 layer timings in five M40 configurations. Gate/up/SwiGLU and down projection dominate the remaining projection cost. The November short split comparison uses a different baseline from the compound and portfolio runs. |
 | Small-N and rollback | Research/1121-verifier-correctness 081cc65 records actual two-build rollback/near-tie results. Research/1121-small-n-verification a438032 adds the separately gated six-arm small-row comparison. |
 | Other studies | Research/1121-active-row-kv 2228ea7 binds actual active lengths and idle ownership. Research/1121-gsq-quality 59aaf76 identifies comparable model files and the missing layer dispatch. On independently main-based research/1121-gguf-compatibility, 541cec1 fixes checked shape arithmetic and 1989d82 qualifies it. |
 
