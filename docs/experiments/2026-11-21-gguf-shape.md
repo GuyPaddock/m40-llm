@@ -1,0 +1,5 @@
+# GGUF projection shape validation
+
+Start at current remote main e1403e0. While checking the GSQ tensor-type path, the loader and the tensor-view builder each multiplied dimensions with an unchecked u64 product. The view builder later computes checked strides from the same dimensions. In debug builds the earlier multiplication can panic. In optimized builds the later stride check can still reject an unrepresentable result. Scope the study to consistent recoverable errors for tensor shapes on the ordinary loader entry point.
+
+Use exactly the current layouts, offsets, alignment rules and dtype whitelist. Compute the element count from the checked stride calculation. Preserve valid view strides/bytes and the existing offset, zero-dimension, and dtype rejections. Compare debug and release CPU behavior, run current GGUF device-view/offset suites, and compile the CUDA/server path. Stop at the checked arithmetic repair. This issue does not qualify Qwen3 architecture or K-Quant execution, and supplies no speed claim.
