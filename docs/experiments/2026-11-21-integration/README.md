@@ -1,6 +1,6 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 47 decisions for which the
+The [candidate matrix](candidates.tsv) records 48 decisions for which the
 scope can already be established. Each row has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
@@ -171,6 +171,13 @@ returned the same 128 IDs. P95 token gaps rose from about
 135–136 ms to 226 ms and sampled process peak rose by 134 MiB.
 This scopes the batching win to aggregate throughput for two equal
 short prompts. [Dense two-client result](https://github.com/GuyPaddock/m40-llm/blob/dbc20a66eeb5fb3977063a83b65e876f744236e2/docs/experiments/2026-11-21-serving-concurrency/dense-two/README.md).
+
+Four clients with default KV gained 49.435% aggregate throughput.
+The batched diagnostic brought the last client's first sample from
+42.999 to 14.343 s while P95 token gaps increased from about 150 to
+332 ms. The sampled process peak rose by 216 MiB. This configuration
+still uses recent-only KV for every request.
+[Default four-client result](https://github.com/GuyPaddock/m40-llm/blob/8d2c839d9fc0922d06eaae3ed3bbf8b76508e9fa/docs/experiments/2026-11-21-serving-concurrency/default-four/README.md).
 
 **Excluded work.** The original channel selector, ShiftAdd, additional
 multi-row gate/up fusion, lossless KV compression and DualPace all missed
