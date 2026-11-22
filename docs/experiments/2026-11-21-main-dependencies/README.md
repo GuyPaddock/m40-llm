@@ -163,11 +163,13 @@ The same preformatted Qwen text also gains an extra BOS on main.
    nongreedy and unsupported fallbacks. Compare complete FFN, prefill and
    HTTP; the observed short down/vocabulary result carries an extra
    1,192,935,424 bytes. The post-pause repeat at e25b2ed reproduced an
-   11.776% gain. The isolated peak-residency comparison remains open.
+   11.776% gain. The isolated server result at ad48643 measured peak
+   residency of 3,275 MiB native and 4,414 MiB prepared, with
+   launch-to-health of 6.233 and 17.322 s, respectively.
    Once compound qualifies, keep the joint-only owner from e83e172 and
    retain the explicit `M40LLM_Q8_FFN_OWNERSHIP=retain-split` diagnostic.
    Its [matched ownership comparison](../2026-11-22-q8-ownership/README.md)
-   measured 1,647 MiB less loader peak with exact logits and HTTP
+   measured 1,647 MiB less loader and isolated server peak with exact logits and HTTP
    non-regression. The combined packet and argmax portfolio at 7ff9d33
    reproduces a 3.842% gain against the already prepared joint-FFN
    control. That falls below the November 5% gate and the 56.153149

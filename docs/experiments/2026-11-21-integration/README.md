@@ -118,13 +118,15 @@ matched seven full-logit rows. The HTTP interval lay within −0.16% to
 The strongest measured prepared-weight subset uses only down and
 vocabulary weights. It improved the short dense HTTP request by 11.73%
 against native Q8 and cost 1,192,935,424 extra device bytes. After the upgrade pause, five fresh pairs reproduced an 11.776% gain
-(11.579–11.828%) with all 512 IDs unchanged. The single-model peak
-memory comparison remains open. The
+(11.579–11.828%) with all 512 IDs unchanged. A fresh-server diagnostic
+measured a 1,139 MiB peak increase and an 11.1 s increase in
+launch-to-health. The
 earlier all-family setting lost 64.21% on HTTP; preparing QKV and output
 alongside down and vocabulary lost 6.71% with native MLP. Both losing
 settings matched the control's 512 generated IDs.
 [Native and selective prepared comparison](../2026-11-21-native-split/README.md).
 [Historical family controls](../2026-10-25-q8-prepared-http.md).
+[Isolated process residency](../2026-11-22-q8-ownership/server-peaks/README.md).
 
 Packed GGUF QKV/output, compound FFN, and the packet/argmax portfolio
 improved HTTP throughput by 4.02%, 3.20%, and 4.01%, respectively, on
