@@ -2,22 +2,31 @@ use super::{
     config::{self, CacheArm},
     evidence::{command_text, Report},
     execution,
-    fixture::{self, ContextKind, Manifest},
-    metrics,
-    prefix::collect_prefixes,
+    fixture::{self, Case, ContextKind, Manifest},
+    metrics, november,
+    prefix::{collect_prefixes, PrefixObservations},
 };
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use m40_llm::{
     cuda::{CudaContext, CudaStream},
     evaluation::{
         corpus::Corpus,
         identity::{file_sha256, sha256},
+        scoring::TaskScore,
     },
+    generate::GeneratedText,
     gguf,
+    infer::LoadedModel,
     tokenizer::Tokenizer,
 };
 use serde_json::json;
-use std::{collections::BTreeMap, fs, path::Path, time::Instant};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    fs,
+    io::Write,
+    path::Path,
+    time::Instant,
+};
 
 const INPUT_SHA256: &str = "e2e7ce56f0223bf929705dd49c33610ac01a0992837bb9c376bcea6dfc62b5de";
 
@@ -29,6 +38,54 @@ fn classify_quality(reference: bool, candidate: bool) -> &'static str {
     } else {
         "regression"
     }
+}
+
+fn record_generation(
+    model: &mut LoadedModel,
+    case: &Case,
+    arm: CacheArm,
+    tokenizer: &Tokenizer,
+    report: &mut Report,
+) -> Result<(GeneratedText, TaskScore)> {
+    eprintln!("kv quality generation case={} arm={arm:?}", case.id);
+    let (generated, dispatch, state) = execution::generate_case(model, case, arm)?;
+    let score = case.task.scoring.score(&generated.output)?;
+    let ids = &generated.token_ids[generated.prompt_token_len..];
+    let repetition_ids = if ids
+        .last()
+        .is_some_and(|id| tokenizer.stop_ids().contains(id))
+    {
+        &ids[..ids.len() - 1]
+    } else {
+        ids
+    };
+    report.append(json!({"kind":"kv_quality_generation","case":case.id,"context":case.context,"arm":arm,
+        "output":generated.output,"generated_ids":ids,"metrics":generated.metrics,"score":score,
+        "repetition":metrics::measure_repetition(repetition_ids),"prefill_mode":generated.prefill_mode,
+        "prefill_temporary_weight_bytes":generated.q8_prefill_temporary_weight_bytes,
+        "dispatch":dispatch,"cache":state,"is_performance_measurement":false}))?;
+    Ok((generated, score))
+}
+
+fn retain_logits(
+    directory: &Path,
+    case: &Case,
+    arm: CacheArm,
+    observations: &PrefixObservations,
+) -> Result<()> {
+    for (step, logits) in observations.steps.iter().zip(&observations.logits) {
+        let path = directory.join(format!("{}-{arm:?}-{step}.f32le", case.id));
+        let mut file = fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(path)?;
+        let bytes: Vec<u8> = logits
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        file.write_all(&bytes)?;
+    }
+    Ok(())
 }
 
 pub fn run(model_path: &Path, corpus_path: &Path, inputs: &Path, output: &Path) -> Result<()> {
@@ -51,15 +108,29 @@ pub fn run(model_path: &Path, corpus_path: &Path, inputs: &Path, output: &Path) 
         sha256(&corpus_bytes)? == fixture::CORPUS_SHA256,
         "wrong corpus source"
     );
+    let input_hash = file_sha256(inputs)?;
+    let is_november =
+        input_hash == "18d0c6f69dbdfa3bf976780b5b20e14d06dfec5f32980418a9d4f308da9f1cc3";
     ensure!(
-        file_sha256(inputs)? == INPUT_SHA256,
+        is_november || input_hash == INPUT_SHA256,
         "inputs changed after freeze"
     );
     let corpus = Corpus::parse(std::str::from_utf8(&corpus_bytes)?)?;
     let metadata = gguf::load_gguf(model_path)?;
     let tokenizer = Tokenizer::from_gguf_metadata(&metadata.metadata)?;
     let manifest: Manifest = serde_json::from_slice(&fs::read(inputs)?)?;
-    manifest.validate(&corpus, &tokenizer, fixture::tokenizer_identity(&metadata)?)?;
+    let identity = fixture::tokenizer_identity(&metadata)?;
+    let logit_directory = output.with_extension("logits");
+    if is_november {
+        let expected = november::create(&tokenizer, identity)?;
+        ensure!(
+            serde_json::to_value(&manifest)? == serde_json::to_value(expected)?,
+            "November input replay differs"
+        );
+        fs::create_dir(&logit_directory)?;
+    } else {
+        manifest.validate(&corpus, &tokenizer, identity)?;
+    }
     let executable = std::env::current_exe()?;
     let mut report = Report::create(output)?;
     let initial = CudaContext::total_device_bytes();
@@ -71,35 +142,36 @@ pub fn run(model_path: &Path, corpus_path: &Path, inputs: &Path, output: &Path) 
         let mut model = execution::load_model(model_path)?;
         report.append(json!({"kind":"kv_quality_manifest","schema":"m40-kv-quality-results-v1",
             "source_revision":revision,"source_clean":true,"executable_sha256":file_sha256(&executable)?,
-            "model_sha256":fixture::MODEL_SHA256,"corpus_sha256":fixture::CORPUS_SHA256,
-            "inputs_sha256":INPUT_SHA256,"inputs":manifest,"environment":environment,
+            "model_sha256":fixture::MODEL_SHA256,"corpus_sha256":manifest.corpus_sha256,
+            "inputs_sha256":input_hash,"inputs":manifest,"environment":environment,
             "prepared_weights":model.q8_execution_stats(),"gpu":format!("{:?}",model.cuda.current_device_props()?),
             "capacity":fixture::CAPACITY,"recent_window":fixture::RECENT,"block_size":fixture::BLOCK,
             "arms":CacheArm::ALL,"quantized_backing":"fp16-k-q4-v","quantized_attention":"fp16-k-q4-v-direct",
             "quantized_all_top_blocks":64,"quantized_top8_top_blocks":8,"selection_policy":"plain top-k; no policy overrides",
             "initial_tracked_device_bytes":initial,"is_performance_measurement":false}))?;
+        let mut dense_runs = VecDeque::new();
+        if is_november {
+            for case in &manifest.cases {
+                dense_runs.push_back(record_generation(
+                    &mut model,
+                    case,
+                    CacheArm::Dense,
+                    &tokenizer,
+                    &mut report,
+                )?);
+            }
+            report.append(json!({"kind":"dense_grid_complete","cases":dense_runs.len()}))?;
+        }
         for case in &manifest.cases {
             let mut generations = Vec::new();
             let mut scores = Vec::new();
             for arm in CacheArm::ALL {
-                eprintln!("kv quality generation case={} arm={arm:?}", case.id);
-                let (generated, dispatch, state) = execution::generate_case(&mut model, case, arm)?;
-                let score = case.task.scoring.score(&generated.output)?;
-                let ids = &generated.token_ids[generated.prompt_token_len..];
-                let repetition_ids = if ids
-                    .last()
-                    .is_some_and(|id| tokenizer.stop_ids().contains(id))
-                {
-                    &ids[..ids.len() - 1]
+                let (generated, score) = if is_november && arm == CacheArm::Dense {
+                    dense_runs.pop_front().context("missing dense reference")?
                 } else {
-                    ids
+                    record_generation(&mut model, case, arm, &tokenizer, &mut report)?
                 };
-                report.append(json!({"kind":"kv_quality_generation","case":case.id,"context":case.context,"arm":arm,
-                    "output":generated.output,"generated_ids":ids,"metrics":generated.metrics,"score":score,
-                    "repetition":metrics::measure_repetition(repetition_ids),"prefill_mode":generated.prefill_mode,
-                    "prefill_temporary_weight_bytes":generated.q8_prefill_temporary_weight_bytes,
-                    "dispatch":dispatch,"cache":state,"is_performance_measurement":false}))?;
-                total_generated += ids.len();
+                total_generated += generated.token_ids.len() - generated.prompt_token_len;
                 generation_rows += 1;
                 generations.push(generated);
                 scores.push(score);
@@ -113,6 +185,9 @@ pub fn run(model_path: &Path, corpus_path: &Path, inputs: &Path, output: &Path) 
             );
             let reference =
                 collect_prefixes(&mut model, CacheArm::Dense, &case.prompt_ids, continuation)?;
+            if is_november {
+                retain_logits(&logit_directory, case, CacheArm::Dense, &reference)?;
+            }
             report.append(json!({"kind":"kv_quality_prefix_reference","case":case.id,"steps":reference.steps,
                 "dispatch":reference.dispatch,"cache":reference.state,"targets":reference.steps.iter().map(|&step|continuation[step]).collect::<Vec<_>>()}))?;
             for (index, arm) in [(1, CacheArm::QuantizedAll), (2, CacheArm::QuantizedTop8)] {
@@ -121,6 +196,9 @@ pub fn run(model_path: &Path, corpus_path: &Path, inputs: &Path, output: &Path) 
                     candidate.steps == reference.steps,
                     "mismatched observation positions"
                 );
+                if is_november {
+                    retain_logits(&logit_directory, case, arm, &candidate)?;
+                }
                 let comparisons = reference.steps.iter().enumerate().map(|(row,&step)| {
                     Ok(json!({"step":step,"prefix_tokens":case.prompt_ids.len()+step,"target":continuation[step],
                         "logits":metrics::compare_logits(&reference.logits[row],&candidate.logits[row],continuation[step])?}))
@@ -157,10 +235,10 @@ pub fn run(model_path: &Path, corpus_path: &Path, inputs: &Path, output: &Path) 
         "tracked device allocations remain after model teardown"
     );
     ensure!(
-        generation_rows == 36 && prefix_rows == 24,
+        generation_rows == manifest.cases.len() * 3 && prefix_rows == manifest.cases.len() * 2,
         "incomplete frozen grid"
     );
-    report.append(json!({"kind":"kv_quality_complete","cases":12,"generation_rows":generation_rows,
+    report.append(json!({"kind":"kv_quality_complete","cases":manifest.cases.len(),"generation_rows":generation_rows,
         "comparison_rows":prefix_rows,"generated_tokens":total_generated,"initial_tracked_device_bytes":initial,
         "final_tracked_device_bytes":final_bytes,"elapsed_wall_seconds":started.elapsed().as_secs_f64(),
         "is_performance_measurement":false}))?;
