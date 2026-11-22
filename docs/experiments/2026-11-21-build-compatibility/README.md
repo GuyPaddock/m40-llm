@@ -59,6 +59,11 @@ The independent capture, threshold and paired-timing tests ran separately.
 This compile and CPU regression evidence precedes the capture and charged
 operator measurements on the M40.
 
+The source-isolated fixed-mask layout check at `19e6db8` also passed
+formatting, 223 warning-free non-CUDA tests and CUDA/server all-target
+Clippy. It verifies the control revision before live thresholding.
+[Archive index](isolated/index.tsv).
+
 ## Verifier correctness build
 
 The isolated release-source check at 081cc65 passed formatting, 223
