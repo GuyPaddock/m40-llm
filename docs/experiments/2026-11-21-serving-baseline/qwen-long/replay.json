@@ -1,0 +1,27 @@
+{
+  "default_diagnostics": {
+    "arm": 0,
+    "cli": {
+      "wall_s": 2607.44,
+      "user_s": 609.78,
+      "sys_s": 73.31,
+      "peak_rss_kib": 6675696
+    },
+    "diagnostic_http_ms": 2601471.246237,
+    "generation_first_sample_ms": 2549565.382737,
+    "token_intervals": 127,
+    "itl_median_ms": 408.99999500019476,
+    "itl_p95_ms": 411.98635799996555,
+    "stream_http_ms": 2602565.649894,
+    "stream_records": 128,
+    "stream_first_nonterminal_record_ms": 2553889.088765
+  },
+  "default_max_sampled_server_peak_mib": 3488,
+  "dense_diagnostic": {
+    "sampled_ids": 0,
+    "stop_snapshot_elapsed_s": 3602.5694354,
+    "sampled_process_peak_mib": 3536,
+    "process_status": 143
+  },
+  "completed_paired_trials": 0
+}

@@ -1,0 +1,127 @@
+[
+  {
+    "request": "cli-0",
+    "sample_count": 516,
+    "maximum_unsampled_seconds": 5.089959,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 516,
+      "emerge nice=19 class=TS state=T": 516,
+      "make nice=19 class=TS state=S": 516
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 18.39,
+      "io": 15.34,
+      "memory": 0.0
+    },
+    "vm_cpu": [
+      {
+        "pid": 37220,
+        "start_ticks": 197329,
+        "intervals": 515,
+        "covered_seconds": 2602.834930000005,
+        "mean_logical_cpus": 18.238263768805318,
+        "peak_interval_logical_cpus": 19.69067452817506
+      }
+    ]
+  },
+  {
+    "request": "calibrate-0",
+    "sample_count": 515,
+    "maximum_unsampled_seconds": 5.080872,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 515,
+      "emerge nice=19 class=TS state=T": 515,
+      "make nice=19 class=TS state=S": 515
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 8.14,
+      "io": 1.56,
+      "memory": 0.0
+    },
+    "vm_cpu": [
+      {
+        "pid": 37220,
+        "start_ticks": 197329,
+        "intervals": 514,
+        "covered_seconds": 2597.5573090000016,
+        "mean_logical_cpus": 18.06172277217696,
+        "peak_interval_logical_cpus": 19.665940329490617
+      }
+    ]
+  },
+  {
+    "request": "stream-warm-0",
+    "sample_count": 514,
+    "maximum_unsampled_seconds": 5.07812,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 514,
+      "emerge nice=19 class=TS state=T": 514,
+      "make nice=19 class=TS state=S": 514
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 5.37,
+      "io": 1.69,
+      "memory": 0.0
+    },
+    "vm_cpu": [
+      {
+        "pid": 37220,
+        "start_ticks": 197329,
+        "intervals": 513,
+        "covered_seconds": 2592.8563439999984,
+        "mean_logical_cpus": 18.401501537256028,
+        "peak_interval_logical_cpus": 19.927721934861086
+      }
+    ]
+  },
+  {
+    "request": "stream-measured-0",
+    "sample_count": 515,
+    "maximum_unsampled_seconds": 5.093463,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 515,
+      "emerge nice=19 class=TS state=T": 515,
+      "make nice=19 class=TS state=S": 515
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 4.99,
+      "io": 1.5,
+      "memory": 0.0
+    },
+    "vm_cpu": [
+      {
+        "pid": 37220,
+        "start_ticks": 197329,
+        "intervals": 514,
+        "covered_seconds": 2598.2590880000016,
+        "mean_logical_cpus": 18.107101103691004,
+        "peak_interval_logical_cpus": 19.75879200968614
+      }
+    ]
+  },
+  {
+    "request": "cli-1",
+    "sample_count": 713,
+    "maximum_unsampled_seconds": 5.096964,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 713,
+      "emerge nice=19 class=TS state=T": 713,
+      "make nice=19 class=TS state=S": 713
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 4.76,
+      "io": 1.45,
+      "memory": 0.0
+    },
+    "vm_cpu": [
+      {
+        "pid": 37220,
+        "start_ticks": 197329,
+        "intervals": 712,
+        "covered_seconds": 3598.8593650000053,
+        "mean_logical_cpus": 18.89894077591995,
+        "peak_interval_logical_cpus": 20.255939662182115
+      }
+    ]
+  }
+]
