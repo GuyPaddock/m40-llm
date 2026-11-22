@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from statistics import median
 
@@ -13,6 +14,36 @@ def cpu_ticks(path: Path) -> tuple[str, str, int]:
     pid, fields = path.read_text().rsplit(") ", 1)
     values = fields.split()
     return pid.split(" ", 1)[0], values[19], int(values[11]) + int(values[12])
+
+
+def request_device_samples(directory: Path, labels: list[str]) -> dict[str, int | float | list[int]]:
+    """Select board telemetry within each timed request's enclosing snapshots."""
+    windows = []
+    for label in labels:
+        stamps = [
+            datetime.fromisoformat((directory / f"{label}.{suffix}").read_text().splitlines()[0])
+            for suffix in ("before", "after")
+        ]
+        if stamps[0].utcoffset() != stamps[1].utcoffset() or stamps[0] >= stamps[1]:
+            raise ValueError(f"cannot align local NVML clock for {label}")
+        windows.append(tuple(stamp.replace(tzinfo=None) for stamp in stamps))
+    temperatures, clocks, busy, device_memory = [], [], [], []
+    counts = [0] * len(windows)
+    with (directory / "gpu.csv").open() as stream:
+        for row in csv.DictReader(stream, skipinitialspace=True):
+            stamp = datetime.fromisoformat(row["timestamp"].replace("/", "-"))
+            for index, (start, end) in enumerate(windows):
+                if start <= stamp <= end:
+                    counts[index] += 1
+                    temperatures.append(int(row["temperature.gpu"]))
+                    clocks.append(int(row["clocks.current.sm [MHz]"].split()[0]))
+                    busy.append(int(row["utilization.gpu [%]"].split()[0]))
+                    device_memory.append(int(row["memory.used [MiB]"].split()[0]))
+    if not all(counts):
+        raise ValueError("missing device samples in a timed request")
+    return {"samples_per_request": counts, "temperature_c": [min(temperatures), max(temperatures)],
+            "clocks_sm_mhz": sorted(set(clocks)), "median_board_gpu_busy_pct": median(busy),
+            "board_memory_mib": [min(device_memory), max(device_memory)]}
 
 
 def audit(directory: Path) -> dict[str, object]:
@@ -78,7 +109,8 @@ def audit(directory: Path) -> dict[str, object]:
                         "http_tokens_s":median(len(controls)/r["http_seconds"] for r in rows),
                         "generation_ttft_ms":median(r["metrics"]["prefill_elapsed_ms"] for r in rows),
                         "decode_ms_per_interval":median(token_ms),"process_cpu_s":median(cpu_seconds),
-                        "process_cpu_seconds_by_trial":cpu_seconds,"isolated_trace_peak_mib":max(peaks)})
+                        "process_cpu_seconds_by_trial":cpu_seconds,"isolated_trace_peak_mib":max(peaks),
+                        "timed_device_samples":request_device_samples(directory, [r["label"] for r in rows])})
     saving = median(a-b for a,b in zip(*per_token, strict=True))
     return {"pairs":n,"ids":len(controls),"arms":summary,"median_paired_decode_saving_ms":saving,
             "capture_us":float(capture),"instantiate_us":float(instantiate),"nodes":int(nodes),

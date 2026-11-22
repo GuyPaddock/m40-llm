@@ -16,7 +16,28 @@
         23.42,
         23.43
       ],
-      "isolated_trace_peak_mib": 3288
+      "isolated_trace_peak_mib": 3288,
+      "timed_device_samples": {
+        "samples_per_request": [
+          47,
+          47,
+          47,
+          47,
+          47
+        ],
+        "temperature_c": [
+          57,
+          68
+        ],
+        "clocks_sm_mhz": [
+          1113
+        ],
+        "median_board_gpu_busy_pct": 99,
+        "board_memory_mib": [
+          6561,
+          6574
+        ]
+      }
     },
     {
       "arm": 1,
@@ -32,7 +53,28 @@
         23.37,
         23.39
       ],
-      "isolated_trace_peak_mib": 3288
+      "isolated_trace_peak_mib": 3288,
+      "timed_device_samples": {
+        "samples_per_request": [
+          47,
+          47,
+          46,
+          47,
+          47
+        ],
+        "temperature_c": [
+          59,
+          68
+        ],
+        "clocks_sm_mhz": [
+          1113
+        ],
+        "median_board_gpu_busy_pct": 100.0,
+        "board_memory_mib": [
+          6561,
+          6574
+        ]
+      }
     }
   ],
   "median_paired_decode_saving_ms": 0.23249942270058455,

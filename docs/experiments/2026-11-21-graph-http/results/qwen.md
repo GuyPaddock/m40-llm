@@ -16,6 +16,8 @@ was called for. Retain the correctness repair and keep graphs opt-in.
 | Decode ms per interval, 511 intervals/request | 38.437 | 38.212 |
 | Process-wide server user + system CPU, seconds | 23.42 | 23.37 |
 | Peak single-process NVML sample in full trace companion, MiB | 3,288 | 3,288 |
+| Device busy, median of samples across the five timed requests | 99% | 100% |
+| Device temperature across those samples, °C | 57–68 | 59–68 |
 
 The 32-token diagnostic measured one 396-node capture at 2.830 ms and
 instantiation at 1.239 ms. Median graph launch CPU time was 36.57 µs
@@ -33,7 +35,12 @@ graph server reported successful capture. Every timed output, count
 and stop matched those traces. Two models were resident during timing,
 with only one request in flight. Each companion's memory peak includes
 model load and comes from 500-ms NVML samples. Driver memory below that
-cadence can differ. Background CPU-only research compilation ran at idle
+cadence can differ. The snapshots enclosing the ten timed requests
+contained 235 ordinary and 234 graph device samples. All showed an
+SM clock of 1,113 MHz. With both servers resident the board used
+6,561–6,574 MiB in either arm. The busy percentage measures time with
+GPU activity and does not measure the number of resident warps.
+Background CPU-only research compilation ran at idle
 scheduling priority during part of the cohort. Each request retains host
 load and GPU observations. This result applies to the common native
 attention backend. Faster ordinary packed/prepared Q8 configurations
@@ -42,7 +49,7 @@ have independent controls and cannot inherit this comparison.
 Source `ad3b9516e54092720b4a3ebfdd12017e05e7e13f`,
 release executable SHA-256
 `4cd3c2d98fc0c50562c52afb08eafb4cb6744f58c3ec0f59b48e2e87a5c68eb3`.
-The [raw archive](qwen-http.tar.gz) contains the model, flags, input,
+The [raw archive](qwen-http.tar.gz) contains the model's SHA-256, flags, input,
 timings, token IDs, graph diagnostics and per-request CPU and GPU samples.
 SHA-256 `e8a6cde289b189106bc957e7455c2d181809de7bd3a92374730ea80360b6db26`.
 Run `python3 ../audit.py EXTRACTED_DIRECTORY` from this results directory
