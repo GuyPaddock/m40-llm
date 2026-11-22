@@ -10,6 +10,8 @@ jq -es 'last|.kind=="kv_quality_complete" and .cases==48 and .generation_rows==1
 mkdir "$out"
 mkdir "$out/vectors"
 python3 "$audit/replay.py" "$raw/report.jsonl" "$inputs" > "$out/independent-replay.json"
+jq -s -L "$audit" --argjson dense_only false --slurpfile inputs "$inputs" \
+    -f "$audit/generation-audit.jq" "$raw/report.jsonl" > "$out/generation-audit.json"
 jq -n --slurpfile rows "$raw/report.jsonl" --slurpfile tasks "$corpus" \
     --argjson arms '["dense","quantized_all","quantized_top8"]' -f "$audit/raw-json.jq" > "$out/answer-format.json"
 cp "$raw/preflight.txt" "$out/"

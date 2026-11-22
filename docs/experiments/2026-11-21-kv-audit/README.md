@@ -93,3 +93,23 @@ bash "$study/pack.sh" ORIGINAL_RUN FROZEN_INPUTS NEW_BUNDLE
 bash "$study/unpack.sh" NEW_BUNDLE NEW_REPLAY_DIRECTORY
 python3 "$study/replay.py" NEW_REPLAY_DIRECTORY/report.jsonl NEW_REPLAY_DIRECTORY/inputs.json
 ```
+
+### Independent generation and dispatch replay
+
+The [generation audit](generation-audit.jq) checks every free-running
+answer against the frozen scoring rules, reconstructs repetition from
+emitted IDs, checks stop reasons, verifies the 36 physical KV lengths,
+and counts the expected attention launches and 252 packed-prefill cuBLAS
+calls in each generation. It reuses the [October independent functions](october_quality.jq)
+from research/1031-kv-quality at 9da2390. The complete report path also
+requires one completion per case, the final token total and released
+tracked storage. These checks supplement the independent raw-logit replay.
+
+The [dense replay](dense-generations.json) independently confirms all 48
+answers, including the 29 passing rows. Altering a cache length, output
+text, dispatch count, repetition length or stop reason invalidated the
+dense replay. An attempt to submit the dense-only grid for full
+qualification also failed. The full-grid archive runs the same checks on
+all 144 outputs. The frozen concepts scorer enforces a minimum paragraph
+count. A manual review must still assess audience, meaning and strict
+instructions such as a request for exactly one paragraph.
