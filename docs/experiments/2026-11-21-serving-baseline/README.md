@@ -75,6 +75,13 @@ identical set of paired rows through the frozen random seed and keeps
 the initial screen, extension and fresh confirmation in their own
 populations. A cohort with differing output IDs has no paired speed gate.
 
+Once the benchmark process has exited, use
+`bash archive-cohort.sh RAW_DIRECTORY NEW_PACKAGE_DIRECTORY RESEARCH_HTTP_PAIRS`
+to retain the raw records. The packager replays the request ledger and
+timing decisions before archiving and again after extraction. It also
+checks the historical KV dispatch replay when present and saves the
+archive checksum alongside the summaries.
+
 Generation TTFT starts at admission. Prompt throughput includes setup
 through the first sampled token. Decode throughput divides the remaining
 sample count, including a sampled stop, by the first-to-last sample span.
