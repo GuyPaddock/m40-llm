@@ -159,10 +159,12 @@ flowchart TD
     Owner --> Matmul["Prepared single-row down or vocabulary matmul"]
     Native --> Fused["One-row fused entry points in normal forward · 6629f75 / c71254c"]
     Fused --> QKV["Prepared fused QKV · 4db3c1e"]
-    Fused --> FFN["Prepared gate/up/SwiGLU · e2dbc61"]
+    Fused --> Selector["Load-time FFN selection · relevant parts of c3a5122"]
     Owner --> QKV
-    Owner --> FFN
-    FFN --> Joint["Compound gate/up and joint-only ownership · e5a06ac / e83e172"]
+    Owner --> Pair["Gate/up identity and lossless paired planes · 8881763"]
+    Pair --> JointKernel["128-thread shared-scale kernel · c629471"]
+    JointKernel --> Joint["Compound model dispatch and owners · e5a06ac / e83e172"]
+    Selector --> Joint
     Native --> Packed["Causal packed target and verification transaction · 0b7992b"]
     Packed --> Verify["Complete small-N target verification"]
     Owner --> Verify
@@ -222,3 +224,59 @@ and quality/serving evidence. A sidecar-stride redesign is also unnecessary
 for this single-request promotion gate. The byte reconciliation at 46b4a46
 bounds its potential savings at 23,887,872 bytes. B2's ownership and
 peak measurements still govern any memory claim.
+
+## Conditional compound FFN port
+
+The runtime branch for `JointSharedScales` in
+`src/infer/gemm.rs::try_mlp_gate_up_swiglu_f32xf16_gguf_decode_async`
+gets the model-owned pair and enqueues its shared-scale kernel directly.
+The generic prepared fused MLP at e2dbc61 lost to native fused execution
+in the 2e2bb5c HTTP study. It is a historical control. The compound
+consumer has its own kernel, arithmetic and ownership prerequisites.
+The rebuild diagram above follows that direct call.
+
+If the full compound family qualifies against the best native main path,
+split the optional port into the following reviewable changes.
+
+1. **Pack one pair losslessly.** Port the host `Q8FfnPairKey` and
+   `HostQ8FfnPair::pack` from 8881763 after Q8 source identities and
+   checked matrix shapes exist. Each record retains both original
+   FP16 scale bit patterns and four signed payload bytes per source.
+   Reject cross-model pairs, repeated sources, incompatible shapes,
+   incomplete blocks and size overflows. Include the host packing and
+   invalid-pair cases in `src/infer/execution_weights/ffn_pair.rs`.
+2. **Execute one explicit pair on Maxwell.** Port `DeviceQ8FfnPair`
+   with two decode-accessible device planes, its Rust call in
+   `src/cuda/q8_ffn.rs`, the C ABI
+   `m40llm_ffn_q8_joint_shared_scales_f32_async`, and
+   `gate_up_joint_f32x4_shared_scales` from c629471. Preserve the
+   `reduce_published<128>` summation order from 38e14a0, the input
+   alignment checks, K divisible by 32 and K ≤ 4096. The kernel uses
+   128 threads and 1,024 + 8 × (K / 32) bytes of dynamic shared memory
+   per block. Track the included CUDA header in `build.rs`. Port the
+   relevant cases from `tests/q8_ffn_joint.rs`. The one-row consumer
+   has no need for the four-row verification session or the ablation
+   variant selector.
+3. **Admit compound at model load.** Port the pair planner and budget
+   checks in e5a06ac, the model-local configuration boundary from
+   c3a5122, and the one-row forward call. Build all pair plans before
+   upload; ensure a failed later pair releases earlier device owners.
+   Exercise budget rejection, duplicate sources, 36 real pairs, source
+   pointer mapping and original GGUF-backed prefill. Keep the native
+   selection as the ordinary default.
+4. **Select the physical owners.** From e83e172 and a37cedc carry the
+   explicit `retain-split` and `joint-only` options and the latter's
+   selection only inside the opt-in compound configuration.
+   `M40LLM_Q8_EXECUTION_WEIGHTS=split`,
+   `M40LLM_Q8_EXECUTION_FAMILIES=gate-up,down,vocabulary` and
+   `M40LLM_Q8_FFN_KERNEL=joint-shared-scales-128` select the measured
+   family. The control sets `M40LLM_Q8_FFN_OWNERSHIP=retain-split`.
+   Keep down and vocabulary owners and original GGUF data; remove just
+   the redundant gate/up split planes. Include
+   `test_joint_only_ownership_matches_retained_compound` and
+   `test_compound_combined_budget_failure_releases_model`. Repeat
+   the fixed full-logit, token, HTTP and single-process memory checks
+   on the actual integration revision before claiming its resource gain.
+
+The November ownership comparison prices step 4 inside an existing
+compound engine. It supplies no speed estimate for steps 1–3 on main.

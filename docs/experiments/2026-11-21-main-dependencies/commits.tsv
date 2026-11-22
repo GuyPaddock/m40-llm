@@ -52,3 +52,13 @@ c71254cfe7e5f66f62c589de3c0472c6beda83d2	perf(cuda): fuse q8 decode projections
 46b4a461c1eaf16a6b99239b6787c4fe943345a7	docs(kvcache): reconcile mixed storage costs
 110f8c7b6a84e4758e5e7a2aeb7bfa3fccaa6621	docs(perf): replay Q8 projection stage costs
 21aca1cb11034d127b27d6169e98933dbc97222d	test(bench): verify actual graph node counts
+8881763d1599d51f8c8228d4a36f3a4333379649	feat(cuda): test joint Q8 gate/up packing
+c6294717e423057cec566cd7951fb0031e12d18e	feat(cuda): probe joint shared-scale FFN
+c3a512205fa508cbfd72b28dd9be374f1cb22487	feat(infer)!: select model-local Q8 FFN paths
+a37cedc87607497a17b2e05919952ee7c21cd9d2	feat(infer): prefer joint-only compound owners
+38e14a0af061fda3b32a6dd3e9e5cbc33f7789f1	feat(cuda): add bounded FP32 FFN ablations
+2e2bb5c6c4a0a3ea30c3b51c9c3147b66df23589	docs(perf): record prepared Q8 HTTP results
+5a2966ba8131ff00c6b361dcb96d06b17883f17a	feat(cuda): share down weights in verification
+16fbcc48878d0bb272f7ca17249954b548ba8013	docs(research): admit four-row Q8 verification
+5a99f1a79283db407cfbd2442fd860a0e4fbfe56	docs(research): qualify compound Q8 ownership
+99ca16a9087b691accfc760f155d7d71b64b68b8	test(bench): isolate compound HTTP memory peaks
