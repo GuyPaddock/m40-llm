@@ -1,0 +1,35 @@
+f1bb7a4201ca1300af08282215d4bbb95620e8a9
+417ad559cbd06d76db50f8740e044c9e2e1a46823040bd96bbb0c9d965484bed  target/hardware/release/examples/kv_quality
+4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d  /mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d
+e793aaae9aa3c6d5d281a67b028ae94ae3306d574957d48200c2f6ee74f781c2  ../raw/kv-history-inputs.json
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2025 NVIDIA Corporation
+Built on Fri_Feb_21_20:23:50_PST_2025
+Cuda compilation tools, release 12.8, V12.8.93
+Build cuda_12.8.r12.8/compiler.35583870_0
+ELF file    1: kv_quality.1.sm_52.cubin
+CUDA_VISIBLE_DEVICES=GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852
+M40LLM_ATTN_HEAD128_KERNEL=native
+M40LLM_CUDA_GREEDY_ARGMAX=1
+M40LLM_DECODE_GRAPH=0
+M40LLM_ENABLE_CUBLAS=1
+M40LLM_ENABLE_NVCC=1
+M40LLM_FUSED_Q8_MLP_SWIGLU=1
+M40LLM_FUSED_Q8_QKV=1
+M40LLM_KV_SELECTED_BLOCK_ORDER=chronological
+M40LLM_MATERIALIZE_F32_WEIGHTS=0
+M40LLM_PROJECTION_BACKEND=large-model
+M40LLM_Q8_DECODE_COL_TILE=4
+M40LLM_Q8_DECODE_SPLIT_QBLOCK=4
+M40LLM_Q8_DECODE_STREAM=decode
+M40LLM_Q8_EXECUTION_WEIGHTS=off
+M40LLM_Q8_FFN_KERNEL=native
+M40LLM_Q8_LM_HEAD_ARGMAX=1
+M40LLM_Q8_LM_HEAD_ARGMAX_SHARED_A=1
+M40LLM_Q8_MLP_GATE_UP_SPLIT_QBLOCK=4
+M40LLM_Q8_PREFILL_BACKEND=dequant-sgemm
+M40LLM_SYSROOT=/mnt/array-fastest/home/guyep/.local/share/mamba/envs/m40-rustfmt/x86_64-conda-linux-gnu/sysroot
+2026-11-22T01:13:52,443489566-05:00
+uuid, driver_version, pstate, temperature.gpu, clocks.current.sm [MHz], clocks.current.memory [MHz], memory.used [MiB], utilization.gpu [%]
+GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, 580.159.04, P0, 51, 1113 MHz, 3004 MHz, 0 MiB, 0 %
+

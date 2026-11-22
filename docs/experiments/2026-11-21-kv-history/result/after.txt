@@ -1,0 +1,4 @@
+2026-11-22T02:15:28,955359049-05:00
+uuid, driver_version, pstate, temperature.gpu, clocks.current.sm [MHz], clocks.current.memory [MHz], memory.used [MiB], utilization.gpu [%]
+GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, 580.159.04, P0, 53, 1113 MHz, 3004 MHz, 0 MiB, 100 %
+
