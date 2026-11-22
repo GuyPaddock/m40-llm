@@ -56,3 +56,21 @@ out=$(mktemp -d)
 tar -xzf measurements.tar.gz -C "$out"
 bash replay.sh "$out/ownership" | diff - summary.json
 ```
+
+## Single-owner HTTP residency check
+
+The paired timing harness holds both owners at once. Freeze an independent
+memory observation using the normal server binary and one process per
+arm. Each process handles the original prompt twice, first cold and then
+warm. Require the expected owner in startup logs, 36-layer packed prefill,
+and both sequences of 512 generated IDs against the frozen reference.
+Record NVML by PID every 250 ms across model load and both requests.
+Report full-process peak and each request window separately. The
+single-sequence memory gate is 10% lower observed process peak, with
+the exact-output and HTTP non-regression controls above. These two
+logged requests supply memory attribution only.
+
+Run `bash docs/experiments/2026-11-22-q8-ownership/server-peak.sh NEW_DIRECTORY`
+from the consolidation worktree with the project environment and shared
+M40 lock. The experiment uses the same dense KV, 1,024 capacity and
+compound gate/up kernel in both arms.
