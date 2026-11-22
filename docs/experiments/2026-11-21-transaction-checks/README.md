@@ -1,0 +1,5 @@
+# Transaction, near-tie and zero-scale verification
+
+Five release tests executed in each cuBLAS configuration. Both generations of the packed/serial rollback test and the new interleaved-session cases passed. The new close-logit oracle observed four strictly positive margins between approximately 8.29e-9 and 1.09e-8. All four predictions matched. Zero-scale distractors produced exact zeros. Scope: two-layer synthetic Qwen fixture with the native packed backend; existing regression coverage also exercises dequant-SGEMM when enabled. The tests do not claim that arbitrary arithmetic orders are universally batch invariant.
+
+The hardware run used the source diff identified in preflight.txt, then committed as two changes in this branch. Reproduce from their combined tree with M40LLM_ENABLE_CUBLAS=1 and 0 and cargo test --locked --release --features cuda --test exact_verification -- --include-ignored --test-threads=1 --nocapture. Keep the C1 kernel's new partial-tile and storage guards as a separate admission check.

@@ -1,0 +1,6 @@
+2026-11-21T21:22:36-05:00
+a21f19218e4fae1244d1f3a28141237e53565922
+ M tests/exact_verification.rs
+6b732fdec608637aecbd337338e78f98167d93ec472ffcd11e8ce2b73b347ec1  ../raw/verifier-correctness-01/test-changes.patch
+uuid, driver_version, clocks.current.sm [MHz], temperature.gpu, memory.used [MiB]
+GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, 580.159.04, 324 MHz, 41, 0 MiB
