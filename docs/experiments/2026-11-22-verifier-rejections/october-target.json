@@ -1,0 +1,181 @@
+{
+  "revision": "50d4d17f3ca59e7a8999fea7c385ff01f288c276",
+  "executable_sha256": "7e922a3e4e95613254b6520d6bbf38c33880ee12d03b33c7fad6b3d83dae7de4",
+  "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+  "groups": [
+    {
+      "arm": "serial",
+      "phase": "screen",
+      "requests": 5,
+      "four_row_transactions": 635,
+      "median_request_mean_batch_ms": 57.82026534645672,
+      "median_three_tail_ms": 56.328591,
+      "median_resident_ms": 7781.266565,
+      "down_launches_per_request": [
+        18396
+      ],
+      "target_counters_per_request": [
+        {
+          "cublas_calls": 0,
+          "d2h_bytes": 1113980,
+          "d2h_copies": 1022,
+          "device_allocs": 0,
+          "device_frees": 0,
+          "h2d_bytes": 4186112,
+          "h2d_copies": 511,
+          "launches": 208569,
+          "stream_syncs": 1022,
+          "stream_waits": 0
+        }
+      ],
+      "session_scratch_bytes": [
+        1521188
+      ],
+      "tracked_live_bytes": [
+        6198896172
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "arm": "serial",
+      "phase": "screen",
+      "round": 0,
+      "order": null,
+      "mean_batch_ms": 57.74629130708661,
+      "tail_ms": 56.49763299999999,
+      "decode_ms": 7390.321524,
+      "resident_ms": 7774.185753000001,
+      "device_event_decode_through_teardown_ms": 7390.47509765625,
+      "session_scratch_bytes": 1521188,
+      "tracked_live_bytes": 6198896172,
+      "counters": {
+        "cublas_calls": 0,
+        "d2h_bytes": 1113980,
+        "d2h_copies": 1022,
+        "device_allocs": 0,
+        "device_frees": 0,
+        "h2d_bytes": 4186112,
+        "h2d_copies": 511,
+        "launches": 208569,
+        "stream_syncs": 1022,
+        "stream_waits": 0
+      },
+      "down_launches": 18396,
+      "began": 1793202603014689,
+      "ended": 1793202610789262
+    },
+    {
+      "arm": "serial",
+      "phase": "screen",
+      "round": 1,
+      "order": null,
+      "mean_batch_ms": 57.83715227559057,
+      "tail_ms": 56.328591,
+      "decode_ms": 7401.688463,
+      "resident_ms": 7785.014578,
+      "device_event_decode_through_teardown_ms": 7401.84521484375,
+      "session_scratch_bytes": 1521188,
+      "tracked_live_bytes": 6198896172,
+      "counters": {
+        "cublas_calls": 0,
+        "d2h_bytes": 1113980,
+        "d2h_copies": 1022,
+        "device_allocs": 0,
+        "device_frees": 0,
+        "h2d_bytes": 4186112,
+        "h2d_copies": 511,
+        "launches": 208569,
+        "stream_syncs": 1022,
+        "stream_waits": 0
+      },
+      "down_launches": 18396,
+      "began": 1793202610872222,
+      "ended": 1793202618657611
+    },
+    {
+      "arm": "serial",
+      "phase": "screen",
+      "round": 2,
+      "order": null,
+      "mean_batch_ms": 57.807625456692904,
+      "tail_ms": 56.305119,
+      "decode_ms": 7397.936199,
+      "resident_ms": 7780.142027,
+      "device_event_decode_through_teardown_ms": 7398.080078125,
+      "session_scratch_bytes": 1521188,
+      "tracked_live_bytes": 6198896172,
+      "counters": {
+        "cublas_calls": 0,
+        "d2h_bytes": 1113980,
+        "d2h_copies": 1022,
+        "device_allocs": 0,
+        "device_frees": 0,
+        "h2d_bytes": 4186112,
+        "h2d_copies": 511,
+        "launches": 208569,
+        "stream_syncs": 1022,
+        "stream_waits": 0
+      },
+      "down_launches": 18396,
+      "began": 1793202638671763,
+      "ended": 1793202646452270
+    },
+    {
+      "arm": "serial",
+      "phase": "screen",
+      "round": 3,
+      "order": null,
+      "mean_batch_ms": 57.82026534645672,
+      "tail_ms": 56.308672,
+      "decode_ms": 7399.527452,
+      "resident_ms": 7781.266565,
+      "device_event_decode_through_teardown_ms": 7399.68798828125,
+      "session_scratch_bytes": 1521188,
+      "tracked_live_bytes": 6198896172,
+      "counters": {
+        "cublas_calls": 0,
+        "d2h_bytes": 1113980,
+        "d2h_copies": 1022,
+        "device_allocs": 0,
+        "device_frees": 0,
+        "h2d_bytes": 4186112,
+        "h2d_copies": 511,
+        "launches": 208569,
+        "stream_syncs": 1022,
+        "stream_waits": 0
+      },
+      "down_launches": 18396,
+      "began": 1793202646532905,
+      "ended": 1793202654314530
+    },
+    {
+      "arm": "serial",
+      "phase": "screen",
+      "round": 4,
+      "order": null,
+      "mean_batch_ms": 57.98086147244093,
+      "tail_ms": 56.543976,
+      "decode_ms": 7420.167262,
+      "resident_ms": 7809.879469,
+      "device_event_decode_through_teardown_ms": 7420.30517578125,
+      "session_scratch_bytes": 1521188,
+      "tracked_live_bytes": 6198896172,
+      "counters": {
+        "cublas_calls": 0,
+        "d2h_bytes": 1113980,
+        "d2h_copies": 1022,
+        "device_allocs": 0,
+        "device_frees": 0,
+        "h2d_bytes": 4186112,
+        "h2d_copies": 511,
+        "launches": 208569,
+        "stream_syncs": 1022,
+        "stream_waits": 0
+      },
+      "down_launches": 18396,
+      "began": 1793202674370656,
+      "ended": 1793202682180891
+    }
+  ]
+}
