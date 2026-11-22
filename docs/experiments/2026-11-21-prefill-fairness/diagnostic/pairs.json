@@ -1,0 +1,217 @@
+[
+  {
+    "pair": 0,
+    "control": {
+      "matches_isolated": [
+        true,
+        true
+      ],
+      "request_wall_ms": [
+        44718.085826999995,
+        36515.89754600001
+      ],
+      "second_arrival_ms": 8972.804686,
+      "second_admission_delay_ms": 104.92715400000088,
+      "short_samples_before_arrival": 4,
+      "arrived_during_decode": true,
+      "largest_overlapping_gap": {
+        "from_output": 4,
+        "to_output": 5,
+        "gap_ms": 8636.842338999997,
+        "overlapping_ms": 8501.898113
+      }
+    },
+    "treatment": {
+      "matches_isolated": [
+        true,
+        true
+      ],
+      "request_wall_ms": [
+        379508.630417,
+        358266.34183199995
+      ],
+      "second_arrival_ms": 8972.88809,
+      "second_admission_delay_ms": 4.872165999999197,
+      "short_samples_before_arrival": 4,
+      "arrived_during_decode": true,
+      "largest_overlapping_gap": {
+        "from_output": 4,
+        "to_output": 5,
+        "gap_ms": 346576.95395700005,
+        "overlapping_ms": 346448.861004
+      }
+    }
+  },
+  {
+    "pair": 1,
+    "control": {
+      "matches_isolated": [
+        true,
+        true
+      ],
+      "request_wall_ms": [
+        44939.766214999996,
+        36597.978465
+      ],
+      "second_arrival_ms": 8972.546406,
+      "second_admission_delay_ms": 49.166746000000785,
+      "short_samples_before_arrival": 3,
+      "arrived_during_decode": true,
+      "largest_overlapping_gap": {
+        "from_output": 3,
+        "to_output": 4,
+        "gap_ms": 8748.611883999996,
+        "overlapping_ms": 8616.552843000001
+      }
+    },
+    "treatment": {
+      "matches_isolated": [
+        true,
+        true
+      ],
+      "request_wall_ms": [
+        377314.22058,
+        355875.55293299997
+      ],
+      "second_arrival_ms": 8973.611915,
+      "second_admission_delay_ms": 14.531189000001177,
+      "short_samples_before_arrival": 4,
+      "arrived_during_decode": true,
+      "largest_overlapping_gap": {
+        "from_output": 4,
+        "to_output": 5,
+        "gap_ms": 344171.242197,
+        "overlapping_ms": 344040.504484
+      }
+    }
+  },
+  {
+    "pair": 2,
+    "control": {
+      "matches_isolated": [
+        true,
+        true
+      ],
+      "request_wall_ms": [
+        44548.470353,
+        36332.121533000005
+      ],
+      "second_arrival_ms": 8973.581578,
+      "second_admission_delay_ms": 43.88760600000023,
+      "short_samples_before_arrival": 4,
+      "arrived_during_decode": true,
+      "largest_overlapping_gap": {
+        "from_output": 4,
+        "to_output": 5,
+        "gap_ms": 8585.468039000005,
+        "overlapping_ms": 8452.562671000002
+      }
+    },
+    "treatment": {
+      "matches_isolated": [
+        true,
+        true
+      ],
+      "request_wall_ms": [
+        379910.79328900005,
+        358393.330098
+      ],
+      "second_arrival_ms": 8972.834447000001,
+      "second_admission_delay_ms": 80.58712099999866,
+      "short_samples_before_arrival": 3,
+      "arrived_during_decode": true,
+      "largest_overlapping_gap": {
+        "from_output": 3,
+        "to_output": 4,
+        "gap_ms": 346552.777498,
+        "overlapping_ms": 346420.854593
+      }
+    }
+  },
+  {
+    "pair": 3,
+    "control": {
+      "matches_isolated": [
+        true,
+        true
+      ],
+      "request_wall_ms": [
+        44642.699748,
+        36415.894575
+      ],
+      "second_arrival_ms": 8972.479521000001,
+      "second_admission_delay_ms": 99.06812699999864,
+      "short_samples_before_arrival": 4,
+      "arrived_during_decode": true,
+      "largest_overlapping_gap": {
+        "from_output": 4,
+        "to_output": 5,
+        "gap_ms": 8602.175539,
+        "overlapping_ms": 8472.519597999999
+      }
+    },
+    "treatment": {
+      "matches_isolated": [
+        true,
+        true
+      ],
+      "request_wall_ms": [
+        378301.247589,
+        356896.03632599994
+      ],
+      "second_arrival_ms": 8972.558925,
+      "second_admission_delay_ms": 129.0003710000001,
+      "short_samples_before_arrival": 4,
+      "arrived_during_decode": true,
+      "largest_overlapping_gap": {
+        "from_output": 4,
+        "to_output": 5,
+        "gap_ms": 345052.947188,
+        "overlapping_ms": 344921.741689
+      }
+    }
+  },
+  {
+    "pair": 4,
+    "control": {
+      "matches_isolated": [
+        true,
+        true
+      ],
+      "request_wall_ms": [
+        45028.366421,
+        36670.570598000006
+      ],
+      "second_arrival_ms": 8973.258757,
+      "second_admission_delay_ms": 46.05183500000021,
+      "short_samples_before_arrival": 3,
+      "arrived_during_decode": true,
+      "largest_overlapping_gap": {
+        "from_output": 3,
+        "to_output": 4,
+        "gap_ms": 8738.743252,
+        "overlapping_ms": 8607.097834999999
+      }
+    },
+    "treatment": {
+      "matches_isolated": [
+        true,
+        true
+      ],
+      "request_wall_ms": [
+        384271.693509,
+        362793.76925400004
+      ],
+      "second_arrival_ms": 8973.714909,
+      "second_admission_delay_ms": 32.97616299999936,
+      "short_samples_before_arrival": 3,
+      "arrived_during_decode": true,
+      "largest_overlapping_gap": {
+        "from_output": 3,
+        "to_output": 4,
+        "gap_ms": 350970.32154399995,
+        "overlapping_ms": 350838.895074
+      }
+    }
+  }
+]

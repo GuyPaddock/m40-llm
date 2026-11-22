@@ -1,0 +1,152 @@
+[
+  {
+    "request": "diagnostic-0-control",
+    "sample_count": 9,
+    "maximum_unsampled_seconds": 5.061072,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 9,
+      "emerge nice=19 class=TS state=T": 9,
+      "make nice=19 class=TS state=S": 9
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 0.83,
+      "io": 1.29,
+      "memory": 0.0
+    }
+  },
+  {
+    "request": "diagnostic-0-treatment",
+    "sample_count": 75,
+    "maximum_unsampled_seconds": 5.09831,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 75,
+      "emerge nice=19 class=TS state=T": 75,
+      "make nice=19 class=TS state=S": 75
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 6.23,
+      "io": 11.49,
+      "memory": 0.0
+    }
+  },
+  {
+    "request": "diagnostic-1-control",
+    "sample_count": 9,
+    "maximum_unsampled_seconds": 5.059455,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 9,
+      "emerge nice=19 class=TS state=T": 9,
+      "make nice=19 class=TS state=S": 9
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 2.98,
+      "io": 1.78,
+      "memory": 0.0
+    }
+  },
+  {
+    "request": "diagnostic-1-treatment",
+    "sample_count": 74,
+    "maximum_unsampled_seconds": 5.074955,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 74,
+      "emerge nice=19 class=TS state=T": 74,
+      "make nice=19 class=TS state=S": 74
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 3.36,
+      "io": 1.93,
+      "memory": 0.0
+    }
+  },
+  {
+    "request": "diagnostic-2-control",
+    "sample_count": 9,
+    "maximum_unsampled_seconds": 5.074886,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 9,
+      "emerge nice=19 class=TS state=T": 9,
+      "make nice=19 class=TS state=S": 9
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 1.24,
+      "io": 2.29,
+      "memory": 0.0
+    }
+  },
+  {
+    "request": "diagnostic-2-treatment",
+    "sample_count": 75,
+    "maximum_unsampled_seconds": 5.072702,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 75,
+      "emerge nice=19 class=TS state=T": 75,
+      "make nice=19 class=TS state=S": 75
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 3.45,
+      "io": 2.17,
+      "memory": 0.0
+    }
+  },
+  {
+    "request": "diagnostic-3-control",
+    "sample_count": 9,
+    "maximum_unsampled_seconds": 5.060903,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 9,
+      "emerge nice=19 class=TS state=T": 9,
+      "make nice=19 class=TS state=S": 9
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 2.79,
+      "io": 0.71,
+      "memory": 0.0
+    }
+  },
+  {
+    "request": "diagnostic-3-treatment",
+    "sample_count": 75,
+    "maximum_unsampled_seconds": 5.089364,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 75,
+      "emerge nice=19 class=TS state=T": 75,
+      "make nice=19 class=TS state=S": 75
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 3.65,
+      "io": 1.09,
+      "memory": 0.0
+    }
+  },
+  {
+    "request": "diagnostic-4-control",
+    "sample_count": 9,
+    "maximum_unsampled_seconds": 5.060755,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 9,
+      "emerge nice=19 class=TS state=T": 9,
+      "make nice=19 class=TS state=S": 9
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 0.55,
+      "io": 0.89,
+      "memory": 0.0
+    }
+  },
+  {
+    "request": "diagnostic-4-treatment",
+    "sample_count": 76,
+    "maximum_unsampled_seconds": 5.061983,
+    "observations_per_process_group": {
+      "emerge nice=19 class=TS state=S": 76,
+      "emerge nice=19 class=TS state=T": 76,
+      "make nice=19 class=TS state=S": 76
+    },
+    "peak_some_pressure_avg10_percent": {
+      "cpu": 3.54,
+      "io": 0.96,
+      "memory": 0.0
+    }
+  }
+]
