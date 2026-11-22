@@ -47,10 +47,12 @@ host_sampler=$!
 nvidia-smi -i "$CUDA_VISIBLE_DEVICES" --query-compute-apps=timestamp,pid,process_name,used_gpu_memory --format=csv -lms 250 > "$out/processes.csv" &
 gpu_sampler=$!
 trap 'kill "$host_sampler" "$gpu_sampler" 2>/dev/null || true; wait "$host_sampler" "$gpu_sampler" 2>/dev/null || true' EXIT
-"$bin" live --compare-target-schedules --model "$model" --heldout "$heldout" +    --output "$out/correctness.jsonl" > "$out/correctness.log" 2>&1
+live_args=(live --compare-target-schedules --model "$model" --heldout "$heldout")
+"$bin" "${live_args[@]}" --output "$out/correctness.jsonl" > "$out/correctness.log" 2>&1
 idle
 snapshot > "$out/before-timing.txt"
-"$bin" live --compare-target-schedules --model "$model" --heldout "$heldout" +    --correctness-report "$out/correctness.jsonl" --output "$out/timing.jsonl" > "$out/timing.log" 2>&1
+"$bin" "${live_args[@]}" --correctness-report "$out/correctness.jsonl" \
+    --output "$out/timing.jsonl" > "$out/timing.log" 2>&1
 idle
 snapshot > "$out/after.txt"
 jq -es '([.[] | select(.kind == "copy_schedule_gate")] | length) == 2 and last.does_release_all_device_bytes == true' "$out/timing.jsonl"
