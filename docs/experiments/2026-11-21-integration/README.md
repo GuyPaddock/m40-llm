@@ -1,6 +1,6 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 17 decisions for which the
+The [candidate matrix](candidates.tsv) records 19 decisions for which the
 scope can already be established. Each row has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
@@ -19,8 +19,9 @@ hardware qualification. The verifier rollback and near-tie cases should
 accompany any future verifier port. They do not warrant bringing the
 verifier into main by themselves. [Archived CUDA evidence](../2026-11-21-evidence-audit/README.md).
 
-**Do not broaden aggressive KV selection.** Two measured top-8 outcomes
-lose a correct dense answer. The profile already defaults to top-8 on
+**Do not broaden aggressive KV selection.** Top-8 lost three of ten
+dense-passing long answers. Top-64 retained all ten where every historical
+block fit, and both arms retained all 19 short passes. The profile already defaults to top-8 on
 supported paths. Changing that setting would be a separate compatibility
 decision. Both a less aggressive policy and the actual peak-VRAM/speed
 comparison are under investigation. The data do not support a single
