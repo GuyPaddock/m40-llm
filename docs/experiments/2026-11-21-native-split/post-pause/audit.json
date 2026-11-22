@@ -1,0 +1,29 @@
+{
+  "control": {
+    "pairs": 5,
+    "client_ms": 16039.237218,
+    "http_tps": 31.92171753812638,
+    "prefill_ms": 1688.954572,
+    "decode_tps": 35.724320478160884,
+    "preparation_bytes": [
+      0
+    ],
+    "complete_prefill_tps": 38.48534535954351
+  },
+  "prepared": {
+    "pairs": 5,
+    "client_ms": 14349.496122,
+    "http_tps": 35.68069538100538,
+    "prefill_ms": 1585.058494,
+    "decode_tps": 40.178877011494514,
+    "preparation_bytes": [
+      1192935424
+    ],
+    "complete_prefill_tps": 41.007950334986184
+  },
+  "recomputed_gain": 0.1177561275764496,
+  "reported_bootstrap_interval": [
+    0.11579009484887881,
+    0.11828046803347592
+  ]
+}

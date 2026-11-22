@@ -35,3 +35,21 @@ and host RSS high-water mark. Use these two runs to price the peak memory
 increase and its ratio to the retained weight bytes. The paired timing
 cohorts supply the speed verdict. No new timing or kernel search follows
 from a memory observation.
+
+## Repeat after the Gentoo upgrade pause
+
+**PASS on the frozen short Qwen Q8_0 HTTP workload.** Across five new
+alternating pairs, native weights delivered 31.922 HTTP tokens/s and
+prepared down/vocabulary weights delivered 35.681. The median gain was
+11.776%, with a paired bootstrap interval of 11.579–11.828%. The earlier
+cohort gave 11.730%. Both arms generated the same 512 token IDs in the
+repeat. Median complete request time fell from 16.039 s to 14.349 s.
+The prepared weights still required 1,192,935,424 additional bytes.
+
+Host samples recorded one stopped emerge process, one sleeping emerge
+process and nine sleeping make processes at the sampling instants. The
+repeat supports this workload-specific gain with the upgrade paused.
+It does not quantify the effect of emerge on individual trials.
+The build, flags, outputs, host samples and timings are in the
+[raw archive](post-pause/measurements.tar.gz). Processing the archived
+report with the same jq audit reproduces the [summary](post-pause/audit.json).
