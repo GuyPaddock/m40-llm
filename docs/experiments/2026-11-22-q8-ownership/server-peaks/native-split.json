@@ -1,0 +1,27 @@
+{
+  "arms": [
+    {
+      "arm": "native",
+      "pid": 3729474,
+      "sampled_peak_mib": 3275,
+      "launch_to_health_ms": 6233.393383,
+      "diagnostic_wall_ms": [
+        16205.450037999999,
+        16116.872340000002
+      ],
+      "matched_generated_ids_per_request": 512
+    },
+    {
+      "arm": "split",
+      "pid": 3730121,
+      "sampled_peak_mib": 4414,
+      "launch_to_health_ms": 17322.136521,
+      "diagnostic_wall_ms": [
+        14522.540777,
+        14481.783055
+      ],
+      "matched_generated_ids_per_request": 512
+    }
+  ],
+  "candidate_minus_control_peak_mib": 1139
+}

@@ -74,3 +74,9 @@ Run `bash docs/experiments/2026-11-22-q8-ownership/server-peak.sh NEW_DIRECTORY`
 from the consolidation worktree with the project environment and shared
 M40 lock. The experiment uses the same dense KV, 1,024 capacity and
 compound gate/up kernel in both arms.
+
+**PASS for isolated peak residency.** The
+[normal-server study](server-peaks/README.md) reproduced a 1,647 MiB
+reduction from 7,807 MiB to 6,160 MiB with exact sampled IDs.
+The same study records a separate 1,139 MiB increase for selective
+prepared Q8 against native Q8.

@@ -53,3 +53,8 @@ It does not quantify the effect of emerge on individual trials.
 The build, flags, outputs, host samples and timings are in the
 [raw archive](post-pause/measurements.tar.gz). Processing the archived
 report with the same jq audit reproduces the [summary](post-pause/audit.json).
+
+The [single-process residency comparison](../2026-11-22-q8-ownership/server-peaks/README.md)
+measured a sampled peak of 3,275 MiB native and 4,414 MiB prepared.
+All 512 IDs matched. Fresh-server launch-to-health was 6.233 s
+native and 17.322 s prepared in the independent diagnostic.
