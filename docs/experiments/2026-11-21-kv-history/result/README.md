@@ -14,6 +14,39 @@ all sampled positions, maximum KL was 0.00010917 for top-64 and 0.32391938
 for top-8. Minimum top-ten overlap was eight and five respectively.
 This quality run supplies no whole-request speed qualification.
 
+### Storage precision and historical selection
+
+Each comparison below covers the same 12 positions on the dense-generated
+trajectories. KL uses the reference distribution first. Top-ten overlap
+counts shared vocabulary IDs. Each column gives its own worst observation.
+
+| Reference | Candidate | Maximum KL | Minimum top-ten overlap | Greedy mismatches |
+|---|---|---:|---:|---:|
+| Dense FP16 | Full mixed history | 0.009902 | 8 | 0/12 |
+| Dense FP16 | Top-64 | 0.010082 | 7 | 0/12 |
+| Dense FP16 | Top-8 | 0.207628 | 6 | 0/12 |
+| Full mixed history | Top-64 | 0.000109 | 8 | 0/12 |
+| Full mixed history | Top-8 | 0.323919 | 5 | 0/12 |
+
+Dense versus full mixed retains every position and changes the storage
+and attention path. Its largest KL occurred on the first output of the
+3,200-token code case. Restricting full mixed history to top-8 produced
+its largest KL on the first output of the relay task. All arms still
+selected the same greedy token there. In free generation the relay answer
+first diverged at output index 13, between the frozen observations at 8
+and 16. Requiring greedy agreement at sampled positions alone would have
+missed the answer regression.
+
+Recompute the table from the retained report:
+
+```bash
+gzip -dc report.jsonl.gz | jq -s '
+  map(select(.kind=="comparison")) | group_by([.reference,.candidate])[] |
+  [.[0].reference, .[0].candidate, length,
+   (map(.logits.kl_reference_candidate)|max), (map(.logits.top10_overlap)|min),
+   (map(select(.logits.reference.top_indices[0]!=.logits.candidate.top_indices[0]))|length)]'
+```
+
 The real M40 run at f1bb7a4201ca1300af08282215d4bbb95620e8a9 completed
 16 free generations, 16 dense-trajectory replays and 60 paired comparisons.
 All 48 vocabulary readbacks were saved. The tracked device allocation
