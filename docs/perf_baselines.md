@@ -4,6 +4,21 @@ This file tracks measured CUDA baselines before M40-specific optimization work.
 
 ## 2026-11-22 Maxwell qualification
 
+After Portage paused, five fresh alternating Qwen Q8_0 HTTP pairs
+reproduced the benefit of preparing only down and vocabulary weights.
+Throughput rose from 31.922 to 35.681 tok/s on the dense 65-input,
+512-output workload. The paired gain was 11.776% (11.579–11.828%),
+with identical generated IDs and 1,192,935,424 extra weight bytes.
+[Post-pause measurements and replay](experiments/2026-11-21-native-split/README.md).
+
+On TinyLlama F16 with dense KV, main served 25.993 tok/s and Phase 4
+served 20.944 tok/s on the same 46 input and 128 output IDs. The paired
+change was −19.423% (−21.609% to −18.090%). Each server reached
+6,200 MiB in the process samples. Preserve this cross-revision control
+when porting Q8 admission to main. The comparison does not attribute
+the F16 regression to a particular component.
+[Dense F16 measurements and replay](experiments/2026-11-21-serving-baseline/tiny-dense/README.md).
+
 The [candidate matrix](experiments/2026-11-21-integration/candidates.tsv) links each source and raw report. Qwen native-head128 graph replay preserved all 512 IDs and improved paired HTTP throughput by 0.361% [0.269%, 0.477%] at e6567e5. Mixed cache peak residency at e100c54 was 22 MiB higher at capacity 1,024, 3 MiB higher at 3,072 and 47 MiB lower at 8,448. Both results fall below their promotion gates. The four-row Q8 down operator at 16fbcc4 saved about 0.150 ms per layer over four independent calls and 0.100 ms over the existing multi-row split path. Complete-target timings are pending. At 377bec4, holding 4,096 idle tokens in a second slot did not increase active attention latency.
 
 Joint-only compound gate/up ownership removed 1,724,645,376 tracked device bytes. The peak of a fresh loader process fell from 7,671 to 6,024 MiB. Matched 512-token HTTP throughput changed by +0.10% [−0.16%, +0.32%]. [Full ownership results](experiments/2026-11-22-q8-ownership/README.md).

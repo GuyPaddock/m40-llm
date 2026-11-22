@@ -53,7 +53,9 @@ allocation sizes, raw logit comparisons and the historical October traces
 do not need repeats solely due to the upgrade. The post-pause Portage snapshot
 showed PID 48103 stopped, sleeping descendants and no increase in whole CPU
 seconds between the two observations. Check host activity during every
-subsequent timed cohort.
+subsequent timed cohort. Five post-pause pairs reproduced an 11.776%
+gain for prepared down and vocabulary weights with all 512 IDs identical.
+[Repeat and uncertainty interval](experiments/2026-11-21-native-split/README.md).
 
 The [main dependency audit](experiments/2026-11-21-main-dependencies/README.md)
 traces graph, mixed KV, prepared Q8 and the target verifier to the pinned
@@ -65,7 +67,9 @@ between prefill and ongoing decode. On research/1121-kv-scale-port,
 a898ac2 builds the original Q8 regression directly on main, 75ed22f
 ports both barriers, and d56ca89 binds the serial positive and negative
 tests. Fixed and unfixed sm_52 release binaries exist. Their main-based
-hardware qualification and the serving results are pending.
+hardware qualification remains pending. The first cross-revision serving
+cohort found Phase 4 19.423% slower than main on matched dense F16 HTTP.
+[TinyLlama results](experiments/2026-11-21-serving-baseline/tiny-dense/README.md).
 
 The [closed-direction register](experiments/2026-11-21-closed-directions/README.md)
 records nine October dispositions and exact reopening conditions. The [dense
