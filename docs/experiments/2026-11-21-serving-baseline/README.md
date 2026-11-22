@@ -149,5 +149,7 @@ The [default TinyLlama comparison](tiny-default/README.md) confirms a
 smaller gain than the 5% threshold after 20 fresh pairs with exact IDs.
 The [short Qwen comparison](qwen-short/README.md) records explicit
 dense and default recent-only KV on the same Phase 4 executable.
+The [medium Qwen baseline](qwen-medium/README.md) prices both modes
+with active historical KV and reports their differing continuations.
 The [local Q4 baseline](qwen-q4-short/README.md) records Phase 4 default
 and dense KV through the same boundaries on a separate supported checkpoint.
