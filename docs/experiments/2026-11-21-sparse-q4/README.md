@@ -89,3 +89,18 @@ has a separate warm pass. Raw wall time includes the ending synchronization;
 CPU submission and CUDA event spans have distinct fields. The analyzer uses
 the common paired-bootstrap implementation with operator calls/second. A
 10% latency reduction requires at least 11.111% higher service rate.
+
+### Host timing after Portage paused
+
+Replayed the identical exporter executable and model on the host when the
+operator paused Gentoo upgrades. Byte comparisons passed on all 12 outputs.
+Lossless packing took 124–128 ms per layer, versus 215–246 ms in the first
+run. Alternate conversion took 382–395 ms versus 821–841 ms. These are
+single observations per layer with different host conditions; the experiment
+does not isolate Portage from CPU scheduling, clock and cache differences.
+Use the second cohort for the observed post-pause preparation cost. Neither
+cohort measures GPU inference. The five-second process observation found
+the stopped root and sleeping descendants; whole-second accumulated CPU
+time did not increase in the sampled tree. The observation covers that
+interval only. [Repeat measurements](post-pause/prepare.jsonl) and
+[host sample](post-pause/portage-observation.txt).
