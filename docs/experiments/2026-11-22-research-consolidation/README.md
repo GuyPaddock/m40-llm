@@ -68,6 +68,16 @@ record for negative and prerequisite-limited studies.
   ordinary correction. Live copy workload qualification follows
   separately. [Complete target and rejection results](https://github.com/GuyPaddock/m40-llm/blob/837e0708edda8ca4d74aabcf6436e18dfffad6bc/docs/experiments/2026-11-21-small-n/target-result/README.md).
 
+## November follow-ups
+
+| Direction | Disposition and evidence |
+|---|---|
+| Active-row compressed KV | Close the idle-slot hypothesis. Up to 4,096 tokens in an idle slot had no measurable effect on another head128 request in the controlled test. [Slot-isolation result](https://github.com/GuyPaddock/m40-llm/blob/377bec468d51844a917648ab3700baa0ad8b4258/docs/experiments/2026-11-21-active-row-result/README.md). |
+| SpQt-style sparse Q4 | The fixed-mask hardware screen warranted one real-activation study. Calibration and held-out captures preserved dense output IDs. The operator test charges device thresholding and compaction. Keep the original causal channel predictors closed. [Captured Q4 inputs](https://github.com/GuyPaddock/m40-llm/blob/159edb4218f5a4a2090ca0e082f60bf61b603179/docs/experiments/2026-11-22-sparse-q4-live.md). |
+| GSQ checkpoints | Defer to model preparation until supported layer mappings and kernels can execute the Q2_K and Q3_K_M tensor mixes. The GGUF type enums alone establish format recognition. [GSQ feasibility](https://github.com/GuyPaddock/m40-llm/blob/59aaf765e2d21078f41ff0e2f873df7ce029cc96/docs/experiments/2026-11-21-gsq-feasibility.md). |
+| Terminal prefill pruning | Keep the dependency trace. The valid KV-only saving estimated from the measured terminal operations was at most 0.092% of a complete request, below the admission gate. [Dependency and timing screen](https://github.com/GuyPaddock/m40-llm/blob/8965fd3f5f5ee2c021e928917fbfab67d7bdf3a3/docs/experiments/2026-11-21-output-pruning/README.md). |
+| Prefill fairness | A 2,060-token prompt stalled ongoing decode by 344–351 seconds in the matched dense HTTP cohort. This qualified one 16-position scheduling trial with exact state, cancellation and fairness checks. [Measured stall](https://github.com/GuyPaddock/m40-llm/blob/a37d0bc8b9d9537f626b696868857f88dd80ada2/docs/experiments/2026-11-21-prefill-fairness/result/README.md). |
+
 ## Evidence index
 
 - [October branch and artifact inventory](../2026-11-21-inventory/README.md).
