@@ -123,6 +123,11 @@ combined port. Their differences span whole revisions.
 [Default-cache baseline](../2026-11-21-serving-baseline/tiny-default/README.md).
 Use Phase 4 for Qwen Q8 performance until a main port runs the real model.
 The same preformatted Qwen text also gains an extra BOS on main.
+Record greedy output separately for both KV modes. The medium Qwen
+results at 87b1ef7 matched every within-arm output and diverged across
+arms at the first sampled ID, with median HTTP times of 489.292 s
+default and 373.309 s dense. Keep both baselines in main-port tests.
+[Medium Qwen baseline](../2026-11-21-serving-baseline/qwen-medium/README.md).
 
 4. **Native Q8 layer projection.** Use the shape and block-stride checks,
    `m40llm_*` CUDA entry points, non-CUDA stubs, Rust wrappers and native

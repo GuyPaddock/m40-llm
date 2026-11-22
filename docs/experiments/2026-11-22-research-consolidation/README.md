@@ -53,6 +53,12 @@ record for negative and prerequisite-limited studies.
   IDs and 37 MiB lower sampled peak. Its median internal first sample
   took 8.521 s versus 3.830 s default. Both requests fit inside the
   compressed cache's recent window. [Matched default and dense baseline](../2026-11-21-serving-baseline/qwen-short/README.md).
+- **Medium Qwen baseline.** At 2,060 prompt IDs and 128 outputs, the
+  first sampled ID differed between default top-8 and explicit dense
+  KV. Each mode reproduced its own output in all five timing trials.
+  Buffered medians were 489.292 and 373.309 s, with peaks of 3,332 and
+  3,320 MiB respectively. Both remain separate workload baselines.
+  [Medium CLI, streaming and buffered metrics](../2026-11-21-serving-baseline/qwen-medium/README.md).
 - **Prepared Q8.** Preparing only down and vocabulary layouts had the
   strongest measured short HTTP result against native Q8. Preparing all
   families lost 64.21% on that historical request. When compound FFN is

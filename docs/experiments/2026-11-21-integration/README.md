@@ -176,6 +176,13 @@ qualifies this concurrency cohort and leaves historical-block serving
 and general defaults open.
 [Two-client result](https://github.com/GuyPaddock/m40-llm/blob/c708a507a3d28a8bdbb1f634fb4ed45d055239f6/docs/experiments/2026-11-21-serving-concurrency/default-two/README.md).
 
+For one medium Qwen request, the original top-8 KV and explicit dense
+KV each reproduced their own continuation. Their first sampled IDs
+differed with a 2,060-token input. The five trial ranges were
+489.120–490.156 s default and 372.221–373.511 s dense. Keep both as
+independent baselines for later ports and leave cache defaults outside
+the proposed review series. [Medium serving result](../2026-11-21-serving-baseline/qwen-medium/README.md).
+
 The matched dense two-client cohort gained 59.495% aggregate
 throughput. Both clients reached their first sample sooner and
 returned the same 128 IDs. P95 token gaps rose from about

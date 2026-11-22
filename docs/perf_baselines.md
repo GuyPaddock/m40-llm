@@ -32,6 +32,13 @@ when porting Q8 admission to main. The comparison does not attribute
 the F16 regression to a particular component.
 [Dense F16 measurements and replay](experiments/2026-11-21-serving-baseline/tiny-dense/README.md).
 
+The Phase 4 medium Qwen Q8_0 baseline used 2,060 inputs and 128 outputs.
+Five timed requests in each cache mode reproduced their own diagnostic
+outputs. Default mixed KV and dense FP16 returned different first
+sampled IDs. Their separate median HTTP times were 489.292 and
+373.309 s, with sampled process peaks of 3,332 and 3,320 MiB.
+[Medium CLI, streaming and HTTP evidence](experiments/2026-11-21-serving-baseline/qwen-medium/README.md).
+
 On Phase 4, Qwen Q4_0 ran all 36 layers with its dedicated Q6_K head.
 Default direct mixed KV served 2.887 buffered tok/s and dense KV
 served 2.830 across five alternating 65-input, 32-output pairs with

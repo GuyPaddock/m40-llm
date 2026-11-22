@@ -94,3 +94,5 @@ a37d0bc8b9d9537f626b696868857f88dd80ada2	docs(perf): qualify the dense prefill s
 8133884f04fb5024a3223281a8a0220debe0680d	test(bench): score prefill chunk tradeoffs	Guy Elsmore-Paddock
 c0cdbcb373b80248a551d87e6a942330cd5c7161	docs(test): retain guarded prefill chunk checks	Guy Elsmore-Paddock
 aef2d6278a44d63069636d1eca3749583d8c2868	test(quality): run the expanded sparse-Q4 gate	Guy Elsmore-Paddock
+87b1ef7290dfcef4a499fa58b74efb8208aece6c	docs(perf): retain medium Qwen serving baseline	Guy Elsmore-Paddock
+23c7f58b7721132860488f190d61e1d9932fa655	feat(bench): replay sampled VM CPU usage	Guy Elsmore-Paddock
