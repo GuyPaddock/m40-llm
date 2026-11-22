@@ -8,7 +8,7 @@ defaults, including compressed KV for supported generation, remain the
 reference behavior.
 
 GitHub resolved both branch names to the same full commits on November
-22. The pinned main worktree was clean when both patch checks ran.
+22. The pinned main worktree was clean when the patch checks ran.
 Recheck the remote heads at final handoff.
 [Remote main](https://github.com/GuyPaddock/m40-llm/commit/e1403e0dbe2037cd8fc2b0af32addf97a4df3488) ·
 [Remote Phase 4](https://github.com/GuyPaddock/m40-llm/commit/48c63332462e009964e891be1cabaf139e3b50f8).
@@ -25,17 +25,19 @@ The Maxwell implementation to trace is this project's 0676570.
 
 ## Independent fixes
 
-The first review series has two atomic commits. The GGUF change can go
-first because it stays within tensor validation and its CPU regression.
-The Q8 scale repair can then be reviewed and tested on its own CUDA path.
-Each patch independently passed a read-only application check on e1403e0.
-Their paths are disjoint. The graph repair follows only if the corrected
-boundary and real-model fixtures qualify the main port.
+The first review series has three atomic commits. The GGUF validation
+can go first. The Q8 scale and graph fixes touch distinct code paths
+in the same CUDA file and can be reviewed separately. All three
+patches apply to e1403e0. Applying them and their fixtures in order
+to a temporary Git index produced tree
+`9ab6cee687f0d06a7ee6c0b942471db5f917a5bf` and passed
+`git diff --cached --check`. The worktree and branch refs stayed clean.
 
 | Order | Proposed commit | Changes and verification |
 |---:|---|---|
 | 1 | `fix(gguf): check device tensor sizes` | Port 541cec1 with its `gguf_device_views` tests. Run locked CPU checks and validate existing legal layouts and malformed shapes before device allocation. |
 | 2 | `fix(cuda): synchronize Q8 history scales` | Use the two barriers from 75ed22f and include the guarded incremental test from a898ac2 in the same commit. Repeat it and `attention_parity_cuda_grid` with cuBLAS on and off. Record the successful unfixed main control and the Phase 4 failure witness. |
+| 3 | `fix(cuda): align graph attention dispatch` | Use the two production files from 63ea66a with the final grid and session fixtures from 5877729. Require exact attention on both builds and real F16 replay with cuBLAS. On the unsupported no-cuBLAS F16 combination, verify ordinary fallback with exact state and complete cleanup. Retain the opt-in flag. |
 
 Run these checks from a clean e1403e0 checkout in the same repository.
 
@@ -43,6 +45,7 @@ Run these checks from a clean e1403e0 checkout in the same repository.
 git diff 541cec1^ 541cec1 | git apply --check
 git diff e1403e0 75ed22f -- cuda/kernels.cu tests/q8_kv_scale_reuse.rs \
     tests/common/guarded_bytes.rs | git apply --check
+git diff 63ea66a^ 63ea66a | git apply --check
 ```
 
 1. **GGUF shape validation.** Main-based 541cec1 checks products and row
@@ -90,11 +93,14 @@ git diff e1403e0 75ed22f -- cuda/kernels.cu tests/q8_kv_scale_reuse.rs \
    async FP32 materialized path only when cuBLAS and that layout are
    available. Its native F16 fallback calls
    `cuda/kernels.cu::m40llm_gemm_f32xf16_gguf_f32`, which synchronizes
-   the prefill stream joined by capture. The main retry therefore
-   distinguishes actual replay from ordinary fallback in both build modes.
-   Phase 4's async native F16 controls use a separate implementation at
-   adbccd6. Include it in a port only if an observed unsupported graph
-   combination justifies that additional dependency.
+   the prefill stream joined by capture. At beb1faf, the corrected
+   fixtures passed 96 short and 56 boundary comparisons in each build.
+   The cuBLAS build gave eight actual F16 replays with exact logits and
+   valid KV. The no-cuBLAS build failed F16 capture at the Q projection,
+   performed ordinary fallback and passed the state and cleanup checks.
+   Keep the expected fallback check separate from the actual replay gate.
+   Phase 4's async native F16 implementation at adbccd6 is a separate
+   dependency for any future attempt to expand capture compatibility.
 
 ## Qwen Q8 admission precedes all prepared-weight proposals
 

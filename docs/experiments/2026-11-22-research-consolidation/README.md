@@ -9,7 +9,7 @@ records completed evidence and the current rebuild recommendation.
 | Status | Recommendation | Evidence and boundary |
 |---|---|---|
 | Integrate first | Checked GGUF tensor products and the narrow Q8 history-scale synchronization repair, as two independent changes on current main | The checked tensor repair catches an actual malformed shape. The Phase 4 Q8 control exhibited the synchronization defect. Both fixed main CUDA modes passed the guarded incremental cache case and ten attention cases. The unfixed main guard also passed, so the race itself remains unreproduced on main. |
-| Carry when the main fixture qualifies | The narrow CUDA Graph attention-dispatch repair | The Phase 4 fix restores exact ordinary/replay logits and FP16 KV. The repaired main short grids pass in both CUDA builds. The corrected main boundary and real-model fixtures are still queued. Repaired Qwen and TinyLlama Graph serving missed the complete-request gain gate. |
+| Integrate first, within tested scope | The narrow CUDA Graph attention-dispatch repair | Main passed both attention grids with cuBLAS on and off. The cuBLAS F16 session used eight actual replays and matched all logits and valid KV. The off build used ordinary fallback after F16 capture failed. Keep replay opt-in. [Main correctness result](https://github.com/GuyPaddock/m40-llm/blob/beb1fafd746bab4d8d88f9f9f692b5da6d4e1337/docs/experiments/2026-11-21-main-graph-parity/result/README.md). |
 | Retain existing functionality | Direct single-sequence historical FP16-K/Q4-V attention | The matched TinyLlama head64 workload gained 8.775% HTTP throughput and cut sampled process peak by 16 MiB with the same output IDs. Pinned main already has the consumer. Block selection and staged Qwen head128 have separate limitations. |
 | Study after the foundation | Native Q8 model support, prepared down and vocabulary dispatch, shared four-row exact verification | Selective preparation gained 11.776% on the short Qwen HTTP workload with 1,192,935,424 additional requested bytes. Shared down weights reduced complete four-row verifier latency 5.876% with the same scratch allocation and prepared weight owners. Pinned main needs layer, output-head and verifier foundations. |
 | Keep as research controls | Host selected-Q4 packing and device execution, staging and residency harnesses, graph diagnostics, both exact verification controls | These isolate cost or correctness. Their presence alone gives no reason to change inference dispatch. |
@@ -18,8 +18,8 @@ records completed evidence and the current rebuild recommendation.
 The [candidate matrix](../2026-11-21-integration/candidates.tsv) carries
 full hashes, source modules, flags, evidence and allocation scope for
 each row. The [dependency-ordered rebuild](../2026-11-21-main-dependencies/README.md)
-lists the independent first two commits and the separate conditions for
-graph, Q8 model support, experimental prepared weights and verification.
+lists the independent first three commits and the separate conditions for
+Q8 model support, experimental prepared weights and verification.
 The [closure register](../2026-11-21-closed-directions/README.md) is the
 record for negative and prerequisite-limited studies.
 

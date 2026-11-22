@@ -83,3 +83,6 @@ be7bf4bbfa90eb468b2af53f5c8732e8d1a05c04	docs(q4): qualify charged sparse operat
 0736f062d2a4ac3f2b2bf39b48635689a4362528	feat(research): bind admitted Q4 down layouts	Guy Elsmore-Paddock
 5324ba57f55f45462fcd34c42f41b7b56e7f5451	test(research): freeze sparse Q4 quality arms	Guy Elsmore-Paddock
 d33663563d69a3f52baf55a5913dcc6d8489994e	docs(perf): retain TinyLlama default baseline	Guy Elsmore-Paddock
+5877729c9bfa7fdaa4d950729ec1f310936a0dbf	test(bench): bind graph fixture retry builds	Guy Elsmore-Paddock
+e5e176d4b867cba37201e2a5c52d3210bb7383f3	fix(test): seed main graph fixtures in order	Guy Elsmore-Paddock
+beb1fafd746bab4d8d88f9f9f692b5da6d4e1337	docs(cuda): qualify main graph dispatch repair	Guy Elsmore-Paddock

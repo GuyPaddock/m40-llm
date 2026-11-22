@@ -9,17 +9,19 @@ identifies the kind of integration; the recommendation states whether
 it is ready on main. Open hardware measurements will add rows and refine
 the dependent recommendations before the final shortlist.
 
-**Ready on the pinned main base.** GGUF shape validation at 541cec1 has
-a reproduced failing input and a passing isolated main-based repair.
-The narrow Q8 history-scale repair also passed the main CUDA checks.
-The two patches apply independently and can be reviewed as separate
-correctness commits. [First two rebuild commits](../2026-11-21-main-dependencies/README.md#independent-fixes).
+**Ready on the pinned main base.** GGUF tensor bounds, Q8 history-scale
+synchronization and the narrow CUDA Graph attention repair have
+independent patch and correctness evidence. Their ordered application
+passed in a temporary Git index.
+[Initial three rebuild commits](../2026-11-21-main-dependencies/README.md#independent-fixes).
 
-**Correctness before performance.** The graph state repair passes the
-Phase 4 M40 grid and failure paths. On main both repaired builds passed
-96 short attention comparisons. Boundary and full-session setup failed
-in both runtime revisions. The corrected fixtures are queued.
-[First main graph run](https://github.com/GuyPaddock/m40-llm/blob/dd0a9a64cbf591771587b8c2163fb703033467a1/docs/experiments/2026-11-21-main-graph-parity/first-run/README.md).
+**Correctness before performance.** The repaired main builds passed
+96 short and 56 boundary attention comparisons each. The cuBLAS F16
+session matched 256,000 logits and 405,504 valid FP16 cache words in
+eight actual replays. The unfixed control reproduced state differences.
+The off build used ordinary fallback after its F16 Q projection could
+not be captured. Retain the opt-in flag and test both behaviors.
+[Main graph qualification](https://github.com/GuyPaddock/m40-llm/blob/beb1fafd746bab4d8d88f9f9f692b5da6d4e1337/docs/experiments/2026-11-21-main-graph-parity/result/README.md).
 
 TinyLlama returned identical 128 sampled IDs using the asynchronous F16
 decode stream in both arms. Five alternating requests measured a 0.261%
