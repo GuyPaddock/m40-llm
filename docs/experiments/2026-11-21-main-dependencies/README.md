@@ -168,11 +168,20 @@ until the tick returns. The measured Phase 4 source at cfb9df0 uses the same
 order for dense KV. This explains how a stall can occur. Its frequency and
 size require the D3 two-client traces.
 
-If D3 admits a chunking experiment, the port needs a prompt cursor that
-survives ticks and a way to distinguish partial prefill from ready decode.
-Both revisions currently classify a request as pending prefill only while
-`processed_len() == 0`. A partial chunk must advance valid KV without
-sampling or counting a generated token. Test arrivals during decode,
+If D3 admits a chunking experiment, reuse the session's existing
+`processed_len()` cursor. On both revisions, passing `&ids[..end]` to
+`logits_for_ids` starts at that cursor, preserves absolute positions and
+sets the cursor to `end` after a successful return. The existing sequential
+path already computes logits at every position. An initial chunking
+experiment can retain that arithmetic and discard intermediate results.
+Sample only after the full prompt completes.
+
+Both revisions classify a request as pending prefill only while
+`processed_len() == 0`. A partial prompt must remain eligible for its
+next sequential chunk. Keep it out of packed prefill: `prefill_sequence`
+passes the entire prefix from position zero. Sending a partially processed
+request there would replay its history. Test a second pending prefill
+arriving after the first chunk as well as arrivals during decode,
 one-token and uneven final chunks, exact generated IDs and valid KV,
 cancellation between chunks, and sequence-slot reuse. The experiment can
 use main's existing scheduler and dense sequence leases independently of
