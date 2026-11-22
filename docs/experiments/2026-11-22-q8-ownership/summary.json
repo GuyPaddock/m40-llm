@@ -1,0 +1,117 @@
+{
+  "manifest": {
+    "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+    "executable_sha256": "fe91ff4a930d53fc938eb9049b7ee209371353004d789a8f8c35edaa50197007",
+    "revision": "c4807e1ff3a49603a37fb1a20fd274eb775f107e",
+    "worktree": "",
+    "build_profile": "release",
+    "frozen_environment": {
+      "CUDA_VISIBLE_DEVICES": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852",
+      "M40LLM_ATTN_HEAD128_KERNEL": "parallel",
+      "M40LLM_ATTN_HEAD128_PARTITIONS": "8",
+      "M40LLM_ATTN_HEAD128_THREADS": "256",
+      "M40LLM_CUDA_GREEDY_ARGMAX": "1",
+      "M40LLM_DECODE_GRAPH": "0",
+      "M40LLM_ENABLE_CUBLAS": "1",
+      "M40LLM_ENABLE_NVCC": "1",
+      "M40LLM_FUSED_Q8_MLP_SWIGLU": "1",
+      "M40LLM_FUSED_Q8_QKV": "1",
+      "M40LLM_MATERIALIZE_F32_WEIGHTS": "0",
+      "M40LLM_PROJECTION_BACKEND": "large-model",
+      "M40LLM_Q8_DECODE_COL_TILE": "4",
+      "M40LLM_Q8_DECODE_SPLIT_QBLOCK": "4",
+      "M40LLM_Q8_DECODE_STREAM": "decode",
+      "M40LLM_Q8_EXECUTION_WEIGHTS": "off",
+      "M40LLM_Q8_LM_HEAD_ARGMAX": "1",
+      "M40LLM_Q8_LM_HEAD_ARGMAX_SHARED_A": "1",
+      "M40LLM_Q8_MLP_GATE_UP_SPLIT_QBLOCK": "4",
+      "M40LLM_SYSROOT": "/mnt/array-fastest/home/guyep/.local/share/mamba/envs/m40-rustfmt/x86_64-conda-linux-gnu/sysroot"
+    }
+  },
+  "retain": {
+    "elapsed_ms": 24502.018325,
+    "host_high_water": "VmHWM:\t 6999556 kB",
+    "tracked_device_delta": 7921745920,
+    "counters": {
+      "cublas_calls": 0,
+      "d2h_bytes": 0,
+      "d2h_copies": 0,
+      "device_allocs": 291,
+      "device_frees": 0,
+      "h2d_bytes": 7921745920,
+      "h2d_copies": 291,
+      "launches": 0,
+      "stream_syncs": 292,
+      "stream_waits": 0
+    },
+    "prepared_bytes": 4642226176,
+    "preparation_ms": 1367.40799
+  },
+  "joint": {
+    "elapsed_ms": 23695.017974,
+    "host_high_water": "VmHWM:\t 6999636 kB",
+    "tracked_device_delta": 6197100544,
+    "counters": {
+      "cublas_calls": 0,
+      "d2h_bytes": 0,
+      "d2h_copies": 0,
+      "device_allocs": 147,
+      "device_frees": 0,
+      "h2d_bytes": 6197100544,
+      "h2d_copies": 147,
+      "launches": 0,
+      "stream_syncs": 148,
+      "stream_waits": 0
+    },
+    "prepared_bytes": 2917580800,
+    "preparation_ms": 1349.419524
+  },
+  "tracked_saved": 1724645376,
+  "skipped_allocations": 144,
+  "load_peak_mib": [
+    7671,
+    6024
+  ],
+  "dense_passing": 7,
+  "dense_inconclusive": 5,
+  "checked_full_logits_steps": [
+    0,
+    1,
+    8,
+    32,
+    128,
+    256,
+    511
+  ],
+  "http_rates": [
+    50.79453180666408,
+    50.84738894745882
+  ],
+  "comparison": {
+    "bootstrap_gain_ci95": [
+      -0.0015899595786988963,
+      0.0031560589388410776
+    ],
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 0,
+    "candidate": {
+      "mad_over_median": 0.00040414000829698294,
+      "max": 50.954842342816754,
+      "median": 50.84738894745882,
+      "min": 50.81441389588208
+    },
+    "control": {
+      "mad_over_median": 0.0007471837326287389,
+      "max": 50.948945175055606,
+      "median": 50.79453180666408,
+      "min": 50.74355485341619
+    },
+    "gain": 0.0010406069101280835,
+    "needs_fresh_confirmation": false,
+    "needs_variation_extension": false,
+    "pairs": 5,
+    "passes_promotion_gate": false,
+    "promotion_threshold": 0.03,
+    "reaches_original_target": false
+  }
+}
