@@ -78,7 +78,7 @@ start_study() {
     monitor_pids+=("$!")
 }
 start_server() {
-    local binary=$1 label=$2
+    local binary=$1 label=$2 attempt
     shift 2
     [[ -z "$server_pid" ]]
     check_gpu_owners
@@ -92,7 +92,7 @@ start_server() {
     "$binary" run "$model" --addr "127.0.0.1:$port" --require-sm52 "$@" > "$out/$label.log" 2>&1 &
     server_pid=$!
     echo "$server_pid" > "$out/$label.pid"
-    for ((i=0;i<480;i++)); do
+    for ((attempt=0;attempt<480;attempt++)); do
         if ! kill -0 "$server_pid"; then tail -12 "$out/$label.log" >&2; return 1; fi
         if curl -fsS --max-time 1 "$url/health" >/dev/null 2>&1; then
             gpu_snapshot > "$out/$label.ready"
