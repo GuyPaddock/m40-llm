@@ -1,0 +1,193 @@
+[
+  {
+    "variant": "packed-full",
+    "disposition": "PASS",
+    "tasks": 6,
+    "passages": 2,
+    "dense_passes": 4,
+    "dense_failures": 2,
+    "stop": null,
+    "sampled_two_model_peak_mib": 4029,
+    "candidate_memory": {
+      "counter_bytes": 0,
+      "extra_weight_bytes": 38043648,
+      "is_capturing": false,
+      "is_enabled": true,
+      "layers": [],
+      "native_bypass_layer_ids": [],
+      "preparation_elapsed_ms": 6850.4127180000005,
+      "selection_workspace_bytes": 350212,
+      "skipped_layer_ids": [],
+      "target_sparsity": null,
+      "thresholds": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "layout": {
+      "layers": [
+        0,
+        17,
+        35
+      ],
+      "layout": "packed",
+      "preparation_ms": 6850.4127180000005,
+      "projection_calls": [
+        720,
+        720,
+        720
+      ],
+      "repack_host_payload_bytes": 12681216,
+      "thresholds": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  },
+  {
+    "variant": "packed-thresholded",
+    "disposition": "PASS",
+    "tasks": 6,
+    "passages": 2,
+    "dense_passes": 4,
+    "dense_failures": 2,
+    "stop": null,
+    "sampled_two_model_peak_mib": 4029,
+    "candidate_memory": {
+      "counter_bytes": 0,
+      "extra_weight_bytes": 38043648,
+      "is_capturing": false,
+      "is_enabled": true,
+      "layers": [],
+      "native_bypass_layer_ids": [],
+      "preparation_elapsed_ms": 6399.259889,
+      "selection_workspace_bytes": 350212,
+      "skipped_layer_ids": [],
+      "target_sparsity": null,
+      "thresholds": [
+        0.024985965341329575,
+        0.11531174927949905,
+        0.35809656977653503
+      ]
+    },
+    "layout": {
+      "layers": [
+        0,
+        17,
+        35
+      ],
+      "layout": "packed",
+      "preparation_ms": 6399.259889,
+      "projection_calls": [
+        720,
+        720,
+        720
+      ],
+      "repack_host_payload_bytes": 12681216,
+      "thresholds": [
+        0.024985965341329575,
+        0.11531174927949905,
+        0.35809656977653503
+      ]
+    }
+  },
+  {
+    "variant": "zigzag-full",
+    "disposition": "PASS",
+    "tasks": 6,
+    "passages": 2,
+    "dense_passes": 4,
+    "dense_failures": 2,
+    "stop": null,
+    "sampled_two_model_peak_mib": 4029,
+    "candidate_memory": {
+      "counter_bytes": 0,
+      "extra_weight_bytes": 38043648,
+      "is_capturing": false,
+      "is_enabled": true,
+      "layers": [],
+      "native_bypass_layer_ids": [],
+      "preparation_elapsed_ms": 8305.454364,
+      "selection_workspace_bytes": 350212,
+      "skipped_layer_ids": [],
+      "target_sparsity": null,
+      "thresholds": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "layout": {
+      "layers": [
+        0,
+        17,
+        35
+      ],
+      "layout": "zigzag",
+      "preparation_ms": 8305.454364,
+      "projection_calls": [
+        720,
+        720,
+        720
+      ],
+      "repack_host_payload_bytes": 25362432,
+      "thresholds": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  },
+  {
+    "variant": "zigzag-thresholded",
+    "disposition": "FAIL",
+    "tasks": 6,
+    "passages": 1,
+    "dense_passes": 4,
+    "dense_failures": 2,
+    "stop": {
+      "id": "held-passage-market",
+      "reason": "perplexity"
+    },
+    "sampled_two_model_peak_mib": 4029,
+    "candidate_memory": {
+      "counter_bytes": 0,
+      "extra_weight_bytes": 38043648,
+      "is_capturing": false,
+      "is_enabled": true,
+      "layers": [],
+      "native_bypass_layer_ids": [],
+      "preparation_elapsed_ms": 7976.625255,
+      "selection_workspace_bytes": 350212,
+      "skipped_layer_ids": [],
+      "target_sparsity": null,
+      "thresholds": [
+        0.05871416628360748,
+        0.23754067718982697,
+        0.7496800422668457
+      ]
+    },
+    "layout": {
+      "layers": [
+        0,
+        17,
+        35
+      ],
+      "layout": "zigzag",
+      "preparation_ms": 7976.625255,
+      "projection_calls": [
+        681,
+        681,
+        681
+      ],
+      "repack_host_payload_bytes": 25362432,
+      "thresholds": [
+        0.05871416628360748,
+        0.23754067718982697,
+        0.7496800422668457
+      ]
+    }
+  }
+]
