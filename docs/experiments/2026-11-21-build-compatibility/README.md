@@ -67,3 +67,11 @@ Clippy invocation. The replay confirmed the checkout and target paths
 and compared the retained command logs byte for byte. The earlier
 hardware transaction checks supply the actual M40 evidence.
 [Archive index](isolated/index.tsv).
+
+## Mixed KV lifetime diagnostic
+
+Source `27fc182` passed formatting, 224 warning-free non-CUDA tests
+and CUDA/server all-target Clippy with the GPU hidden. The archive
+retains its source-specific target and original logs. The associated
+M40 run exercises three complete allocations in each of two processes.
+[Archive index](isolated/index.tsv).
