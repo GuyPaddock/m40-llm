@@ -456,7 +456,12 @@ addition to main. The following dependencies are checked by
   copy comparison is frozen at 0890799 and uses the three-arm CLI
   harness at 16b29d0. It measures the same causal drafter on both
   schedules against ordinary decode, with actual copy acceptance and
-  complete resident request timing.
+  complete resident request timing. At e1fcebb, both live workloads
+  passed. Shared weights improved 2.551% and 1.308% over the
+  existing multi-row copy arm with positive paired lower bounds.
+  After a clean-base verifier port, retain the two workloads and
+  all 21 correctness cases. A serving dispatch requires its own
+  complete HTTP and mixed-request evaluation.
 
 The [target cost replay](../2026-11-22-verifier-rejections/README.md)
 counts 18,396 down launches in the serial-down verifier per 512-token

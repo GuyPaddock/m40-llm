@@ -87,3 +87,4 @@ d33663563d69a3f52baf55a5913dcc6d8489994e	docs(perf): retain TinyLlama default ba
 e5e176d4b867cba37201e2a5c52d3210bb7383f3	fix(test): seed main graph fixtures in order	Guy Elsmore-Paddock
 beb1fafd746bab4d8d88f9f9f692b5da6d4e1337	docs(cuda): qualify main graph dispatch repair	Guy Elsmore-Paddock
 ad486431b954a4ac5cb08c9e90f62378429f6c34	docs(perf): qualify isolated Q8 server residency	Guy Elsmore-Paddock
+e1fcebb8f7bf274465f2d4493e0423ba0268c1ff	docs(perf): qualify live copy-only speculation	Guy Elsmore-Paddock

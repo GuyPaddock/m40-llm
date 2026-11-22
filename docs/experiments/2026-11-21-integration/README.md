@@ -47,10 +47,17 @@ by 5.876% against the fastest exact control across 20 confirmation
 rounds. All 511 full-logit row digests and the 10,616,832 valid FP16
 KV words matched. The three-arm request used the same device
 allocation in each arm and independently exercised 60 rejection
-and correction cases. This admits a live copy-only comparison with
-the existing prompt-copy source. A main port still depends on Q8
-model support, prepared weights and the exact verifier stack.
+and correction cases. A main port still depends on Q8 model support,
+prepared weights and the exact verifier stack.
 [Complete target result](https://github.com/GuyPaddock/m40-llm/blob/837e0708edda8ca4d74aabcf6436e18dfffad6bc/docs/experiments/2026-11-21-small-n/target-result/README.md).
+
+The fixed prompt-copy source passed both live copy workloads against
+ordinary decoding and against the existing multi-row verifier. The
+shared verifier improved resident throughput by 17.416% and 8.934%
+over ordinary decoding, and by 2.551% and 1.308% over the existing
+copy verifier. All 21 correctness cases retained exact logits and
+valid KV, including natural rejections. Keep this opt-in after the
+verified target port. [Live copy results](https://github.com/GuyPaddock/m40-llm/blob/e1fcebb8f7bf274465f2d4493e0423ba0268c1ff/docs/experiments/2026-11-22-copy-verifier/result/README.md).
 
 The graph fallback node adds 1.569–3.019 µs synchronized wall time
 per head128 attention replay at the two sampled lengths. The implied

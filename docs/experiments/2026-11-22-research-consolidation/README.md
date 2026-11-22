@@ -73,8 +73,14 @@ record for negative and prerequisite-limited studies.
   All 511 full-logit row digests and 10,616,832 valid FP16 KV words
   matched. The corresponding resident Qwen request fell 5.52%.
   Sixty forced rejections preserved accepted state and matched the
-  ordinary correction. Live copy workload qualification follows
-  separately. [Complete target and rejection results](https://github.com/GuyPaddock/m40-llm/blob/837e0708edda8ca4d74aabcf6436e18dfffad6bc/docs/experiments/2026-11-21-small-n/target-result/README.md).
+  ordinary correction. [Complete target and rejection results](https://github.com/GuyPaddock/m40-llm/blob/837e0708edda8ca4d74aabcf6436e18dfffad6bc/docs/experiments/2026-11-21-small-n/target-result/README.md).
+- **Fixed live copy drafting.** Shared Q8 down weights gained 17.416%
+  and 8.934% resident CLI throughput against ordinary decode in the
+  two copy cases. The gains against the existing multi-row copy arm
+  were 2.551% and 1.308%. All 21 correctness cases matched, including
+  13 natural rejections per candidate. The specific copy path warrants
+  continued opt-in work after the clean-base verifier qualifies.
+  [Live copy evidence](https://github.com/GuyPaddock/m40-llm/blob/e1fcebb8f7bf274465f2d4493e0423ba0268c1ff/docs/experiments/2026-11-22-copy-verifier/result/README.md).
 
 ## November follow-ups
 
