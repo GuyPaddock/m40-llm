@@ -19,6 +19,26 @@ The Maxwell implementation to trace is this project's 0676570.
 
 ## Independent fixes
 
+The first review series has two atomic commits. The GGUF change can go
+first because it stays within tensor validation and its CPU regression.
+The Q8 scale repair can then be reviewed and tested on its own CUDA path.
+Each patch independently passed a read-only application check on e1403e0.
+Their paths are disjoint. The graph repair follows only if the corrected
+boundary and real-model fixtures qualify the main port.
+
+| Order | Proposed commit | Changes and verification |
+|---:|---|---|
+| 1 | `fix(gguf): check device tensor sizes` | Port 541cec1 with its `gguf_device_views` tests. Run locked CPU checks and validate existing legal layouts and malformed shapes before device allocation. |
+| 2 | `fix(cuda): synchronize Q8 history scales` | Use the two barriers from 75ed22f and include the guarded incremental test from a898ac2 in the same commit. Repeat it and `attention_parity_cuda_grid` with cuBLAS on and off. Record the successful unfixed main control and the Phase 4 failure witness. |
+
+Run these checks from a clean e1403e0 checkout in the same repository.
+
+```bash
+git diff 541cec1^ 541cec1 | git apply --check
+git diff e1403e0 75ed22f -- cuda/kernels.cu tests/q8_kv_scale_reuse.rs \
+    tests/common/guarded_bytes.rs | git apply --check
+```
+
 1. **GGUF shape validation.** Main-based 541cec1 checks products and row
    strides in `src/infer/tensor_views.rs` and reuses the checked result in
    `src/infer/load.rs`. Include `tests/gguf_device_views.rs`. No CUDA

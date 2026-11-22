@@ -11,7 +11,9 @@ the dependent recommendations before the final shortlist.
 
 **Ready on the pinned main base.** GGUF shape validation at 541cec1 has
 a reproduced failing input and a passing isolated main-based repair.
-It introduces no CUDA dependency.
+The narrow Q8 history-scale repair also passed the main CUDA checks.
+The two patches apply independently and can be reviewed as separate
+correctness commits. [First two rebuild commits](../2026-11-21-main-dependencies/README.md#independent-fixes).
 
 **Correctness before performance.** The graph state repair passes the
 Phase 4 M40 grid and failure paths. On main both repaired builds passed
