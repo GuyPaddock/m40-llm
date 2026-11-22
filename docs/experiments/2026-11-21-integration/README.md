@@ -62,9 +62,14 @@ The allocator formula puts the requested-byte crossover at capacity
 3,403 for the measured 36-layer, one-sequence geometry. The fixed recent
 ring and the replicated summary capacity account for the short-context
 penalty. [Allocation arithmetic and measured peaks](https://github.com/GuyPaddock/m40-llm/blob/623fd33aa425350124b4c07953d3a65c4c265d08/docs/experiments/2026-11-21-kv-residency/README.md).
-Main already consumes this storage directly. In November, all 144 matched operator comparisons reproduced the October
-benefit. The live HTTP comparison and the lossy historical-block policy
-have separate qualification gates.
+Main already consumes this storage directly. All 144 matched operator
+groups reproduced the October benefit. On Phase 4, five matched
+TinyLlama F16 head64 HTTP pairs gained 8.775% throughput
+(8.575–9.089%) and reduced sampled process peak from 6,224 to
+6,208 MiB. This qualifies the existing single-sequence consumer for
+that workload. The staged runtime is unavailable on Qwen head128.
+The lossy block-selection policy has its own qualification gate.
+[Matched historical-KV result](../2026-11-21-serving-baseline/tiny-kv-consumer/result/README.md).
 
 **When compound FFN is enabled, keep joint-only ownership.** The paired
 HTTP control retained identical gate/up weights in two layouts. Eliminating

@@ -169,7 +169,11 @@ The same preformatted Qwen text also gains an extra BOS on main.
   allocation coverage independently. Keep November's 97102a1 staged
   comparison, 9489bb6 residency probes and f1bb7a4 beyond-top64
   equivalence checks as research evidence. Report dense-failing tasks
-  separately. An actual new batched feature would require the slot index,
+  separately. In the Phase 4 TinyLlama head64 run at c8ddabe, the direct
+  consumer gained 8.775% complete HTTP throughput with identical IDs
+  and 16 MiB lower sampled process peak. It supports retaining the
+  direct path. Qwen head128 has no staged serving control.
+  An actual new batched feature would require the slot index,
   variable-length dispatch, ownership, `src/decode_batch.rs`, server and
   forward changes from 7f3bcfd, plus attention_batched_varlen and
   server_smoke. Only consider that port after a serving result.

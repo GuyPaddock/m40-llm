@@ -49,6 +49,13 @@ all 2,340 paired intervals replayed. Three source layers at head128/batch
 one took 7.890–7.905 ms staged and 7.543–7.554 ms direct at context 8,192.
 These times exclude append and cover a single attention operation.
 
+On TinyLlama F16 head64, five matched mixed-KV HTTP pairs used 1,390
+prompt IDs and generated the same 32 IDs. Replacing staging with direct
+consumption raised buffered throughput by 8.775% (8.575–9.089%).
+Median client wall fell from 116.642 to 107.232 s. Peak process
+residency fell from 6,224 to 6,208 MiB.
+[Matched staging comparison](experiments/2026-11-21-serving-baseline/tiny-kv-consumer/result/README.md).
+
 ## 2026-11-21 Maxwell consolidation
 
 Five alternating short Qwen2.5-3B Q8_0 dense HTTP pairs on the M40 produced
