@@ -49,6 +49,24 @@ ports both barriers, and d56ca89 binds the serial positive and negative
 tests. Fixed and unfixed sm_52 release binaries exist. Their main-based
 hardware qualification and the serving results are pending.
 
+The [closed-direction register](experiments/2026-11-21-closed-directions/README.md)
+records nine October dispositions and exact reopening conditions. The [dense
+quality audit](experiments/2026-11-21-kv-audit/README.md) reviewed all eight
+long-form continuations and all 48 dense answers. Four short structured
+responses were fenced: 29 pass the frozen rubric and 25 also satisfy raw
+JSON where requested. Preserve both denominators. The measured four-row
+verification target budget at research/1121-small-n-verification 6d58b4e
+is 57.8203 ms; saving 5% requires 2.8910 ms per batch. Its 223 CPU test
+passes, formatting and CUDA/server Clippy are recorded at 3bd61fd.
+
+The HTTP concurrency driver at research/1121-prefill-fairness cfb9df0
+compares default and dense caches at 1/2/4 clients, with an independent
+completed-batch-width trace. Research/1121-main-graph-parity 63ea66a
+adapts graph attention to main without Phase 4 projection APIs. 4efc654
+binds the fixed and unfixed grids plus the eight-position TinyLlama F16
+full-logit/cache checks. Their release builds are verified; hardware
+evidence for the main-based repair is pending.
+
 The serial cohorts and their raw logs live under the adjacent research-1121/raw directory. Compiled probes and queued jobs are pending evidence until their completion records, workloads and outputs are audited. The final shortlist and rebuild sequence remain open.
 
 ## October checkpoint
