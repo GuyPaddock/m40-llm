@@ -12,6 +12,10 @@ while kill -0 "$benchmark_pid" 2>/dev/null; do
             sed "s/^/$resource /" "/proc/pressure/$resource"
         fi
     done
-    ps -eo comm= | awk '/^(emerge|ebuild|cc1|cc1plus|rustc|ld|ld.lld|ninja|make)$/ {n[$1]++} END {for (name in n) print name,n[name]}'
+    ps -eo comm=,ni=,cls= | awk '
+        $1 ~ /^(emerge|ebuild|cc1|cc1plus|rustc|ld|ld\.lld|ninja|make)$/ {
+            groups[$1 " nice=" $2 " class=" $3]++
+        }
+        END {for (group in groups) print group, "count=" groups[group]}'
     sleep 5
 done
