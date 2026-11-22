@@ -1,0 +1,298 @@
+{
+  "operator": {
+    "packed": "PASS",
+    "zigzag": "PASS"
+  },
+  "layers": [
+    {
+      "layer": 0,
+      "rows": 36,
+      "checks": 666,
+      "intervals": 3888,
+      "comparisons": {
+        "packed": {
+          "controls": {
+            "native/event_us": {
+              "gain": 0.6478711895572244,
+              "lower": 0.601528893235012,
+              "upper": 0.7585247754804774,
+              "twice_noise": 0.0032257956233167307,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "native/wall_us": {
+              "gain": 0.647509604490499,
+              "lower": 0.6007838417013587,
+              "upper": 0.7582750667652964,
+              "twice_noise": 0.0031133129563125587,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "packed/event_us": {
+              "gain": 0.42977757601346483,
+              "lower": 0.3566258748571294,
+              "upper": 0.6099327192845998,
+              "twice_noise": 0.00326980043635123,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "packed/wall_us": {
+              "gain": 0.4295150749814075,
+              "lower": 0.35589868207965264,
+              "upper": 0.6098086741096354,
+              "twice_noise": 0.003269976060776842,
+              "tasks": 6,
+              "decision": "PASS"
+            }
+          },
+          "passed": true,
+          "failed": false,
+          "median_density": 0.5129905523255813,
+          "median_retained_mass": 0.894254584746,
+          "max_native_relative_rms": 0.0990165211213,
+          "max_layout_relative_rms": 0.0990165211213,
+          "min_layout_cosine": 0.995102301812,
+          "min_native_cosine": 0.995102301812
+        },
+        "zigzag": {
+          "controls": {
+            "native/event_us": {
+              "gain": 0.8419043546541625,
+              "lower": 0.807058304140307,
+              "upper": 0.9155206722922251,
+              "twice_noise": 0.0038937846091834597,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "native/wall_us": {
+              "gain": 0.8415936526634684,
+              "lower": 0.8067114977155578,
+              "upper": 0.9151119906883679,
+              "twice_noise": 0.004688153301430293,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "zigzag/event_us": {
+              "gain": 0.4727418259392084,
+              "lower": 0.36114119085972984,
+              "upper": 0.7206101597762435,
+              "twice_noise": 0.006344765381551807,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "zigzag/wall_us": {
+              "gain": 0.4718882488071705,
+              "lower": 0.36121035522272216,
+              "upper": 0.7198291726854572,
+              "twice_noise": 0.007502026181334494,
+              "tasks": 6,
+              "decision": "PASS"
+            }
+          },
+          "passed": true,
+          "failed": false,
+          "median_density": 0.25168059593023256,
+          "median_retained_mass": 0.6703930756245,
+          "max_native_relative_rms": 0.260507273491,
+          "max_layout_relative_rms": 0.254469866834,
+          "min_layout_cosine": 0.967607492317,
+          "min_native_cosine": 0.965908415288
+        }
+      }
+    },
+    {
+      "layer": 17,
+      "rows": 36,
+      "checks": 666,
+      "intervals": 3888,
+      "comparisons": {
+        "packed": {
+          "controls": {
+            "native/event_us": {
+              "gain": 0.6382547206474314,
+              "lower": 0.6301800417901677,
+              "upper": 0.6671845129969509,
+              "twice_noise": 0.0023208422126369394,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "native/wall_us": {
+              "gain": 0.6379714187111908,
+              "lower": 0.6297615095809472,
+              "upper": 0.6667799439106685,
+              "twice_noise": 0.002259736969693959,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "packed/event_us": {
+              "gain": 0.416591138353707,
+              "lower": 0.4028557144854004,
+              "upper": 0.46290878370902155,
+              "twice_noise": 0.0024772831839946106,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "packed/wall_us": {
+              "gain": 0.41629518864190973,
+              "lower": 0.40231828871490927,
+              "upper": 0.46250167570127815,
+              "twice_noise": 0.0025644070101105525,
+              "tasks": 6,
+              "decision": "PASS"
+            }
+          },
+          "passed": true,
+          "failed": false,
+          "median_density": 0.5058139534883721,
+          "median_retained_mass": 0.865116883631,
+          "max_native_relative_rms": 0.172211831116,
+          "max_layout_relative_rms": 0.172211831116,
+          "min_layout_cosine": 0.985076433102,
+          "min_native_cosine": 0.985076433102
+        },
+        "zigzag": {
+          "controls": {
+            "native/event_us": {
+              "gain": 0.8280415138786491,
+              "lower": 0.8224645662578862,
+              "upper": 0.8555639411169144,
+              "twice_noise": 0.006749985220961695,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "native/wall_us": {
+              "gain": 0.8277394531592396,
+              "lower": 0.8222191875721121,
+              "upper": 0.8552794369810315,
+              "twice_noise": 0.006693797487126069,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "zigzag/event_us": {
+              "gain": 0.42953541375027426,
+              "lower": 0.40984404939815944,
+              "upper": 0.5210850694314981,
+              "twice_noise": 0.007597161176456341,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "zigzag/wall_us": {
+              "gain": 0.42894290747230546,
+              "lower": 0.4089870842759162,
+              "upper": 0.5206290008227239,
+              "twice_noise": 0.007860093753518047,
+              "tasks": 6,
+              "decision": "PASS"
+            }
+          },
+          "passed": true,
+          "failed": false,
+          "median_density": 0.25222565406976744,
+          "median_retained_mass": 0.623168709108,
+          "max_native_relative_rms": 0.422259491065,
+          "max_layout_relative_rms": 0.416486806392,
+          "min_layout_cosine": 0.909265500643,
+          "min_native_cosine": 0.906526699438
+        }
+      }
+    },
+    {
+      "layer": 35,
+      "rows": 36,
+      "checks": 666,
+      "intervals": 3888,
+      "comparisons": {
+        "packed": {
+          "controls": {
+            "native/event_us": {
+              "gain": 0.6385008572814894,
+              "lower": 0.6252466796627538,
+              "upper": 0.6803895836477963,
+              "twice_noise": 0.0026042292069333416,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "native/wall_us": {
+              "gain": 0.6383296374989098,
+              "lower": 0.6250794559426601,
+              "upper": 0.6801225138634187,
+              "twice_noise": 0.0033802334757717604,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "packed/event_us": {
+              "gain": 0.41736684661995016,
+              "lower": 0.39579271096957463,
+              "upper": 0.48434857636396067,
+              "twice_noise": 0.002477340500777408,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "packed/wall_us": {
+              "gain": 0.4170679852869677,
+              "lower": 0.39563557025496093,
+              "upper": 0.48409235624221436,
+              "twice_noise": 0.0033802334757717604,
+              "tasks": 6,
+              "decision": "PASS"
+            }
+          },
+          "passed": true,
+          "failed": false,
+          "median_density": 0.501953125,
+          "median_retained_mass": 0.8869795408059999,
+          "max_native_relative_rms": 0.0297796917668,
+          "max_layout_relative_rms": 0.0297796917668,
+          "min_layout_cosine": 0.99958527838,
+          "min_native_cosine": 0.99958527838
+        },
+        "zigzag": {
+          "controls": {
+            "native/event_us": {
+              "gain": 0.8320917447108178,
+              "lower": 0.824609345550594,
+              "upper": 0.8603208107535808,
+              "twice_noise": 0.005378056924133618,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "native/wall_us": {
+              "gain": 0.8318154411549118,
+              "lower": 0.8241485425539117,
+              "upper": 0.8600512772709743,
+              "twice_noise": 0.005482896665425381,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "zigzag/event_us": {
+              "gain": 0.4414226407206875,
+              "lower": 0.41811674247069514,
+              "upper": 0.5352021071825321,
+              "twice_noise": 0.007264890796003488,
+              "tasks": 6,
+              "decision": "PASS"
+            },
+            "zigzag/wall_us": {
+              "gain": 0.4410252580085526,
+              "lower": 0.4165018768238434,
+              "upper": 0.5345422602915875,
+              "twice_noise": 0.0076606523744250365,
+              "tasks": 6,
+              "decision": "PASS"
+            }
+          },
+          "passed": true,
+          "failed": false,
+          "median_density": 0.24454941860465118,
+          "median_retained_mass": 0.682761325475,
+          "max_native_relative_rms": 0.0889311126479,
+          "max_layout_relative_rms": 0.0777496753152,
+          "min_layout_cosine": 0.997338247501,
+          "min_native_cosine": 0.996184133631
+        }
+      }
+    }
+  ],
+  "model_quality": "unmeasured",
+  "whole_request_speed": "unmeasured"
+}

@@ -87,7 +87,7 @@ no performance or approximate-inference quality result.
 
 The [capture checksum list](2026-11-22-sparse-q4-live/capture.sha256)
 names the original records in `research-1121/raw/sparse-q4-live-01`,
-including both full vector files and their 56 MiB of JSON payload.
+including both full vector files and their 57,480,279 bytes of JSON.
 Verify from that durable directory with `sha256sum -c` and the
 checksum list's absolute path. The
 [frozen cutoff document](2026-11-22-sparse-q4-live/cutoffs.json)
