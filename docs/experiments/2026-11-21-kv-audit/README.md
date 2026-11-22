@@ -7,6 +7,12 @@ Run it on the original JSONL beside its .logits directory with the frozen
 tokenized input file as its second argument. Its counts exclude
 dense-failing answers from claims about accuracy preservation.
 
+The complete broad-grid package has 48 case shards. A second replay,
+after verifying transport hashes and extracting the original files,
+reproduced all 522 vocabulary vectors and 348 aligned observations.
+The committed manifest pins the durable package and each file size.
+[Full archive and reproduction](https://github.com/GuyPaddock/m40-llm/blob/d6cabf1cd0e0bd97df030eb47fbf96f613bb0722/docs/experiments/2026-11-21-kv-quality-result/full-replay/README.md).
+
 ## Dense reference audit
 
 We read the 48 completed dense answers from research/1121-quantized-kv

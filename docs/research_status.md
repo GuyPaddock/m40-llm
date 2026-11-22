@@ -90,6 +90,11 @@ verification target budget at research/1121-small-n-verification 6d58b4e
 is 57.8203 ms; saving 5% requires 2.8910 ms per batch. Its 223 CPU test
 passes, formatting and CUDA/server Clippy are recorded at 3bd61fd.
 
+The complete 48-case KV archive was restored and its 522 full FP32
+vectors independently replayed. Top-8 lost three of ten dense-passing
+long cases. Full mixed coverage retained all 29 dense passes.
+[Archive, hashes and replay](https://github.com/GuyPaddock/m40-llm/blob/d6cabf1cd0e0bd97df030eb47fbf96f613bb0722/docs/experiments/2026-11-21-kv-quality-result/full-replay/README.md).
+
 The HTTP concurrency driver at research/1121-prefill-fairness cfb9df0
 compares default and dense caches at 1/2/4 clients, with an independent
 completed-batch-width trace. Research/1121-main-graph-parity 63ea66a
