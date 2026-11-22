@@ -67,6 +67,14 @@ Launch-to-health includes the monitoring snapshot and health polling.
 The 250 ms process sampler can miss a shorter allocation peak. The
 dedicated cache-residency experiment measures cache growth separately.
 
+After replaying the request ledger, run
+`bash verify-pair-statistics.sh RAW_DIRECTORY RESEARCH_HTTP_PAIRS` to
+regenerate the exact bootstrap intervals and decisions. The executable
+must match the benchmark's recorded hash. The replay folds each
+identical set of paired rows through the frozen random seed and keeps
+the initial screen, extension and fresh confirmation in their own
+populations. A cohort with differing output IDs has no paired speed gate.
+
 Generation TTFT starts at admission. Prompt throughput includes setup
 through the first sampled token. Decode throughput divides the remaining
 sample count, including a sampled stop, by the first-to-last sample span.
