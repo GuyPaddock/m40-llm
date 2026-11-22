@@ -1,6 +1,6 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 24 decisions for which the
+The [candidate matrix](candidates.tsv) records 27 decisions for which the
 scope can already be established. Each row has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
@@ -14,8 +14,8 @@ a reproduced failing input and a passing isolated main-based repair.
 It introduces no CUDA dependency.
 
 **Correctness before performance.** The graph state repair passes the
-Phase 4 M40 grid and failure paths. Main's independent port has its own
-hardware qualification. The verifier rollback and near-tie cases should
+Phase 4 M40 grid and failure paths. The separate main-based graph and Q8
+eviction repairs have pinned test binaries awaiting hardware results. The verifier rollback and near-tie cases should
 accompany any future verifier port. They do not warrant bringing the
 verifier into main by themselves. [Archived CUDA evidence](../2026-11-21-evidence-audit/README.md).
 
@@ -23,9 +23,10 @@ verifier into main by themselves. [Archived CUDA evidence](../2026-11-21-evidenc
 dense-passing long answers. Top-64 retained all ten where every historical
 block fit, and both arms retained all 19 short passes. The profile already defaults to top-8 on
 supported paths. Changing that setting would be a separate compatibility
-decision. Both a less aggressive policy and the actual peak-VRAM/speed
-comparison have separate gates. The residency study at e100c54 measured only a 1.01% peak saving at capacity 8,448. Direct-consumer speed is under investigation. The data do not support a single
-quality ranking across every model or workload.
+decision. At capacity 8,448, e100c54 measured a 1.01% peak saving for mixed KV.
+Main already consumes this storage directly. Its matched October operator
+benefit and the pending whole-request comparison have separate rows from
+the lossy historical-block policy.
 
 **When compound FFN is enabled, keep joint-only ownership.** The paired
 HTTP control retained identical gate/up weights in two layouts. Eliminating
