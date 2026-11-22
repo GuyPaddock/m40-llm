@@ -70,3 +70,4 @@ b0afd1b40c3e22cd2351d66261385a235b1add20	feat(bench): compare complete verifier 
 b072baf59cd070279b13b0511cda971727e294fd	docs(research): report all KV answer outcomes	Guy Elsmore-Paddock
 9d4b78c24741342c81f1f4b61320e89f501e35d6	docs(research): report matched KV logit drift	Guy Elsmore-Paddock
 e25b2ed41a022870fcebad776e352310f6f221d4	docs(bench): retain post-pause Q8 repeat	Guy Elsmore-Paddock
+ce1cc2661391e3761238170ad1651714930d7367	docs(bench): retain dense TinyLlama baseline	Guy Elsmore-Paddock

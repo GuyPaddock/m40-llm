@@ -62,7 +62,14 @@ Main already reads Q8 token embeddings. Checking embeddings alone misses
 both failures. The immutable model bytes and the real main errors are
 recorded on research/1121-main-baseline at dd81f05. TinyLlama F16 maps all
 22 layers, shares all 46 input IDs and the stop IDs, and has the same 2048
-capacity on both builds. Use this for the cross-branch A2 comparison.
+capacity on both builds. In the explicit dense cross-branch comparison at
+ce1cc26, main delivered 25.993 HTTP tokens/s and Phase 4 delivered
+20.944 with the same 128 greedy IDs. Each proposed mapping or execution
+port can be checked against main on this unchanged F16 path. Repeat the
+paired comparison on the same host and request. Record output equality,
+client wall time and peak sampled process memory. The measured difference
+spans whole revisions and supplies no attribution to an individual patch.
+[Cross-revision baseline](../2026-11-21-serving-baseline/tiny-dense/README.md).
 Use Phase 4 for Qwen Q8 performance until a main port runs the real model.
 The same preformatted Qwen text also gains an extra BOS on main.
 
