@@ -1,6 +1,6 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 28 decisions for which the
+The [candidate matrix](candidates.tsv) records 35 decisions for which the
 scope can already be established. Each row has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
@@ -34,6 +34,28 @@ the redundant split owners saved 1,647 MiB at the fresh loader peak and
 matched seven full-logit rows. The HTTP interval lay within −0.16% to
 +0.32%. This comparison qualifies a memory choice inside compound FFN.
 [Ownership report](../2026-11-22-q8-ownership/README.md).
+
+**Start Q8 work on main with the missing layer and output-head support.**
+The strongest measured prepared-weight subset uses only down and
+vocabulary weights. It improved the short dense HTTP request by 11.73%
+against native Q8 and cost 1,192,935,424 extra device bytes. Its quiet-host
+repeat and single-model residency evidence still matter for a port. The
+earlier all-family setting lost 64.21% on HTTP; preparing QKV and output
+alongside down and vocabulary lost 6.71% with native MLP. Both losing
+settings matched the control's 512 generated IDs.
+[Native and selective prepared comparison](../2026-11-21-native-split/README.md).
+[Historical family controls](../2026-10-25-q8-prepared-http.md).
+
+Packed GGUF QKV/output, compound FFN, and the packet/argmax portfolio
+improved HTTP throughput by 4.02%, 3.20%, and 4.01%, respectively, on
+their own historical controls. Packed GGUF loads added no weight or
+scratch allocation. The portfolio control already owned the same 37
+packets as its candidate. A deployment would still pay for them. Keep
+these three comparisons separate when budgeting a port. Each cleared
+its frozen 3% gate and fell below the general November 5% threshold.
+[Packed-load comparison](../2026-10-25-maxwell-packed-projection-incremental-http.md).
+[Compound comparison](../2026-10-27-maxwell-compound-runtime.md).
+[Portfolio comparison](../2026-10-29-portfolio-runtime.md).
 
 **Excluded work.** Seven October hypotheses failed their gates, one
 activation-preparation operator has no compatible local model, and the

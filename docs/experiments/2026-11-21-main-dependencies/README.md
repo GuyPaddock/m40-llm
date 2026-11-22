@@ -330,3 +330,9 @@ addition to main. The following dependencies are checked by
   input and preflight. Live copy drafting requires an independently
   successful complete-target result. A standalone kernel or a verifier
   port alone cannot establish a copy-workload speed gain.
+
+The [target cost replay](../2026-11-22-verifier-rejections/README.md)
+counts 18,396 down launches in the serial-down verifier per 512-token
+request. Both multi-row alternatives use 4,680. A saving against the
+serial schedule can include 13,716 fewer launches. The comparison with
+the existing multi-row schedule controls for that difference.
