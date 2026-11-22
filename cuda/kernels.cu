@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <float.h>
 #include <algorithm>
+#include <chrono>
 #include <vector>
 #include "common.h"
 
@@ -24,6 +25,7 @@ struct M40llmCudaEvent {
 };
 
 struct M40llmCudaContext {
+    std::chrono::steady_clock::time_point capture_started[2];
     int device_id;
     cudaStream_t prefill_stream;
     cudaStream_t decode_stream;
@@ -960,6 +962,12 @@ extern "C" {
         if (ensure_device(ctx) != 0) return -2;
         cudaStream_t stream = select_stream(ctx, stream_kind);
         if (!stream) return -3;
+        const char* diagnostics = std::getenv("M40LLM_RESEARCH_GRAPH_SETUP");
+        if (diagnostics && std::strcmp(diagnostics, "1") == 0) {
+            ctx->capture_started[stream_kind == 1] = std::chrono::steady_clock::now();
+        } else {
+            ctx->capture_started[stream_kind == 1] = {};
+        }
         cudaError_t err = cudaStreamBeginCapture(stream, cudaStreamCaptureModeRelaxed);
         return err == cudaSuccess ? 0 : -4;
     }
@@ -980,12 +988,24 @@ extern "C" {
         if (!graph) return -5;
 
         cudaGraphExec_t exec = nullptr;
+        const auto started = ctx->capture_started[stream_kind == 1];
+        const bool diagnostics = started != std::chrono::steady_clock::time_point{};
+        const auto captured = diagnostics ? std::chrono::steady_clock::now() : started;
         err = cudaGraphInstantiate(&exec, graph, nullptr, nullptr, 0);
         if (err != cudaSuccess) {
             cudaGraphDestroy(graph);
             return -6;
         }
 
+        if (diagnostics) {
+            const auto instantiated = std::chrono::steady_clock::now();
+            size_t nodes = 0;
+            const auto status = cudaGraphGetNodes(graph, nullptr, &nodes);
+            fprintf(stderr, "[graph-setup] capture_us=%.3f instantiate_us=%.3f nodes=%zu query_status=%d\n",
+                std::chrono::duration<double,std::micro>(captured - started).count(),
+                std::chrono::duration<double,std::micro>(instantiated - captured).count(),
+                nodes, static_cast<int>(status));
+        }
         M40llmCudaGraphExec* wrapped = new M40llmCudaGraphExec();
         wrapped->graph = graph;
         wrapped->exec = exec;
@@ -1043,7 +1063,9 @@ extern "C" {
             cudaEventDestroy(start);
             return -6;
         }
+        const auto started = std::chrono::steady_clock::now();
         err = cudaGraphLaunch(graph->exec, stream);
+        const auto submitted = std::chrono::steady_clock::now();
         if (err != cudaSuccess) {
             cudaEventDestroy(stop);
             cudaEventDestroy(start);
@@ -1062,6 +1084,8 @@ extern "C" {
             return -9;
         }
         err = cudaEventElapsedTime(elapsed_ms, start, stop);
+        fprintf(stderr, "[graph-replay] launch_cpu_us=%.3f\n",
+            std::chrono::duration<double,std::micro>(submitted - started).count());
         cudaEventDestroy(stop);
         cudaEventDestroy(start);
         return err == cudaSuccess ? 0 : -10;
