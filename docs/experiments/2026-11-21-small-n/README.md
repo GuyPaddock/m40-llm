@@ -83,3 +83,40 @@ unobserved layer or a full verification. A synthetic control with a 0.1 ms
 saving per layer produced 3.6 ms on both clocks while retaining a faster
 existing multirow control. Changed output bits, a duplicate arm position
 and a missing width all failed analysis. These are analysis checks only.
+
+## Complete-target qualification after operator admission
+
+The [M40 operator results](result/README.md) clear the admission budget.
+The research session at `5a2966b` offers three schedules using exactly
+the same model-owned planes. Retain the serial-down verifier, the existing
+multi-row launch and the new shared-weight launch. The standard constructor
+selects serial. Each direct schedule keeps 127 four-row transactions,
+three serial tails and the same 65-input/512-output trace. The cached
+SGEMM operator uses different rounding and would add 3,246,391,296 bytes
+if all 36 expanded down weights were retained. That implementation is
+absent from the existing complete verifier.
+
+The [runner](target.sh) requires one clean source build and one SHA-256
+for all three schedules. Each schedule must pass the full browser logit
+comparison, exact valid FP16 KV, full task generations, acceptance at
+all four positions, invalid cases, forced partial commits and rollback.
+Compare all 511 full FP32 logit-row hashes and the complete valid KV
+digest across schedules before timing.
+
+Warm all three schedules. Alternate and reverse their order across five
+rounds with the same resident model. Measure each begin-through-commit
+batch, full resident request, setup, prefill, tails, teardown, dispatch
+and memory. The primary gate requires at least 5% lower complete target
+latency against both correct controls, greater than twice variation, with
+positive paired lower bound. Extend once to ten for high variation.
+Borderline stable results get twenty independent confirmation rounds.
+Measure accepted-prefix lengths zero through three in every schedule over
+five rounds, including rollback and the ordinary correction. Use those
+costs before deciding whether to advance live copy drafting.
+
+From this worktree use `bash docs/experiments/2026-11-21-small-n/target.sh NEW_DIRECTORY MODEL RELEASE_EXE BUILD_MANIFEST`
+under the common M40 lock. The manifest contains the clean build source
+on line one and the executable SHA-256 on line two. Correctness, timing
+and sampled process memory have separate retained files. The CUDA build
+with cuBLAS supplies the common packed prefill. The target computation
+itself must issue zero cuBLAS calls.
