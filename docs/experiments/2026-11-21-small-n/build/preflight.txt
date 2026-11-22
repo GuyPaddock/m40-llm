@@ -1,0 +1,21 @@
+2026-11-21T22:49:41,018393598-05:00
+6d58b4eab96ee144be52597b43d08b90fdf583ad
+research/1121-small-n-verification
+rustc 1.95.0 (59807616e 2026-04-14)
+binary: rustc
+commit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860
+commit-date: 2026-04-14
+host: x86_64-unknown-linux-gnu
+release: 1.95.0
+LLVM version: 22.1.2
+cargo 1.95.0 (f2d3ce0bd 2026-03-21)
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2025 NVIDIA Corporation
+Built on Fri_Feb_21_20:23:50_PST_2025
+Cuda compilation tools, release 12.8, V12.8.93
+Build cuda_12.8.r12.8/compiler.35583870_0
+CARGO_TARGET_DIR=/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/research-1121/compatibility-target
+CARGO_PROFILE_DEV_DEBUG=0
+CARGO_PROFILE_TEST_DEBUG=0
+CARGO_BUILD_JOBS=3
+CUDA_VISIBLE_DEVICES=

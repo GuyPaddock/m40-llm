@@ -50,3 +50,9 @@ the three sampled-layer differences to 36 estimates headroom for the
 gate. It is not an observed full-verifier latency. An ambiguous estimate
 needs a matched target measurement; a successful rank at one, three or
 sixteen rows alone cannot reopen live speculation.
+
+The build checks at 6d58b4e passed formatting, the locked non-CUDA test
+suite with warnings denied (223 reported passes, zero failures), and
+CUDA/server all-target Clippy with NVCC and cuBLAS enabled. The [build
+records](build/status.tsv) include exits, exact commands and compressed
+logs. The CPU-only run contributes no GPU parity or timing evidence.
