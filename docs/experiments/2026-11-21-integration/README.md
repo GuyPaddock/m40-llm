@@ -219,7 +219,6 @@ requires qualified model and request performance with acceptable resource
 cost. The five historical projection-profile cohorts supply per-layer
 timing context for that decision.
 
-Research commits are local. To retrieve any linked GitHub report before
-its branch is published, use `git show FULL_SHA:docs/experiments/PATH`
-from this repository. Each row's full SHA and path remain valid when its
-worktree is removed.
+Origin has the November research branches. Each row pins a full source
+SHA and path. From a checkout with the research objects, the same files
+are available with `git show FULL_SHA:docs/experiments/PATH`.

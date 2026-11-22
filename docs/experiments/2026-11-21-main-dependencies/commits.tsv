@@ -90,3 +90,7 @@ ad486431b954a4ac5cb08c9e90f62378429f6c34	docs(perf): qualify isolated Q8 server 
 e1fcebb8f7bf274465f2d4493e0423ba0268c1ff	docs(perf): qualify live copy-only speculation	Guy Elsmore-Paddock
 d64a2edc93ee60c5f148874b51b6e2eac3174ce5	docs(quality): gate thresholded Q4 on model loss	Guy Elsmore-Paddock
 0bb4431cef4023504380ac99c8176740c6eb3e33	docs(quality): freeze the expanded sparse-Q4 gate	Guy Elsmore-Paddock
+a37d0bc8b9d9537f626b696868857f88dd80ada2	docs(perf): qualify the dense prefill stall	Guy Elsmore-Paddock
+8133884f04fb5024a3223281a8a0220debe0680d	test(bench): score prefill chunk tradeoffs	Guy Elsmore-Paddock
+c0cdbcb373b80248a551d87e6a942330cd5c7161	docs(test): retain guarded prefill chunk checks	Guy Elsmore-Paddock
+aef2d6278a44d63069636d1eca3749583d8c2868	test(quality): run the expanded sparse-Q4 gate	Guy Elsmore-Paddock

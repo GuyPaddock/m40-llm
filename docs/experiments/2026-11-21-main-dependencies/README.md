@@ -216,9 +216,10 @@ The same preformatted Qwen text also gains an extra BOS on main.
   The driver at 0736f06 reuses the measured arithmetic and existing
   research exclusions. The measured quality result at d64a2ed stops
   the zigzag thresholded layout for excess perplexity. Packed kept
-  all four dense-passing answers and proceeds to the 48-case quality
-  gate. Only an expanded quality pass and a paired complete-request
-  benefit can qualify a future packed port.
+  all four dense-passing answers. The 48-case quality runner at aef2d62
+  verifies the original November prompts against the Q4 tokenizer and
+  retains raw aligned FP32 history. A future packed port requires both
+  an expanded quality pass and a paired complete-request benefit.
 - A5 benchmark clients, optional timing clocks, D3 fairness diagnostics
   and oracle adapters are evidence tools. Main-serving changes require
   their own review and measured scheduling case. Preserve main's existing
@@ -235,16 +236,19 @@ batched prefill even when another request is decoding. The scheduler calls
 `DecodeSession::logits_for_ids` in `src/decode_session.rs` processes every
 remaining prompt token in the call. The scheduler holds the generation lock
 until the tick returns. The measured Phase 4 source at cfb9df0 uses the same
-order for dense KV. This explains how a stall can occur. Its frequency and
-size require the D3 two-client traces.
+order for dense KV. The five two-client traces at a37d0bc measured gaps
+of 344–351 seconds while a 2,060-token prompt ran to its first sample.
 
-If D3 admits a chunking experiment, reuse the session's existing
+The 16-position prototype at 8133884 reuses the session's existing
 `processed_len()` cursor. On both revisions, passing `&ids[..end]` to
 `logits_for_ids` starts at that cursor, preserves absolute positions and
 sets the cursor to `end` after a successful return. The existing sequential
 path already computes logits at every position. An initial chunking
 experiment can retain that arithmetic and discard intermediate results.
-Sample only after the full prompt completes.
+It samples only after the full prompt completes. Both cuBLAS builds
+passed exact dense KV, queue progression, cancellation and slot reuse
+at c0cdbcb. The full HTTP qualification continues separately with
+`M40LLM_RESEARCH_DENSE_PREFILL_CHUNKS=1` as the only arm change.
 
 Both revisions classify a request as pending prefill only while
 `processed_len() == 0`. A partial prompt must remain eligible for its
