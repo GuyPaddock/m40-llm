@@ -84,8 +84,9 @@ The same preformatted Qwen text also gains an extra BOS on main.
    `M40LLM_Q8_EXECUTION_WEIGHTS`, `M40LLM_Q8_EXECUTION_BUDGET_MB` and
    `M40LLM_Q8_EXECUTION_FAMILIES` are the opt-in controls. Measure peak
    total VRAM, including native weights still used by prefill.
-7. **Choose individual Q8 consumers after B3.** Sources are 4db3c1e for
-   fused QKV, e2dbc61 for fused MLP and b76177d for greedy vocabulary.
+7. **Choose individual Q8 consumers after B3.** Compare the prepared QKV
+   candidate at 4db3c1e and greedy vocabulary at b76177d against their
+   native controls. Keep e2dbc61 only as the rejected prepared MLP control.
    Later changes include dd8c5f6 for down-reduction order, 05607ab for
    split FFN, e5a06ac and e83e172 for compound FFN and joint-only
    ownership. Commit only each admitted consumer and its tests. Include
@@ -168,6 +169,10 @@ flowchart TD
     Native --> Packed["Causal packed target and verification transaction · 0b7992b"]
     Packed --> Verify["Complete small-N target verification"]
     Owner --> Verify
+    Joint --> FourGate["Four-row compound gate/up · cac4c29"]
+    FourGate --> Verify
+    Native --> Attn["Packed Q8 QKV/output · 8b7b20c / c264c89"]
+    Attn --> Verify
     C2["C2 rollback and near-tie parity · 081cc65"] -.-> Verify
     Verify -.-> Copy["Copy-only speculation in a live request"]
     B2["B2 matching blocks, quality and actual residency"] -.-> KV
@@ -280,3 +285,48 @@ split the optional port into the following reviewable changes.
 
 The November ownership comparison prices step 4 inside an existing
 compound engine. It supplies no speed estimate for steps 1–3 on main.
+
+## What a four-row verifier actually requires
+
+C1 tests the down projection inside an existing direct verifier. A
+standalone split-plane GEMV can be ported independently; the observed
+operator result does not qualify the full verifier as an independent
+addition to main. The following dependencies are checked by
+`DirectVerificationWorkspace::new` in
+`src/infer/direct_verification.rs` at 5a2966b.
+
+- **Exact model and cache.** The direct path requires 36 layers, D=2048,
+  FFN width 11008, 16 query heads and two head128 KV heads. The dense
+  cache must own exclusive storage for the 36 layer slots. All required
+  Q8 projections, prepared vocabulary and a 4-column/256-thread split
+  down owner must be present. The path uses a private session workspace
+  and the decode stream. Ordinary compressed serving cannot be routed
+  through this verifier with unchanged cache semantics.
+- **Attention and gate/up dependencies.** Porting the measured verifier
+  would require the packed GGUF QKV/output operators from 8b7b20c with
+  the guarded `PackedWarp256` model dispatch from c264c89. The target
+  uses the four-row compound gate/up entry point from cac4c29. Its three
+  single-token tails use the ordinary joint-only path. The measured
+  configuration also uses the packed prefix and greedy head. Minimum
+  tests include `q8_attention_projection_runtime`, `q8_four_row` and the
+  ordinary versus direct full-model fixture. The C1 experiment changes
+  none of these stages.
+- **New kernel and dispatch.** The down specialization at 0676570
+  changes `cuda/q8_small_rows.cuh`, its build/FFI wiring, and the
+  prepared device owner. It shares dequantized weights within a block
+  across at most four input rows and preserves FP32 accumulation. The
+  M40 four-row specialization uses 93 registers per thread, 256 threads,
+  4,096 dynamic shared bytes per block and zero reported stack or local
+  bytes. Physical DRAM transactions were unmeasured. The session change
+  at 5a2966b selects the candidate separately from both the serial and
+  existing multi-row controls. Retain ordinary serial down projection
+  in the existing constructor.
+- **Promotion boundary.** Include `tests/q8_separate_projection.rs`
+  and C2's `tests/exact_verification.rs`. Require agreement on all 511
+  full logit-row digests, the final valid dense KV, each accepted prefix,
+  rollback and the correction before ranking total target latency. The
+  three-arm qualification runner at b0afd1b measures 127 actual four-row
+  transactions per request plus three tails; 2dff3f8 binds the binary,
+  input and preflight. Live copy drafting requires an independently
+  successful complete-target result. A standalone kernel or a verifier
+  port alone cannot establish a copy-workload speed gain.

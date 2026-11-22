@@ -62,3 +62,8 @@ a37cedc87607497a17b2e05919952ee7c21cd9d2	feat(infer): prefer joint-only compound
 16fbcc48878d0bb272f7ca17249954b548ba8013	docs(research): admit four-row Q8 verification
 5a99f1a79283db407cfbd2442fd860a0e4fbfe56	docs(research): qualify compound Q8 ownership
 99ca16a9087b691accfc760f155d7d71b64b68b8	test(bench): isolate compound HTTP memory peaks
+8b7b20c4ae0e9840a9a67a139e66865a0e7a16a7	feat(cuda): probe packed Q8 projection loads
+c264c894b486941ae59b6943c67cedb2182a4778	feat(infer): select packed Q8 projections
+cac4c290afe8ac0482f36d7c6d6b339faf090eb4	feat(cuda): probe fixed four-row Q8 reuse
+b0afd1b40c3e22cd2351d66261385a235b1add20	feat(bench): compare complete verifier schedules
+2dff3f8276c77ec8acd5ad519177169f096e12e3	test(bench): bind full verifier qualification
