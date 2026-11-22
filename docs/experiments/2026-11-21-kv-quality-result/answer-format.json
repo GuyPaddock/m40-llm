@@ -1,0 +1,1365 @@
+{
+  "cohorts": [
+    {
+      "arm": "dense",
+      "context": "long",
+      "total": 24,
+      "frozen_passing": 10,
+      "passing_with_raw_json": 10,
+      "accepted_only_after_normalization": []
+    },
+    {
+      "arm": "dense",
+      "context": "short",
+      "total": 24,
+      "frozen_passing": 19,
+      "passing_with_raw_json": 15,
+      "accepted_only_after_normalization": [
+        "nov-relay-short",
+        "nov-museum-short",
+        "nov-parcel-short",
+        "nov-staff-short"
+      ]
+    },
+    {
+      "arm": "quantized_all",
+      "context": "long",
+      "total": 24,
+      "frozen_passing": 10,
+      "passing_with_raw_json": 10,
+      "accepted_only_after_normalization": []
+    },
+    {
+      "arm": "quantized_all",
+      "context": "short",
+      "total": 24,
+      "frozen_passing": 19,
+      "passing_with_raw_json": 15,
+      "accepted_only_after_normalization": [
+        "nov-relay-short",
+        "nov-museum-short",
+        "nov-parcel-short",
+        "nov-staff-short"
+      ]
+    },
+    {
+      "arm": "quantized_top8",
+      "context": "long",
+      "total": 24,
+      "frozen_passing": 8,
+      "passing_with_raw_json": 8,
+      "accepted_only_after_normalization": []
+    },
+    {
+      "arm": "quantized_top8",
+      "context": "short",
+      "total": 24,
+      "frozen_passing": 19,
+      "passing_with_raw_json": 15,
+      "accepted_only_after_normalization": [
+        "nov-relay-short",
+        "nov-museum-short",
+        "nov-parcel-short",
+        "nov-staff-short"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "case": "nov-ledger-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-ledger-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "factual_retrieval",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-platform-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-platform-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "factual_retrieval",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-drawer-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-drawer-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "factual_retrieval",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-crate-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-crate-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-relay-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": false,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-relay-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": true,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-museum-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": false,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-museum-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": true,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-parcel-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": false,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-parcel-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": true,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-staff-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": false,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-staff-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": true,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-order-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "chat",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-order-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "chat",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-rewrite-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "chat",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-rewrite-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "chat",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-omit-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "chat",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-omit-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "chat",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-format-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "chat",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-format-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "chat",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-slice-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "code_config",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-slice-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "code_config",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-fallback-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "code_config",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-fallback-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "code_config",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-loop-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "code_config",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-loop-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "code_config",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-sql-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "code_config",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-sql-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "code_config",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-stock-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-stock-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-chain-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "arithmetic",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-chain-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-cost-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-cost-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-time-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "arithmetic",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-time-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-lost-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-lost-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-host-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "long_form",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-host-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "long_form",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-trail-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-trail-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-meeting-short",
+      "context": "short",
+      "arm": "dense",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-meeting-long",
+      "context": "long",
+      "arm": "dense",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-ledger-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-ledger-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-ledger-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "factual_retrieval",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-ledger-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "factual_retrieval",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-platform-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-platform-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-platform-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "factual_retrieval",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-platform-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "factual_retrieval",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-drawer-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-drawer-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-drawer-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "factual_retrieval",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-drawer-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "factual_retrieval",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-crate-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-crate-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-crate-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-crate-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "factual_retrieval",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-relay-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": false,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-relay-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": false,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-relay-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": true,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-relay-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "multi_fact",
+      "frozen_pass": false,
+      "raw_json_matches": false,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-museum-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": false,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-museum-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": false,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-museum-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": true,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-museum-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": true,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-parcel-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": false,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-parcel-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": false,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-parcel-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": true,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-parcel-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": true,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-staff-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": false,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-staff-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": false,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-staff-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": true,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-staff-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "multi_fact",
+      "frozen_pass": true,
+      "raw_json_matches": true,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-order-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "chat",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-order-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "chat",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-order-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "chat",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-order-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "chat",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-rewrite-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "chat",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-rewrite-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "chat",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-rewrite-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "chat",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-rewrite-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "chat",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-omit-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "chat",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-omit-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "chat",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-omit-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "chat",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-omit-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "chat",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-format-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "chat",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-format-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "chat",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-format-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "chat",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-format-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "chat",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-slice-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "code_config",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-slice-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "code_config",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-slice-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "code_config",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-slice-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "code_config",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-fallback-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "code_config",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-fallback-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "code_config",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-fallback-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "code_config",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-fallback-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "code_config",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-loop-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "code_config",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-loop-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "code_config",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-loop-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "code_config",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-loop-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "code_config",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-sql-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "code_config",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-sql-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "code_config",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-sql-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "code_config",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-sql-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "code_config",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-stock-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-stock-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-stock-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-stock-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-chain-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "arithmetic",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-chain-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "arithmetic",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-chain-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-chain-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-cost-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-cost-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-cost-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-cost-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-time-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "arithmetic",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-time-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "arithmetic",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-time-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-time-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "arithmetic",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-lost-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-lost-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-lost-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-lost-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-host-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "long_form",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-host-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "long_form",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-host-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "long_form",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-host-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "long_form",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-trail-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-trail-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-trail-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-trail-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "long_form",
+      "frozen_pass": false,
+      "raw_json_matches": null,
+      "passes_with_raw_json": false
+    },
+    {
+      "case": "nov-meeting-short",
+      "context": "short",
+      "arm": "quantized_all",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-meeting-short",
+      "context": "short",
+      "arm": "quantized_top8",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-meeting-long",
+      "context": "long",
+      "arm": "quantized_all",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    },
+    {
+      "case": "nov-meeting-long",
+      "context": "long",
+      "arm": "quantized_top8",
+      "family": "long_form",
+      "frozen_pass": true,
+      "raw_json_matches": null,
+      "passes_with_raw_json": true
+    }
+  ]
+}
