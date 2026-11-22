@@ -154,6 +154,30 @@ The same preformatted Qwen text also gains an extra BOS on main.
   their own review and measured scheduling case. Preserve main's existing
   simple HTTP response contract.
 
+### Where a mixed prefill/decode tick spends its time
+
+Main already has a dense buffered scheduler. Its packed prefill requires
+head dimension 64. Phase 4 also admits dimension 128, used by D3's Qwen.
+At e1403e0, `src/server.rs::process_scheduler_batch_tick` separates pending
+prefills from active decodes. A single arriving prompt is ineligible for
+batched prefill even when another request is decoding. The scheduler calls
+`DecodeSchedulerRequest::step` on that prompt before servicing the decode.
+`DecodeSession::logits_for_ids` in `src/decode_session.rs` processes every
+remaining prompt token in the call. The scheduler holds the generation lock
+until the tick returns. The measured Phase 4 source at cfb9df0 uses the same
+order for dense KV. This explains how a stall can occur. Its frequency and
+size require the D3 two-client traces.
+
+If D3 admits a chunking experiment, the port needs a prompt cursor that
+survives ticks and a way to distinguish partial prefill from ready decode.
+Both revisions currently classify a request as pending prefill only while
+`processed_len() == 0`. A partial chunk must advance valid KV without
+sampling or counting a generated token. Test arrivals during decode,
+one-token and uneven final chunks, exact generated IDs and valid KV,
+cancellation between chunks, and sequence-slot reuse. The experiment can
+use main's existing scheduler and dense sequence leases independently of
+the Phase 4 compressed batched-prefill backend.
+
 For a final port, execute the affected tests first, then formatting, locked
 non-CUDA tests with warnings denied, CUDA/server Clippy, CUDA cuBLAS both
 ways and the matched real CLI/HTTP cases. Each correctness or performance
