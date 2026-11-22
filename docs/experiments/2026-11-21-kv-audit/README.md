@@ -175,3 +175,12 @@ the archive. It publishes into a fresh directory after both replays match.
 bash docs/experiments/2026-11-21-kv-audit/pack-history.sh \
     ../raw/kv-history-boundary-01 ../raw/kv-history-inputs.json ../raw/kv-boundary-package-01
 ```
+
+On the 3,203-token relay task, all four arms generated 17 tokens. The
+dense, full mixed and top-64 IDs matched throughout. Top-8 produced the
+same port number, 23, and changed the Boolean from true to false. The
+only differing ID was at zero-based generated position 13 (830 versus
+895). The frozen prefix observations are at positions 0, 1, 8 and 16.
+They support comparisons along the dense trajectory, but the logit margin
+at position 13 was unmeasured. This lost dense-passing answer fails the
+top-8 preservation gate. [Generation records](history-relay-generations.json).
