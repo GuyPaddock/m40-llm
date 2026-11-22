@@ -1,4 +1,3 @@
-use super::meta::dtype_size_bytes;
 use super::tensor_views::build_device_tensor_views;
 use super::{LoadedModel, ModelConfig};
 use crate::cuda::CudaContext;
@@ -10,7 +9,8 @@ use std::ffi::c_void;
 impl LoadedModel {
     pub fn from_gguf(gguf: GgufModel, gguf_bytes: Vec<u8>, device_id: i32) -> Result<Self> {
         let cuda = CudaContext::new(device_id)?;
-        let data_off = gguf.data_offset as usize;
+        let data_off =
+            usize::try_from(gguf.data_offset).context("GGUF data offset exceeds usize")?;
         if data_off > gguf_bytes.len() {
             anyhow::bail!(
                 "GGUF data_offset {} beyond file size {}",
@@ -38,29 +38,6 @@ impl LoadedModel {
         } else {
             None
         };
-        // Validate that all known-sized tensors fit within weights_bytes
-        for t in &gguf.tensors {
-            if let Some(layout) = dtype_size_bytes(t.dtype) {
-                let n_elems: u64 = t.shape.iter().copied().product::<u64>();
-                let n_elems: usize = usize::try_from(n_elems)
-                    .context("tensor element count does not fit in usize")?;
-                let n_blocks = n_elems.div_ceil(layout.block_elems);
-                let need = n_blocks
-                    .checked_mul(layout.block_bytes)
-                    .context("tensor size overflow")?;
-                let start = t.offset as usize;
-                let end = start.saturating_add(need);
-                if end > weights_bytes.len() {
-                    anyhow::bail!(
-                        "tensor '{}' overflows weights blob: [{}..{}) > {}",
-                        t.name,
-                        start,
-                        end,
-                        weights_bytes.len()
-                    );
-                }
-            }
-        }
         #[cfg(feature = "cuda")]
         let device_tensors = build_device_tensor_views(
             &gguf.tensors,

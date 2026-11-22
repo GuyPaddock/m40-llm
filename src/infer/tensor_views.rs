@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::ffi::c_void;
 
-fn contiguous_strides(shape: &[u64]) -> Result<Vec<usize>> {
+fn contiguous_layout(shape: &[u64]) -> Result<(Vec<usize>, usize)> {
     if shape.is_empty() {
         anyhow::bail!("tensor shape must be non-empty");
     }
@@ -23,7 +23,7 @@ fn contiguous_strides(shape: &[u64]) -> Result<Vec<usize>> {
             .context("stride overflow while building tensor view")?;
     }
     strides_rev.reverse();
-    Ok(strides_rev)
+    Ok((strides_rev, stride))
 }
 
 #[allow(clippy::collapsible_if)]
@@ -45,27 +45,11 @@ pub(super) fn build_device_tensor_views(
             .offset
             .try_into()
             .context("tensor offset does not fit in usize")?;
-        // Alignment by dtype
-        let align = match t.dtype {
-            GgmlDType::F16 => 2usize,
-            GgmlDType::F32 => 4usize,
-            _ => 1usize,
-        };
-        if align > 1 && !offset_usize.is_multiple_of(align) {
-            anyhow::bail!(
-                "tensor '{}' offset {} misaligned for {:?} (align {})",
-                t.name,
-                offset_usize,
-                t.dtype,
-                align
-            );
-        }
         let layout = dtype_size_bytes(t.dtype)
             .with_context(|| format!("tensor '{}' unsupported dtype: {:?}", t.name, t.dtype))?;
         // Known element size: check shape product and bounds within weights_len
-        let n_elems_u64: u64 = t.shape.iter().copied().product::<u64>();
-        let n_elems: usize =
-            usize::try_from(n_elems_u64).context("tensor element count does not fit in usize")?;
+        let (strides, n_elems) = contiguous_layout(&t.shape)
+            .with_context(|| format!("tensor '{}' layout computation failed", t.name))?;
         let n_blocks = n_elems.div_ceil(layout.block_elems);
         let need = n_blocks
             .checked_mul(layout.block_bytes)
@@ -81,8 +65,20 @@ pub(super) fn build_device_tensor_views(
                 t.name, offset_usize, nbytes, weights_len
             );
         }
-        let strides = contiguous_strides(&t.shape)
-            .with_context(|| format!("tensor '{}' stride computation failed", t.name))?;
+        let align = match t.dtype {
+            GgmlDType::F16 => 2usize,
+            GgmlDType::F32 => 4usize,
+            _ => 1usize,
+        };
+        if !offset_usize.is_multiple_of(align) {
+            anyhow::bail!(
+                "tensor '{}' offset {} misaligned for {:?} (align {})",
+                t.name,
+                offset_usize,
+                t.dtype,
+                align
+            );
+        }
         // Safe device pointer arithmetic
         #[cfg(feature = "cuda")]
         let dptr: *mut c_void = {

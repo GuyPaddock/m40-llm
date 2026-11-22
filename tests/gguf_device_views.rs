@@ -202,3 +202,23 @@ fn gguf_device_views_reject_zero_dim() {
     assert!(LoadedModel::from_gguf(gg, bytes, -1).is_err());
     let _ = std::fs::remove_file(&path);
 }
+
+#[path = "common/tiny_gguf.rs"]
+mod tiny_gguf;
+
+/// A tensor whose dimensions cannot be multiplied must return a loader error
+/// in both checked and optimized builds before the caller receives any view.
+#[test]
+fn gguf_device_views_reject_unrepresentable_element_count() {
+    let (mut gguf, bytes) = tiny_gguf::make_identity_tiny_gguf(Default::default());
+    gguf.tensors.push(m40_llm::gguf::GgufTensor {
+        name: "oversized".into(),
+        shape: vec![1u64 << 32, 1u64 << 32],
+        dtype: GgmlDType::F16,
+        offset: 0,
+    });
+    let error = LoadedModel::from_gguf(gguf, bytes, -1)
+        .err()
+        .expect("rejected tensor shape");
+    assert!(format!("{error:#}").contains("oversized"), "{error:#}");
+}
