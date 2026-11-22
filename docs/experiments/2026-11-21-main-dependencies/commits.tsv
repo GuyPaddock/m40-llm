@@ -42,3 +42,13 @@ fc487e89fd700f50135e885d9d38b3d8893f2a45	test(cuda): check close Q8 head predict
 a438032f85c8d9f1cb516cf1a7c3d7810bb59747	test(bench): gate small-row timing on parity
 3df1dd2556b0d66a46a7544568aa7105274c3b49	feat(infer): retain Q4 channel packing
 9a6800383efc50f8cd4ea1ac7a8de59b318832a7	feat(cuda): retain selected Q4 execution
+6629f75e14dd83397b53a7c21bf8704d1592e474	perf(cuda): fuse qwen decode projections
+c71254cfe7e5f66f62c589de3c0472c6beda83d2	perf(cuda): fuse q8 decode projections
+54226d75bb2cf6423d25bdf40a700c164208833f	feat(cuda): add q4 gguf projection support
+63ea66a2b5f83bf07ac1945b64554796343d6cfd	fix(cuda): preserve main graph attention arithmetic
+4efc654cd87c1809c89b58c50899ae0ed356c414	test(bench): bind main graph parity binaries
+4d0a79fda28d1eab0f64f2bfccf0350c23a34953	test(bench): admit the local Q4 baseline
+44f15e9376d560b2663c1e9d6bb446e9ae08908b	docs(quality): retain two top-eight regressions
+46b4a461c1eaf16a6b99239b6787c4fe943345a7	docs(kvcache): reconcile mixed storage costs
+110f8c7b6a84e4758e5e7a2aeb7bfa3fccaa6621	docs(perf): replay Q8 projection stage costs
+21aca1cb11034d127b27d6169e98933dbc97222d	test(bench): verify actual graph node counts

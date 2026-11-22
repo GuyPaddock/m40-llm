@@ -138,3 +138,84 @@ ways and the matched real CLI/HTTP cases. Each correctness or performance
 commit needs a trace to the source revision plus its own reproduction on
 the chosen integration base. Current research branches are independent
 and no integration branch has been created.
+
+## Minimum runtime dependencies and qualification order
+
+Solid arrows show capabilities required by a consumer. Dotted arrows show
+measurements required before proposing a port. Each optional family can be
+reviewed and rejected independently.
+
+```mermaid
+flowchart TD
+    M["Pinned main e1403e0"] --> Shape["GGUF checked layouts · 541cec1"]
+    M --> Scale["Q8 KV eviction scale repair · 75ed22f"]
+    M --> Graph["Opt-in dense graph dispatch repair · 63ea66a"]
+    M --> KV["Existing direct mixed KV, one sequence"]
+    M --> Native["Native Q8 layer and output admission · 6f9e573 / 616d628"]
+    Native --> Owner["Model-owned, budgeted split planes · 11f2fb6 / 3d176fe"]
+    Owner --> Matmul["Prepared single-row down or vocabulary matmul"]
+    Native --> Fused["One-row fused entry points in normal forward · 6629f75 / c71254c"]
+    Fused --> QKV["Prepared fused QKV · 4db3c1e"]
+    Fused --> FFN["Prepared gate/up/SwiGLU · e2dbc61"]
+    Owner --> QKV
+    Owner --> FFN
+    FFN --> Joint["Compound gate/up and joint-only ownership · e5a06ac / e83e172"]
+    Native --> Packed["Causal packed target and verification transaction · 0b7992b"]
+    Packed --> Verify["Complete small-N target verification"]
+    Owner --> Verify
+    C2["C2 rollback and near-tie parity · 081cc65"] -.-> Verify
+    Verify -.-> Copy["Copy-only speculation in a live request"]
+    B2["B2 matching blocks, quality and actual residency"] -.-> KV
+    B1["Exact TinyLlama and boundary tests · 4efc654"] -.-> Graph
+    B3["B3 whole-request, ownership and output evidence"] -.-> Matmul
+    B3 -.-> Joint
+```
+
+**Port boundaries that change the estimate.** Main's single-token forward
+calls `qkv_project_f32xf16_gguf_f32_async`, `mlp_gates_f32xf16_gguf_f32_async`
+and the separate down projection. Multirow prefill also uses these APIs.
+The Q8 dtype dispatch in both ordinary GGUF matmul methods (6f9e573) and
+the mapped output head (616d628) are sufficient starting points for
+native Q8 admission. Reuse main's checked shapes and view metadata.
+Test a real full forward before crediting any family hit.
+
+For down and vocabulary, 11f2fb6 already attempts the model-owned
+`try_project` in the synchronous and asynchronous GGUF matmul paths.
+b76177d changes greedy dispatch when prepared vocabulary is present.
+Its fast token path presupposes a device logits buffer, argmax and one
+token readback (introduced at 6629f75). A minimal main port can use the
+prepared matmul with its existing full-logit/host sampler. It must
+measure its own latency. Matching the historical greedy HTTP workload
+requires the greedy device path and stable ties, stop handling, buffer
+lifetime and nongreedy fallback. Keep that as a separate optional commit.
+
+Prepared fused QKV and gate/up do not attach to main's ordinary three-
+and two-matmul methods by applying 4db3c1e or e2dbc61. Both insert calls
+*inside existing one-row fused dispatch* introduced at 6629f75 and extended
+for Q8 at c71254c. Port only the selected forward call site, dtype/shape
+guard, required stream dependency and prepared wrapper. Preserve main's
+ordinary path when the prepared owner is absent or the row shape differs.
+The historical native-fused control is necessary to attribute a claimed
+prepared-versus-native-fused improvement. Admitting native Q8 does not
+require every fused kernel. Likewise, do not import the entire F16
+optimization, sampling, or server diff from 6629f75 as a prerequisite.
+
+**Output-head selection is part of correctness.** On e1403e0,
+`map_lm_head` rejects an unsupported dedicated output type before looking
+for tied embeddings. Later 54226d7 allows another fall-through from an
+unsupported dedicated type to a compatible embedding. Preserve the
+narrow 616d628 Q8 mapping when porting Q8. Test supported dedicated Q8,
+absent-head tied Q8, wrong tied shape, and an unsupported dedicated head
+with otherwise usable embeddings. Record the exact selected tensor name,
+type and tied flag. The Q4 secondary admission (4d0a79f) selected a real,
+dedicated Q6_K head; it did not rely on tied substitution. Q4 support
+and its slower historical 32-token probe require separate review.
+
+**Quantized KV has two separate decisions.** Mixed top-8 failed two
+dense-passing long tasks on research/1121-quantized-kv 44f15e9. Its
+existing use in supported generation on both bases makes this a recorded
+default-behavior risk. Changing its default needs separate authorization
+and quality/serving evidence. A sidecar-stride redesign is also unnecessary
+for this single-request promotion gate. The byte reconciliation at 46b4a46
+bounds its potential savings at 23,887,872 bytes. B2's ownership and
+peak measurements still govern any memory claim.
