@@ -301,3 +301,87 @@ fn test_repeated_verification_after_interleaved_rollback() -> Result<()> {
     assert_eq!(CudaContext::total_device_bytes(), initial);
     Ok(())
 }
+
+/// Adjacent FP16 scales on otherwise identical head columns force a close,
+/// nonzero top-two margin. Zero-scale distractor columns must remain finite.
+#[test]
+#[ignore = "requires serial M40 close-logit verification"]
+fn test_near_tied_q8_head_preserves_greedy_predictions() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let _env = configure();
+    let initial = CudaContext::total_device_bytes();
+    let load = || -> Result<LoadedModel> {
+        let (gguf, mut weights) = fixture::build_prefill_fixture(true);
+        let head = gguf
+            .tensors
+            .iter()
+            .find(|t| t.name == "output.weight")
+            .unwrap();
+        let row_bytes = head.shape[0] as usize / 32 * 34;
+        let start = head.offset as usize;
+        let end = start + row_bytes * head.shape[1] as usize;
+        for (id, row) in weights[start..end].chunks_exact_mut(row_bytes).enumerate() {
+            // The other codes are nonzero on purpose: zero scales must zero them.
+            row.fill(1);
+            for block in row.chunks_exact_mut(34) {
+                block[..2].fill(0);
+            }
+            if id < 4 {
+                row[2..34].fill(0);
+                row[2] = if id < 2 { 1 } else { 255 };
+                row[..2].copy_from_slice(&(0x0400_u16 + (id % 2) as u16).to_le_bytes());
+            }
+        }
+        let mut loaded = LoadedModel::from_gguf_with_q8_backends(
+            gguf,
+            weights,
+            -1,
+            Q8ExecutionConfig::parse("split", Some("6144"), Some("gate-up,down,vocabulary"))?,
+            Q8FfnConfig::split_f32x4(),
+            Q8PrefillBackend::Native,
+        )?;
+        loaded.allocate_kv_cache_for_layers(32)?;
+        Ok(loaded)
+    };
+    {
+        let mut reference_model = load()?;
+        let mut candidate_model = load()?;
+        let mut reference = VerificationSession::new(&mut reference_model, &[])?;
+        let mut candidate = VerificationSession::new(&mut candidate_model, &[])?;
+        let prompt = [7, 4, 1];
+        let mut token = reference.prefill(&prompt)?;
+        assert_eq!(candidate.prefill(&prompt)?, token);
+        let mut inputs = Vec::new();
+        let mut expected = Vec::new();
+        for _ in 0..4 {
+            inputs.push(token);
+            let (next, logits) = reference.serial_step_with_logits(token)?;
+            assert!(logits.iter().all(|value| value.is_finite()));
+            assert!(logits[4..].iter().all(|&value| value == 0.0));
+            let mut top = logits[..4].to_vec();
+            top.sort_by(|a, b| b.total_cmp(a));
+            let margin = top[0] - top[1];
+            assert!(margin > 0.0 && margin <= top[0] * 0.0011, "{top:?}");
+            eprintln!(
+                "near-tied Q8 head margin={margin:e} best={:e} id={next}",
+                top[0]
+            );
+            token = next;
+            expected.push((next, logits));
+        }
+        let batch = candidate.begin(&inputs, true)?;
+        for ((&prediction, row), (next, logits)) in batch
+            .predictions()
+            .iter()
+            .zip(batch.captured_logits().unwrap())
+            .zip(&expected)
+        {
+            assert_eq!(prediction, *next);
+            compare_logits(row, logits);
+            assert!(row[4..].iter().all(|&value| value == 0.0));
+        }
+        assert_eq!(batch.commit()?.accepted_tokens, inputs);
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
