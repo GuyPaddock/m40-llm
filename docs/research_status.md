@@ -7,7 +7,7 @@ against the current code, worktree, Git history, and linked raw results.
 ## November consolidation
 
 Use the [integration matrix](experiments/2026-11-21-integration/README.md)
-for the current 35 dispositions. Graph parity and speculative rollback have
+for the current 38 dispositions. Graph parity and speculative rollback have
 hardware evidence in both cuBLAS builds. The [evidence audit](experiments/2026-11-21-evidence-audit/README.md)
 includes the original raw logs and verifier source patch. Six
 [source-isolated build checks](experiments/2026-11-21-build-compatibility/README.md)
@@ -18,7 +18,7 @@ Phase 4 is pinned at 48c6333 and remote main at e1403e0. The [inventory](experim
 | Study | November evidence or outstanding decision |
 |---|---|
 | Graph | On research/1121-graph-dispatch, bfae111 records four failing unrepaired paths and e2b4739 passes the exact dispatch and replay checks with cuBLAS on and off. Full-model HTTP and setup diagnostics use 66f21e3. The Qwen native-head128 HTTP gain was 0.361% at e6567e5, below the 5% gate. TinyLlama synchronous F16 fell back before capture. |
-| KV | On research/1121-quantized-kv, c484536 retains all dense answers (19/24 short and 10/24 long pass). At 9d4b78c, top-8 loses three long dense-passing answers and top-64 retains all 29 passes where all history fits. At 46b4a46 the 3072-position allocation reconciles to the byte. At e100c54, mixed backing saves 47 MiB of 4,674 MiB whole-process peak at capacity 8,448. At 4281ad8 all 144 matched direct/staged operator groups passed. Full-model consumer timing and beyond-top-64 quality remain open. |
+| KV | On research/1121-quantized-kv, c484536 retains all dense answers (19/24 short and 10/24 long pass). At 9d4b78c, top-8 loses three long dense-passing answers and top-64 retains all 29 passes where all history fits. At 46b4a46 the 3072-position allocation reconciles to the byte. At e100c54, mixed backing saves 47 MiB of 4,674 MiB whole-process peak at capacity 8,448. At 4281ad8 all 144 matched direct/staged operator groups passed. At 341e34f the complete October rerun matched all 86 deterministic records and retained seven dense passes. Full-model consumer timing and beyond-top-64 quality remain open. |
 | Prepared Q8 | Research/1121-q8-projections 110f8c7 recovers all 36 layer timings in five M40 configurations. Gate/up/SwiGLU and down projection dominate the remaining projection cost. The November short split comparison uses a different baseline from the compound and portfolio runs. |
 | Small-N and rollback | Research/1121-verifier-correctness 081cc65 records actual two-build rollback/near-tie results. Research/1121-small-n-verification 16fbcc4 passes four-row operator admission on three weights. The complete-target binary is pinned at cfb0c58. The [target audit](experiments/2026-11-22-verifier-rejections/README.md) reproduces 635 historical transactions and checks both multi-row down schedules against the same launch budget. |
 | Other studies | Research/1121-active-row-kv 377bec4 closes idle-slot indexing with exact outputs at four idle lengths and a distinct two-active positive control. Research/1121-gsq-quality 59aaf76 identifies comparable model files and the missing layer dispatch. On independently main-based research/1121-gguf-compatibility, 541cec1 fixes checked shape arithmetic and 1989d82 qualifies it. |
@@ -73,6 +73,8 @@ adapts graph attention to main without Phase 4 projection APIs. 4efc654
 binds the fixed and unfixed grids plus the eight-position TinyLlama F16
 full-logit/cache checks. Their release builds are verified; hardware
 evidence for the main-based repair is pending.
+
+The charged Q4 sparse screen at 19e6db8 passed its fixed-mask gate for lossless packed and zigzag weights at 25% and 50% active inputs. Native-layout indexing failed. Research/1121-sparse-q4-live 55591ac freezes the same-checkpoint live study.
 
 The serial cohorts and their raw logs live under the adjacent research-1121/raw directory. Compiled probes and queued jobs are pending evidence until their completion records, workloads and outputs are audited. The final shortlist and rebuild sequence remain open.
 
