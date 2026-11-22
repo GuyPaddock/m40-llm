@@ -23,7 +23,8 @@ jq -e '.cases[] | select(.name=="short") | .request' "$manifest" > "$out/request
 if [[ "$cohort" == compound ]]; then
     jq -e --slurpfile req "$out/request.json" '.configuration.browser_prompt==$req[0].prompt and $req[0].max_tokens==512' "$ref" >/dev/null
     jq -sce 'map(select(.kind=="q8_runtime_browser_generation" and .label=="candidate")) | first.generation.generated_token_ids|select(length==512)' "$quality" > "$out/expected.json"
-    jq '.configuration.environment' "$ref" > "$out/environment.json"
+    # The October example supplied this backend through the model constructor.
+    jq '.configuration.environment + {M40LLM_Q8_PREFILL_BACKEND:"dequant-sgemm"}' "$ref" > "$out/environment.json"
 else
     jq -es --slurpfile req "$out/request.json" 'first as $m | $m.prompt==$req[0].prompt and
       $req[0].max_tokens==512 and $m.context_tokens==1024 and $m.kv_mode=="off" and
