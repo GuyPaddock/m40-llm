@@ -29,14 +29,15 @@ pub struct FfnCapture {
     layers_by_gate: HashMap<usize, usize>,
     d_model: usize,
     hidden_dim: usize,
+    sync_prefill: bool,
     state: Mutex<CaptureState>,
 }
 
 impl LoadedModel {
     fn ffn_capture_source(&self, view: &DeviceTensorView) -> Result<FfnTensorSource> {
         ensure!(
-            view.dtype == GgmlDType::Q8_0 && view.shape.len() == 2,
-            "FFN capture requires Q8_0 projection weights"
+            matches!(view.dtype, GgmlDType::Q4_0 | GgmlDType::Q8_0) && view.shape.len() == 2,
+            "FFN capture requires Q4_0 or Q8_0 projection weights"
         );
         self.tensor_device_ptr("FFN capture source", view)?;
         let mut matching = self.gguf.tensors.iter().filter(|tensor| {
@@ -141,6 +142,7 @@ impl LoadedModel {
         );
         let d_model = plan.d_model;
         let hidden_dim = plan.hidden_dim;
+        let sync_prefill = plan.is_sparse_q4;
         let collector = FfnCaptureCollector::new(
             plan,
             digest(&self.host_weights),
@@ -151,6 +153,7 @@ impl LoadedModel {
             layers_by_gate,
             d_model,
             hidden_dim,
+            sync_prefill,
             state: Mutex::new(CaptureState {
                 collector,
                 normalized,
@@ -260,6 +263,9 @@ impl LoadedModel {
             return Ok(());
         }
         self.cuda.synchronize_stream(CudaStream::Decode)?;
+        if capture.sync_prefill {
+            self.cuda.synchronize_stream(CudaStream::Prefill)?;
+        }
         let CaptureState {
             collector,
             normalized,

@@ -5,10 +5,7 @@ use super::{
 use anyhow::{ensure, Context, Result};
 use m40_llm::{
     cuda::CudaContext,
-    evaluation::{
-        corpus::{Corpus, Split},
-        ffn_capture::FfnCapturePlan,
-    },
+    evaluation::{corpus::Corpus, ffn_capture::FfnCapturePlan},
     infer::execution_weights::{Q8ExecutionConfig, Q8SeparateLaunch},
 };
 use serde_json::{json, Value};
@@ -24,11 +21,12 @@ const HOST_BUDGET: usize = 32 * 1024 * 1024;
 
 fn validate_request(args: &Args) -> Result<()> {
     ensure!(
-        matches!(args.split, SplitChoice::Calibration)
+        (matches!(args.split, SplitChoice::Calibration)
+            || (args.sparse_q4_capture && matches!(args.split, SplitChoice::HeldOut)))
             && args.context_tokens == 1024
             && args.skip_layers.is_empty()
             && args.step_timing_trials == 0,
-        "FFN capture requires --split calibration, context 1024, no transforms or timing trials"
+        "FFN capture requires its authorized split, context 1024, no transforms or timing trials"
     );
     let destination = args
         .capture_ffn_inputs
@@ -88,7 +86,24 @@ fn execution_settings(environment: &BTreeMap<String, String>) -> Result<Value> {
 pub(super) fn capture(args: &Args) -> Result<()> {
     validate_request(args)?;
     let environment = run::environment()?;
-    let settings = execution_settings(&environment)?;
+    let split = args.split.selected()[0];
+    let (settings, execution, row_cap) = if args.sparse_q4_capture {
+        research::validate_execution(&environment)?;
+        (
+            json!({"environment":environment,"allocated_context_tokens":1024,"prepared_weights":"off",
+                "kv_mode":"off","prefill_mode":"sequential","sampling":"greedy top_k=1 seed=0; natural stopping",
+                "task_template":"canonical Qwen system+user ChatML","split":split,"source_layer_ids":[0,17,35],
+                "max_generated_input_rows_per_task":8,"capture_host_payload_budget_bytes":HOST_BUDGET}),
+            Q8ExecutionConfig::disabled(),
+            8,
+        )
+    } else {
+        (
+            execution_settings(&environment)?,
+            Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
+            ROW_CAP,
+        )
+    };
     let execution_sha256 = records::sha256(&serde_json::to_vec(&settings)?)?;
     let corpus_bytes = fs::read(&args.corpus)?;
     let corpus = Corpus::parse(std::str::from_utf8(&corpus_bytes)?)?;
@@ -98,14 +113,63 @@ pub(super) fn capture(args: &Args) -> Result<()> {
         records::file_sha256(&args.reference_model)? == model_sha256,
         "FFN capture requires the same original reference/model weights"
     );
+    let plan = if args.sparse_q4_capture {
+        FfnCapturePlan::sparse_q4(
+            model_sha256.clone(),
+            corpus_sha256.clone(),
+            execution_sha256.clone(),
+            &corpus,
+            split,
+        )?
+    } else {
+        FfnCapturePlan::new(
+            model_sha256.clone(),
+            corpus_sha256.clone(),
+            execution_sha256.clone(),
+            &corpus,
+            36,
+            vec![0, 17, 35],
+            2048,
+            11008,
+            row_cap,
+        )?
+    };
     let mut report = Report::create(&args.output)?;
     let initial_device_bytes = CudaContext::total_device_bytes();
+    let mut native_generations = BTreeMap::new();
+    if args.sparse_q4_capture {
+        let (reference, tokenizer) = run::load_model_with_setup(
+            &args.reference_model,
+            args.context_tokens,
+            execution,
+            |model| model.set_diagnostic_layer_mask(&[]),
+        )?;
+        run::validate_inputs(
+            &corpus,
+            &[split],
+            &tokenizer,
+            &tokenizer,
+            args.context_tokens,
+            reference.model_config.vocab_size,
+        )?;
+        tasks::warmup(&reference, &tokenizer)?;
+        for task in &corpus.split(split).tasks {
+            let (prompt, _) = tasks::encode_task(&tokenizer, &task.prompt)?;
+            let started = Instant::now();
+            let generation = tasks::generate(&reference, &prompt, task.max_tokens)?;
+            let elapsed = started.elapsed().as_secs_f64() * 1000.0;
+            let record = tasks::generation_record(&generation, elapsed, &reference)?;
+            native_generations.insert(task.id.clone(), (generation, record));
+        }
+        drop(reference);
+        ensure!(
+            CudaContext::total_device_bytes() == initial_device_bytes,
+            "trace-off Q4 reference leaked device allocations"
+        );
+    }
     let started = Instant::now();
-    let (mut model, tokenizer) = run::load_model_with_setup(
-        &args.model,
-        args.context_tokens,
-        Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
-        |model| {
+    let (mut model, tokenizer) =
+        run::load_model_with_setup(&args.model, args.context_tokens, execution, |model| {
             model.set_diagnostic_layer_mask(&[])?;
             let config = &model.model_config;
             ensure!(
@@ -114,31 +178,26 @@ pub(super) fn capture(args: &Args) -> Result<()> {
                     && config.embedding_length == 2048
                     && config.feed_forward_length == 11008
                     && config.attention_key_length == 128,
-                "M02 FFN capture requires the Qwen2.5-3B Q8_0 model shape"
+                "FFN capture requires the Qwen2.5-3B model shape"
             );
-            let plan = FfnCapturePlan::new(
-                model_sha256.clone(),
-                corpus_sha256.clone(),
-                execution_sha256.clone(),
-                &corpus,
-                36,
-                vec![0, 17, 35],
-                2048,
-                11008,
-                ROW_CAP,
-            )?;
             model.begin_ffn_capture(plan, HOST_BUDGET)
-        },
-    )?;
+        })?;
     let prepared = model.q8_execution_stats();
-    ensure!(
-        prepared.has_prepared_vocabulary
-            && prepared.single_row_down_split_launch == Some(Q8SeparateLaunch::new(4, 256)?),
-        "FFN capture did not install the qualified prepared down/vocabulary control"
-    );
+    if args.sparse_q4_capture {
+        ensure!(
+            prepared.resident_bytes == 0 && prepared.tensors.is_empty(),
+            "Q4 capture requires native GGUF weights"
+        );
+    } else {
+        ensure!(
+            prepared.has_prepared_vocabulary
+                && prepared.single_row_down_split_launch == Some(Q8SeparateLaunch::new(4, 256)?),
+            "FFN capture did not install the qualified prepared down/vocabulary control"
+        );
+    }
     run::validate_inputs(
         &corpus,
-        &[Split::Calibration],
+        &[split],
         &tokenizer,
         &tokenizer,
         args.context_tokens,
@@ -154,13 +213,24 @@ pub(super) fn capture(args: &Args) -> Result<()> {
         "host_compiler":records::command_text("g++",&["--version"])?,"cuda_flags":research::CUDA_FLAGS,
         "device":format!("{:?}",model.cuda.current_device_props()?),
         "setup_through_identity_ms":started.elapsed().as_secs_f64()*1000.0,"is_performance_measurement":false,
-        "scope":"calibration-only read-only paired inputs; active capture adds diagnostic D2H and stream drains; no held-out/browser observations"}))?;
+        "split":split,"scope":"read-only paired inputs; diagnostic D2H and stream drains excluded from performance evidence"}))?;
     tasks::warmup(&model, &tokenizer)?;
-    for task in &corpus.calibration.tasks {
+    for task in &corpus.split(split).tasks {
         let (prompt, prompt_ids) = tasks::encode_task(&tokenizer, &task.prompt)?;
-        let baseline_started = Instant::now();
-        let baseline = tasks::generate(&model, &prompt, task.max_tokens)?;
-        let baseline_ms = baseline_started.elapsed().as_secs_f64() * 1000.0;
+        let (baseline, baseline_record) = if args.sparse_q4_capture {
+            native_generations
+                .remove(&task.id)
+                .context("missing independent dense Q4 reference")?
+        } else {
+            let baseline_started = Instant::now();
+            let baseline = tasks::generate(&model, &prompt, task.max_tokens)?;
+            let record = tasks::generation_record(
+                &baseline,
+                baseline_started.elapsed().as_secs_f64() * 1000.0,
+                &model,
+            )?;
+            (baseline, record)
+        };
         model.begin_ffn_capture_task(&task.id, &prompt_ids)?;
         let capture_started = Instant::now();
         let captured = tasks::generate(&model, &prompt, task.max_tokens)?;
@@ -182,14 +252,14 @@ pub(super) fn capture(args: &Args) -> Result<()> {
         model.finish_ffn_capture_task(generated_ids)?;
         report.append(json!({"kind":"ffn_capture_task","id":task.id,"family":task.family,"rendered_prompt":prompt,
             "prompt_token_ids":prompt_ids,"max_tokens":task.max_tokens,"scoring_rule":task.scoring,
-            "baseline":tasks::generation_record(&baseline,baseline_ms,&model)?,"captured":tasks::generation_record(&captured,capture_ms,&model)?,
-            "score":task.scoring.score(&captured.output)?,"has_identical_generation":true,
-            "captured_rows_per_layer":generated_ids.len().saturating_sub(1).min(ROW_CAP),"is_performance_measurement":false}))?;
+            "baseline":baseline_record,"captured":tasks::generation_record(&captured,capture_ms,&model)?,
+            "score":task.scoring.score(&captured.output)?,"has_identical_generation":true,"baseline_observer_uninstalled":args.sparse_q4_capture,
+            "captured_rows_per_layer":generated_ids.len().saturating_sub(1).min(row_cap),"is_performance_measurement":false}))?;
         eprintln!(
             "FFN capture {}: {} identical generated IDs, {} input rows/layer",
             task.id,
             generated_ids.len(),
-            generated_ids.len().saturating_sub(1).min(ROW_CAP)
+            generated_ids.len().saturating_sub(1).min(row_cap)
         );
     }
     let artifact = model.finish_ffn_capture()?;

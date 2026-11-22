@@ -352,3 +352,38 @@ fn test_consumers_must_bind_observations_to_frozen_corpus() -> Result<()> {
     assert!(plan.validate_corpus(&corpus, &"2".repeat(64)).is_err());
     Ok(())
 }
+
+/// The sparse study binds each split to its own task IDs and the matching
+/// checkpoint. The old Q8 fixture reader rejects observations from this study.
+#[test]
+fn test_sparse_q4_capture_binds_split_and_tensor_storage() -> Result<()> {
+    use super::records::{validate_sources, SPARSE_Q4_MODEL_SHA256};
+    use crate::evaluation::corpus::Split;
+
+    let corpus = corpus()?;
+    let hash = "2a1270959ef105a3ec19e0be0ab888048fb619880fd4f014ce216acfb8710c38";
+    let mut held_out = FfnCapturePlan::sparse_q4(
+        SPARSE_Q4_MODEL_SHA256.to_owned(),
+        hash.to_owned(),
+        "3".repeat(64),
+        &corpus,
+        Split::HeldOut,
+    )?;
+    held_out.validate_corpus(&corpus, hash)?;
+    assert_eq!(
+        held_out.calibration_task_ids[0],
+        corpus.held_out.tasks[0].id
+    );
+    held_out.split = Split::Calibration;
+    assert!(held_out.validate_corpus(&corpus, hash).is_err());
+    let mut q4_sources = sources();
+    q4_sources[0].down.dtype = GgmlDType::Q4_0;
+    assert_eq!(q4_sources[0].down.byte_len()?, 1152);
+    assert!(validate_sources(&plan()?, &q4_sources).is_err());
+
+    let mut artifact = complete()?;
+    artifact.plan = held_out;
+    artifact.schema_version = 2;
+    assert!(FfnCaptureArtifact::parse(&serde_json::to_string(&artifact)?).is_err());
+    Ok(())
+}

@@ -103,6 +103,9 @@ struct Args {
     /// control. Requires calibration split and creates a new paired artifact.
     #[arg(long, conflicts_with_all=["q8_prefix_drift","compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target","step_timing_trials"])]
     capture_ffn_inputs: Option<PathBuf>,
+    /// Capture the frozen sparse-Q4 checkpoint on exactly one named split.
+    #[arg(long, requires = "capture_ffn_inputs")]
+    sparse_q4_capture: bool,
     /// Diagnose the recorded native/prepared down+vocabulary branch on identical
     /// prefixes. No fitting, free generation or performance promotion occurs.
     #[arg(long, conflicts_with_all=["compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target"])]

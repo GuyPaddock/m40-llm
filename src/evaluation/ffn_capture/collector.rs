@@ -94,7 +94,7 @@ impl FfnCaptureCollector {
                 .get(self.tasks.len())
                 .map(String::as_str)
                 == Some(id),
-            "capture only the next frozen calibration task, never held-out tasks"
+            "capture only the next task from the frozen split"
         );
         ensure!(
             !prompt_token_ids.is_empty()
@@ -190,7 +190,7 @@ impl FfnCaptureCollector {
     pub fn validate_complete(&self) -> Result<()> {
         ensure!(
             self.active.is_none() && self.tasks.len() == self.plan.calibration_task_ids.len(),
-            "finish every FFN calibration task before export"
+            "finish every task in the FFN capture split before export"
         );
         ensure!(
             self.layers.iter().all(|layer| !layer.rows.is_empty()),
@@ -211,7 +211,7 @@ impl FfnCaptureCollector {
                 .context("FFN payload overflow")
         })?;
         let artifact = FfnCaptureArtifact {
-            schema_version: 1,
+            schema_version: if self.plan.is_sparse_q4 { 2 } else { 1 },
             plan: self.plan,
             source_weights_sha256: self.source_weights_sha256,
             tasks: self.tasks,

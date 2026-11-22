@@ -6,6 +6,11 @@ use anyhow::{ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+pub const SPARSE_Q4_MODEL_SHA256: &str =
+    "670d82d0fbee6289b661eb323612c65bd2e97ec8c65cdbd9131aa44d30e9816a";
+const SPARSE_Q4_CORPUS_SHA256: &str =
+    "2a1270959ef105a3ec19e0be0ab888048fb619880fd4f014ce216acfb8710c38";
+
 const MAX_JSON_BYTES: usize = 64 * 1024 * 1024;
 
 pub(super) fn validate_digest(digest: &str) -> Result<()> {
@@ -22,6 +27,8 @@ pub struct FfnCapturePlan {
     pub corpus_sha256: String,
     pub execution_sha256: String,
     pub split: Split,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_sparse_q4: bool,
     pub calibration_task_ids: Vec<String>,
     pub source_layer_count: usize,
     pub selected_layer_ids: Vec<usize>,
@@ -51,6 +58,7 @@ impl FfnCapturePlan {
             corpus_sha256,
             execution_sha256,
             split: Split::Calibration,
+            is_sparse_q4: false,
             calibration_task_ids: corpus
                 .calibration
                 .tasks
@@ -67,6 +75,45 @@ impl FfnCapturePlan {
         Ok(plan)
     }
 
+    /// Bind a Q4 observation to one frozen split and the three measured down matrices.
+    pub fn sparse_q4(
+        model_sha256: String,
+        corpus_sha256: String,
+        execution_sha256: String,
+        corpus: &Corpus,
+        split: Split,
+    ) -> Result<Self> {
+        corpus.validate()?;
+        let plan = Self {
+            model_sha256,
+            corpus_sha256,
+            execution_sha256,
+            split,
+            is_sparse_q4: true,
+            calibration_task_ids: corpus
+                .split(split)
+                .tasks
+                .iter()
+                .map(|task| task.id.clone())
+                .collect(),
+            source_layer_count: 36,
+            selected_layer_ids: vec![0, 17, 35],
+            d_model: 2048,
+            hidden_dim: 11008,
+            max_generated_rows_per_task: 8,
+        };
+        plan.validate()?;
+        Ok(plan)
+    }
+
+    pub fn projection_dtype(&self) -> GgmlDType {
+        if self.is_sparse_q4 {
+            GgmlDType::Q4_0
+        } else {
+            GgmlDType::Q8_0
+        }
+    }
+
     pub fn validate(&self) -> Result<()> {
         for digest in [
             &self.model_sha256,
@@ -75,10 +122,23 @@ impl FfnCapturePlan {
         ] {
             validate_digest(digest)?;
         }
-        ensure!(
-            self.split == Split::Calibration,
-            "FFN capture is calibration-only"
-        );
+        if self.is_sparse_q4 {
+            ensure!(
+                self.model_sha256 == SPARSE_Q4_MODEL_SHA256
+                    && self.corpus_sha256 == SPARSE_Q4_CORPUS_SHA256
+                    && self.source_layer_count == 36
+                    && self.selected_layer_ids == [0, 17, 35]
+                    && self.d_model == 2048
+                    && self.hidden_dim == 11008
+                    && self.max_generated_rows_per_task == 8,
+                "Q4 capture differs from the frozen checkpoint, corpus or row plan"
+            );
+        } else {
+            ensure!(
+                self.split == Split::Calibration,
+                "Q8 FFN capture is calibration-only"
+            );
+        }
         ensure!(
             self.source_layer_count > 0
                 && !self.selected_layer_ids.is_empty()
@@ -97,7 +157,7 @@ impl FfnCapturePlan {
                 && self.d_model.is_multiple_of(32)
                 && self.hidden_dim > 0
                 && self.hidden_dim.is_multiple_of(32),
-            "FFN capture requires complete Q8_0 input blocks"
+            "FFN capture requires complete quantized input blocks"
         );
         ensure!(
             (1..=32).contains(&self.max_generated_rows_per_task),
@@ -122,12 +182,12 @@ impl FfnCapturePlan {
             self.corpus_sha256 == corpus_sha256
                 && self.calibration_task_ids
                     == corpus
-                        .calibration
+                        .split(self.split)
                         .tasks
                         .iter()
                         .map(|task| task.id.clone())
                         .collect::<Vec<_>>(),
-            "FFN capture does not match the frozen calibration corpus"
+            "FFN capture does not match the frozen corpus split"
         );
         Ok(())
     }
@@ -153,15 +213,21 @@ pub struct FfnTensorSource {
 impl FfnTensorSource {
     pub fn byte_len(&self) -> Result<usize> {
         ensure!(
-            self.dtype == GgmlDType::Q8_0
+            matches!(self.dtype, GgmlDType::Q4_0 | GgmlDType::Q8_0)
                 && self.shape[0] > 0
                 && self.shape[0].is_multiple_of(32)
                 && self.shape[1] > 0,
-            "FFN source must be a complete Q8_0 matrix"
+            "FFN source must be a complete Q4_0 or Q8_0 matrix"
         );
         (self.shape[0] / 32)
             .checked_mul(self.shape[1])
-            .and_then(|blocks| blocks.checked_mul(34))
+            .and_then(|blocks| {
+                blocks.checked_mul(if self.dtype == GgmlDType::Q4_0 {
+                    18
+                } else {
+                    34
+                })
+            })
             .context("FFN source byte overflow")
     }
 }
@@ -193,7 +259,10 @@ pub(super) fn validate_sources(plan: &FfnCapturePlan, sources: &[FfnLayerSource]
         ] {
             validate_digest(&tensor.source_sha256)?;
             ensure!(
-                !tensor.name.is_empty() && names.insert(&tensor.name) && tensor.shape == shape,
+                !tensor.name.is_empty()
+                    && names.insert(&tensor.name)
+                    && tensor.shape == shape
+                    && tensor.dtype == plan.projection_dtype(),
                 "FFN source name/shape mismatch"
             );
             let bytes = u64::try_from(tensor.byte_len()?)?;
@@ -283,12 +352,19 @@ impl FfnCaptureArtifact {
             "FFN capture JSON exceeds 64 MiB"
         );
         let artifact: Self = serde_json::from_str(json)?;
+        ensure!(
+            !artifact.plan.is_sparse_q4,
+            "Q8 fixture parser requires a calibration capture"
+        );
         artifact.validate()?;
         Ok(artifact)
     }
 
     pub fn validate(&self) -> Result<()> {
-        ensure!(self.schema_version == 1, "unsupported FFN capture schema");
+        ensure!(
+            self.schema_version == if self.plan.is_sparse_q4 { 2 } else { 1 },
+            "unsupported FFN capture schema"
+        );
         self.plan.validate()?;
         validate_digest(&self.source_weights_sha256)?;
         validate_sources(
