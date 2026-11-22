@@ -55,3 +55,33 @@ These results locate the largest remaining projection costs in gate/up
 and down. A large mandatory projection alone does not establish redundant
 work. The B3 joint-only study separately measures actual ownership,
 additional launches, exact output and whole requests on the pinned model.
+
+## Does single-row decode prepare the same activation twice?
+
+**FAIL for a redundant preparation launch in the measured compound path.**
+At generated position 255 the stage counters give 36 attention norms, 36
+fused QKV launches, 36 FFN norms, 36 fused gate/up/SwiGLU launches and
+36 down projections. There are 36 layers. The two norms read different
+inputs. QKV consumes one 8,192-byte normalized row. The later FFN norm
+reads the result of the attention residual and writes the single
+8,192-byte row used by both gate and up. Gate/up writes a 44,032-byte
+SwiGLU output. Down consumes that entire row. The two 44,032-byte gate
+and up scratch slots serve fallback paths and receive no writes here.
+The counters, source arguments in [forward.rs](../../src/infer/forward.rs)
+and the [buffer lifetime analysis](2026-10-28-dataflow-findings.md) agree.
+
+Independent output blocks reread the normalized input, which can reside
+in cache. The available traces count launches and record event spans.
+They do not count physical DRAM reads. Cross-block reuse of FP32 inputs
+would need a new ownership or execution scheme. The profile supplies no
+duplicate producer to remove from the measured single-row path. Keep the
+existing fused execution and leave the weight-reuse hypothesis for
+multi-token verification to C1.
+
+The [separate-plane study](2026-10-24-q8-separate-projections.md) measured
+isolated Q, K, V, gate and up against individual GGUF projections. Those
+ratios use a different baseline from the fused decode calls above.
+The [input-tiled study](2026-10-24-q8-input-tiled.md) exhausted its twelve
+frozen mappings. Neither mapping displaced the existing separate-plane
+single-token down/vocabulary path. Keep the vector layout for admitted
+row shapes and the losing coalesced mapping at `bb4d30e` for provenance.
