@@ -71,7 +71,9 @@ Across 60 matched comparisons, the maximum KL against full mixed history
 was 0.00010917 for top-64 and 0.32391938 for top-8. Dense versus full
 mixed history reached 0.009902. Every arm agreed on the greedy ID at
 all 12 sampled positions, yet top-8 lost the relay answer between samples.
-Retain free generation as a separate gate. [Complete boundary cohort](https://github.com/GuyPaddock/m40-llm/blob/39635f66ba000e5e969738d511af7ffde8fb0a9c/docs/experiments/2026-11-21-kv-history/result/README.md).
+Retain free generation as a separate gate. The replay from the archive
+checks all 48 original FP32 readbacks and 60 comparisons.
+[Complete boundary cohort](https://github.com/GuyPaddock/m40-llm/blob/efaf5e8d84b74c84dad9ff0de3693fb8bd031cec/docs/experiments/2026-11-21-kv-history/result/README.md).
 
 The profile already defaults to top-8 on
 supported paths. Changing that setting would be a separate compatibility

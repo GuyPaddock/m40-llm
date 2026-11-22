@@ -41,8 +41,11 @@ record for negative and prerequisite-limited studies.
   process memory at capacity 8,448 and 3 MiB more at 3,072. Mixed
   post-release residency plateaued at a 1 MiB offset in three
   same-process lifetimes. Scope the direct consumer win to TinyLlama
-  head64 and leave selection coverage open beyond the measured tasks.
+  head64. Four further dense-passing answers held at top-64 beyond
+  the original grid, including prompts with more than 64 eligible
+  blocks. Top-8 lost one of the four.
   [Quality replay](https://github.com/GuyPaddock/m40-llm/blob/d6cabf1cd0e0bd97df030eb47fbf96f613bb0722/docs/experiments/2026-11-21-kv-quality-result/full-replay/README.md) ·
+  [Boundary vectors](https://github.com/GuyPaddock/m40-llm/blob/efaf5e8d84b74c84dad9ff0de3693fb8bd031cec/docs/experiments/2026-11-21-kv-history/result/README.md) ·
   [Direct HTTP comparison](../2026-11-21-serving-baseline/tiny-kv-consumer/result/README.md) ·
   [Reuse](https://github.com/GuyPaddock/m40-llm/blob/27fc182d9e92d2fbe509550e7aab1cf5ee385850/docs/experiments/2026-11-22-kv-cache-reuse.md).
 - **Prepared Q8.** Preparing only down and vocabulary layouts had the
