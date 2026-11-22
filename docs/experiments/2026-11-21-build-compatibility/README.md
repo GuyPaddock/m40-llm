@@ -73,6 +73,13 @@ and compared the retained command logs byte for byte. The earlier
 hardware transaction checks supply the actual M40 evidence.
 [Archive index](isolated/index.tsv).
 
+## Idle-slot cache diagnostic
+
+Source `377bec4` passed formatting, 223 warning-free non-CUDA tests
+and CUDA/server all-target Clippy in its own target directory. The
+isolated build complements the six original device configurations.
+[Archive index](isolated/index.tsv).
+
 ## Mixed KV lifetime diagnostic
 
 Source `27fc182` passed formatting, 224 warning-free non-CUDA tests
