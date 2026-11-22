@@ -1006,3 +1006,6 @@ fn decode_graph_diag_max_ms() -> Option<f32> {
         .and_then(|value| value.parse::<f32>().ok())
         .filter(|value| *value > 0.0)
 }
+
+#[cfg(all(test, feature = "cuda", nvcc))]
+mod main_graph_tests;
