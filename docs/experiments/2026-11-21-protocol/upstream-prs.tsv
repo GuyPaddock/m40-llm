@@ -1,0 +1,11 @@
+31758	b19934d0b8e703095833cb65d5de0206592d9733	d38bea34227bbf9069d62fdc239c98ab6e05435a	closed	2026-11-06T05:11:07Z	https://github.com/ggml-org/llama.cpp/pull/31758	opencl: add q6_k multi column tiled GEMV for speculative verification and refactoring
+31959	71a1c3d2935dc301e1860bade5e7f1223faabf88	a4d4f2fd4ec85ec6a0a9ece4870416c1b6cc24f5	closed	2026-11-11T08:46:13Z	https://github.com/ggml-org/llama.cpp/pull/31959	cuda : use MMVF for BF16 matrices of few rows at small batch sizes
+32065	501669ea747a3f40513831c36bb4ec544ed274c5	8c2c4c39c5d61389dd04d5474a9ab1f68182a5f7	closed	2026-11-17T15:31:41Z	https://github.com/ggml-org/llama.cpp/pull/32065	Title: CUDA: few-row MMQ for MUL_MAT_ID
+32610	41db43a9d8b0614d665fecd277ba1b1f6db83d7d	8af68d486a9473820d24d00af8f33334ca80124d	open	unmerged	https://github.com/ggml-org/llama.cpp/pull/32610	CUDA: few-row MMQ for NVFP4
+32081	5015c3cdab197e1aa9deb5b6ee5051045c4cc69a	bba8408821ae88a2c4370173f60e8b24e5cfd6ae	open	unmerged	https://github.com/ggml-org/llama.cpp/pull/32081	llama,ggml,tests: batch invariance support
+32045	e09ff28267be9f6ece06469cd1a639eaf1647d21	7c2653acc749258dc62067da62d07024d971ccd2	open	unmerged	https://github.com/ggml-org/llama.cpp/pull/32045	fix: roll back draft KV cache for rejected positions in DFlash accept()
+32566	e7db70f5b1b2a44433064fb2b3c550aef0fdeed3	785f6bac0008a0871f7c9a9b42c441d4052a684c	open	unmerged	https://github.com/ggml-org/llama.cpp/pull/32566	ggml-cuda : handle zero blocks in few-row MMQ quantization
+32520	952b2a449dd0e061a866fa4f449b59c119ed931f	401563f10ec60754e688cd3165c1343cf4be9642	open	unmerged	https://github.com/ggml-org/llama.cpp/pull/32520	CUDA : read K/V through kv_rows in the vec flash attention kernel
+32519	84ba70f1695e066d5ce0c2ba141538271e3d172d	401563f10ec60754e688cd3165c1343cf4be9642	closed	2026-11-21T05:22:36Z	https://github.com/ggml-org/llama.cpp/pull/32519	llama : score only the k-pools of the ubatch sequences in QSA
+31750	0cfbb43807693214b48b534c88d970eec1ff16bf	b1c902f026d32535b5e8eae55e5e47b379e57672	open	unmerged	https://github.com/ggml-org/llama.cpp/pull/31750	llama: use KV-only graphs for MTP draft catch-up
+31356	12b8b546b8c30f47d2e044a0593cd7088fe07417	36ee3caf7aa2dcb0210bedab1b61ee9f269765d3	closed	2026-11-03T18:30:38Z	https://github.com/ggml-org/llama.cpp/pull/31356	gemma4: graph optimizations (massive gains on pp for E2B and E4B)
