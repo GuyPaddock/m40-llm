@@ -9,6 +9,7 @@ mod fixture;
 mod hardware_tests;
 #[cfg(any(all(feature = "cuda", nvcc), test))]
 mod metrics;
+mod november;
 #[cfg(all(feature = "cuda", nvcc))]
 mod prefix;
 #[cfg(all(feature = "cuda", nvcc))]
@@ -27,6 +28,13 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Freeze the separate November expansion without invoking inference.
+    PrepareNovember {
+        #[arg(long)]
+        model: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
     /// Run all three cache arms and matched-prefix observations on frozen inputs.
     Run {
         #[arg(long)]
@@ -51,6 +59,7 @@ enum Command {
 
 fn main() -> Result<()> {
     match Args::parse().command {
+        Command::PrepareNovember { model, output } => november::prepare(&model, &output),
         Command::Run {
             model,
             corpus,

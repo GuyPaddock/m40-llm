@@ -135,8 +135,12 @@ pub fn create_cases(corpus: &Corpus, tokenizer: &Tokenizer) -> Result<Vec<Case>>
         corpus.held_out.tasks.len() == 6,
         "expected six frozen held-out tasks"
     );
+    render_cases(&corpus.held_out.tasks, tokenizer)
+}
+
+pub fn render_cases(tasks: &[Task], tokenizer: &Tokenizer) -> Result<Vec<Case>> {
     let mut cases = Vec::new();
-    for task in &corpus.held_out.tasks {
+    for task in tasks {
         let prompt = render_prompt(&task.prompt);
         let ids = tokenizer.encode_with_specials(&prompt, false, false)?;
         let short = Case {
@@ -214,7 +218,13 @@ impl Manifest {
         tokenizer: &Tokenizer,
         tokenizer_sha256: String,
     ) -> Result<()> {
-        let expected = Self::create(corpus, tokenizer, tokenizer_sha256)?;
+        let mut expected = Self::create(corpus, tokenizer, tokenizer_sha256)?;
+        // The original input manifest predates extraction of render_cases.
+        // Rebuild and compare every input even for the archived preparer.
+        let original = "b087bcf9d35b66a798dfe49f0dee8935af6290c96140f04187377e2e1efc716a";
+        if self.preparation_sha256 == original {
+            expected.preparation_sha256 = original.into();
+        }
         ensure!(
             serde_json::to_value(self)? == serde_json::to_value(expected)?,
             "manifest differs from frozen preparation"
