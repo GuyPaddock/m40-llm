@@ -93,8 +93,12 @@ trials lack per-VM CPU counters. This sample cannot assign a magnitude
 or direction to any effect on those timings. [Host observation](vm-observation.txt).
 
 New host monitors record QEMU PID, start ticks, cumulative CPU ticks and
-clock frequency. For adjacent samples with the same PID and start ticks,
-divide the CPU-tick delta by the frequency and elapsed wall seconds to
-obtain average logical CPUs used. Preserve VM-on measurements as their
-own cohort if a clean-host repeat is authorized. Reuse the exact model,
-binary, flags, input and alternating schedule for that comparison.
+clock frequency. `request-host-load.py` reports the observed span,
+mean logical CPU use and highest interval rate for each QEMU lifetime.
+It uses adjacent samples with matching PID, start ticks and frequency.
+The mean is weighted by the observed wall time. Request boundaries and
+missing intermediate readings reduce coverage. The rates describe host
+activity and supply no causal estimate for inference latency. Preserve
+VM-on measurements as their own cohort if a clean-host repeat is
+authorized. Reuse the exact model, binary, flags, input and alternating
+schedule for that comparison.
