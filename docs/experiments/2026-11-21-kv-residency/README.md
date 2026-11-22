@@ -54,3 +54,55 @@ jq -R -s 'split("\n")|map(select(length>0))' "$study/constructor.txt" |
   jq --slurpfile rows <(gzip -dc docs/experiments/2026-11-21-kv-dense/top8-counterexamples.jsonl.gz |
        jq -c 'select(.case=="nov-order-long")') --slurpfile manifest "$study/manifest.json" -f "$study/reconcile.jq"
 ```
+
+## Live process residency on the M40
+
+**FAIL for the 10% single-request peak-VRAM promotion gate.** Nine fresh
+processes loaded the same Qwen2.5-3B Q8_0 weights. Each retained the
+weights while allocating, populating and releasing one 36-layer cache.
+The fixed append inputs exercised every position of every layer. This
+measures cache residency with real model weights and synthetic KV inputs.
+Whole-generation peaks include additional execution workspaces.
+
+| Capacity | Dense requested bytes¹ | Mixed requested bytes¹ | Dense peak MiB² | Mixed peak MiB² | Mixed minus dense MiB |
+|---:|---:|---:|---:|---:|---:|
+| 1,024 | 37,748,880 | 61,747,488 | 4,413 | 4,435 | +22 |
+| 3,072 | 113,246,352 | 116,499,600 | 4,485 | 4,488 | +3 |
+| 8,448 | 311,427,216 | 260,514,576 | 4,674 | 4,627 | −47 |
+
+¹ Includes the slot map in both arms. Top-64 and top-8 agreed on every
+requested byte and peak. At 8,448, mixed backing saved 16.35% of cache
+requests and 1.01% of observed whole-process peak memory.
+
+² Maximum of synchronized process-attributed NVML observations and a
+500 ms process sampler. The sampler alone saw only the 4,377 MiB model
+baseline in all three short runs. CUDA free-memory snapshots and the
+payload breakdown are in the [nine-process summary](live/summary.json).
+The Rust device counter stayed at 4,472,456,192 bytes throughout.
+
+After release, CUDA usage returned to baseline in every dense process
+and in both recent-only mixed processes. Each mixed process that
+populated historical positions retained 1 MiB above baseline at the
+final observation. There was no GPU owner after process exit. A single
+allocation per process cannot distinguish one-time initialization from
+accumulation across cache lifetimes. This limits reuse qualification.
+
+The [raw archive](live/measurements.tar.gz) includes all nine process
+records, model and executable hashes, build and dispatch flags, host
+load, sampler observations and timestamps. Archive SHA-256
+`8346b95e5a0bb10bce7159304c03fe8d3c542523311b411de63f0555ac84d3f2`.
+At source `9d4b78c24741342c81f1f4b61320e89f501e35d6`, use the
+release example `kv_quality residency --help` for capture arguments.
+To replay with the independent audit from consolidation commit
+`6ada455f19bb470f2b610fdb8bb6104e79fe0b52`:
+
+```sh
+study=docs/experiments/2026-11-21-kv-residency
+audit=docs/experiments/2026-11-21-kv-audit
+out=$(mktemp -d)
+tar -xzf "$study/live/measurements.tar.gz" -C "$out"
+for file in residency.sh residency.jq; do
+    git show "6ada455:$audit/$file" > "$out/$file"
+done
+bash "$out/residency.sh" "$out/kv-residency-01" | diff - "$study/live/summary.json"
+```

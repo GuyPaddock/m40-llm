@@ -1,0 +1,416 @@
+[
+  {
+    "capacity": 1024,
+    "arm": "dense",
+    "source": "9d4b78c24741342c81f1f4b61320e89f501e35d6",
+    "payloads": {
+      "cache_reported_bytes": 37748736,
+      "dense_equivalent_bytes": 37748736,
+      "dense_kv_payload_bytes": 37748736,
+      "known_cuda_malloc_requests_bytes": 37748880,
+      "old_k_fp16_bytes": 0,
+      "q4_v_codes_bytes": 0,
+      "q4_v_scale_bytes": 0,
+      "recent_fp16_bytes": 0,
+      "seq_map_bytes_excluded_from_reported_total": 144,
+      "summaries_counts_and_seq_map_bytes": 0
+    },
+    "allocation_wall_ms": 0.5273289999999999,
+    "cuda_used_bytes": [
+      4595122176,
+      4632870912,
+      4632870912,
+      4632870912,
+      4595122176
+    ],
+    "rust_tracked_bytes": [
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192
+    ],
+    "nvml_boundary_mib": [
+      4377,
+      4413,
+      4413,
+      4413,
+      4377
+    ],
+    "sampled_process": {
+      "pid": 3195022,
+      "observations": 9,
+      "peak_mib": 4377
+    },
+    "cuda_allocation_delta_bytes": 37748736,
+    "cuda_post_release_delta_bytes": 0
+  },
+  {
+    "capacity": 1024,
+    "arm": "quantized_all",
+    "source": "9d4b78c24741342c81f1f4b61320e89f501e35d6",
+    "payloads": {
+      "cache_reported_bytes": 61747488,
+      "dense_equivalent_bytes": 37748736,
+      "dense_kv_payload_bytes": 0,
+      "known_cuda_malloc_requests_bytes": 61747488,
+      "old_k_fp16_bytes": 18874368,
+      "q4_v_codes_bytes": 4718592,
+      "q4_v_scale_bytes": 294912,
+      "recent_fp16_bytes": 37748736,
+      "seq_map_bytes_excluded_from_reported_total": 0,
+      "summaries_counts_and_seq_map_bytes": 110880
+    },
+    "allocation_wall_ms": 0.9464509999999999,
+    "cuda_used_bytes": [
+      4595122176,
+      4656463872,
+      4656463872,
+      4656463872,
+      4595122176
+    ],
+    "rust_tracked_bytes": [
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192
+    ],
+    "nvml_boundary_mib": [
+      4377,
+      4435,
+      4435,
+      4435,
+      4377
+    ],
+    "sampled_process": {
+      "pid": 3195564,
+      "observations": 9,
+      "peak_mib": 4377
+    },
+    "cuda_allocation_delta_bytes": 61341696,
+    "cuda_post_release_delta_bytes": 0
+  },
+  {
+    "capacity": 1024,
+    "arm": "quantized_top8",
+    "source": "9d4b78c24741342c81f1f4b61320e89f501e35d6",
+    "payloads": {
+      "cache_reported_bytes": 61747488,
+      "dense_equivalent_bytes": 37748736,
+      "dense_kv_payload_bytes": 0,
+      "known_cuda_malloc_requests_bytes": 61747488,
+      "old_k_fp16_bytes": 18874368,
+      "q4_v_codes_bytes": 4718592,
+      "q4_v_scale_bytes": 294912,
+      "recent_fp16_bytes": 37748736,
+      "seq_map_bytes_excluded_from_reported_total": 0,
+      "summaries_counts_and_seq_map_bytes": 110880
+    },
+    "allocation_wall_ms": 1.1273380000000002,
+    "cuda_used_bytes": [
+      4595122176,
+      4656463872,
+      4656463872,
+      4656463872,
+      4595122176
+    ],
+    "rust_tracked_bytes": [
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192
+    ],
+    "nvml_boundary_mib": [
+      4377,
+      4435,
+      4435,
+      4435,
+      4377
+    ],
+    "sampled_process": {
+      "pid": 3196117,
+      "observations": 9,
+      "peak_mib": 4377
+    },
+    "cuda_allocation_delta_bytes": 61341696,
+    "cuda_post_release_delta_bytes": 0
+  },
+  {
+    "capacity": 3072,
+    "arm": "dense",
+    "source": "9d4b78c24741342c81f1f4b61320e89f501e35d6",
+    "payloads": {
+      "cache_reported_bytes": 113246208,
+      "dense_equivalent_bytes": 113246208,
+      "dense_kv_payload_bytes": 113246208,
+      "known_cuda_malloc_requests_bytes": 113246352,
+      "old_k_fp16_bytes": 0,
+      "q4_v_codes_bytes": 0,
+      "q4_v_scale_bytes": 0,
+      "recent_fp16_bytes": 0,
+      "seq_map_bytes_excluded_from_reported_total": 144,
+      "summaries_counts_and_seq_map_bytes": 0
+    },
+    "allocation_wall_ms": 0.8865620000000001,
+    "cuda_used_bytes": [
+      4595122176,
+      4708368384,
+      4708368384,
+      4708368384,
+      4595122176
+    ],
+    "rust_tracked_bytes": [
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192
+    ],
+    "nvml_boundary_mib": [
+      4377,
+      4485,
+      4485,
+      4485,
+      4377
+    ],
+    "sampled_process": {
+      "pid": 3196558,
+      "observations": 9,
+      "peak_mib": 4485
+    },
+    "cuda_allocation_delta_bytes": 113246208,
+    "cuda_post_release_delta_bytes": 0
+  },
+  {
+    "capacity": 3072,
+    "arm": "quantized_all",
+    "source": "9d4b78c24741342c81f1f4b61320e89f501e35d6",
+    "payloads": {
+      "cache_reported_bytes": 116499600,
+      "dense_equivalent_bytes": 113246208,
+      "dense_kv_payload_bytes": 0,
+      "known_cuda_malloc_requests_bytes": 116499600,
+      "old_k_fp16_bytes": 56623104,
+      "q4_v_codes_bytes": 14155776,
+      "q4_v_scale_bytes": 884736,
+      "recent_fp16_bytes": 37748736,
+      "seq_map_bytes_excluded_from_reported_total": 0,
+      "summaries_counts_and_seq_map_bytes": 7087248
+    },
+    "allocation_wall_ms": 1.477996,
+    "cuda_used_bytes": [
+      4595122176,
+      4710727680,
+      4710727680,
+      4711776256,
+      4596170752
+    ],
+    "rust_tracked_bytes": [
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192
+    ],
+    "nvml_boundary_mib": [
+      4377,
+      4487,
+      4487,
+      4488,
+      4378
+    ],
+    "sampled_process": {
+      "pid": 3197029,
+      "observations": 10,
+      "peak_mib": 4488
+    },
+    "cuda_allocation_delta_bytes": 115605504,
+    "cuda_post_release_delta_bytes": 1048576
+  },
+  {
+    "capacity": 3072,
+    "arm": "quantized_top8",
+    "source": "9d4b78c24741342c81f1f4b61320e89f501e35d6",
+    "payloads": {
+      "cache_reported_bytes": 116499600,
+      "dense_equivalent_bytes": 113246208,
+      "dense_kv_payload_bytes": 0,
+      "known_cuda_malloc_requests_bytes": 116499600,
+      "old_k_fp16_bytes": 56623104,
+      "q4_v_codes_bytes": 14155776,
+      "q4_v_scale_bytes": 884736,
+      "recent_fp16_bytes": 37748736,
+      "seq_map_bytes_excluded_from_reported_total": 0,
+      "summaries_counts_and_seq_map_bytes": 7087248
+    },
+    "allocation_wall_ms": 1.527682,
+    "cuda_used_bytes": [
+      4595122176,
+      4710727680,
+      4710727680,
+      4711776256,
+      4596170752
+    ],
+    "rust_tracked_bytes": [
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192
+    ],
+    "nvml_boundary_mib": [
+      4377,
+      4487,
+      4487,
+      4488,
+      4378
+    ],
+    "sampled_process": {
+      "pid": 3197446,
+      "observations": 11,
+      "peak_mib": 4488
+    },
+    "cuda_allocation_delta_bytes": 115605504,
+    "cuda_post_release_delta_bytes": 1048576
+  },
+  {
+    "capacity": 8448,
+    "arm": "dense",
+    "source": "9d4b78c24741342c81f1f4b61320e89f501e35d6",
+    "payloads": {
+      "cache_reported_bytes": 311427072,
+      "dense_equivalent_bytes": 311427072,
+      "dense_kv_payload_bytes": 311427072,
+      "known_cuda_malloc_requests_bytes": 311427216,
+      "old_k_fp16_bytes": 0,
+      "q4_v_codes_bytes": 0,
+      "q4_v_scale_bytes": 0,
+      "recent_fp16_bytes": 0,
+      "seq_map_bytes_excluded_from_reported_total": 144,
+      "summaries_counts_and_seq_map_bytes": 0
+    },
+    "allocation_wall_ms": 1.878233,
+    "cuda_used_bytes": [
+      4595122176,
+      4906549248,
+      4906549248,
+      4906549248,
+      4595122176
+    ],
+    "rust_tracked_bytes": [
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192
+    ],
+    "nvml_boundary_mib": [
+      4377,
+      4674,
+      4674,
+      4674,
+      4377
+    ],
+    "sampled_process": {
+      "pid": 3197953,
+      "observations": 11,
+      "peak_mib": 4674
+    },
+    "cuda_allocation_delta_bytes": 311427072,
+    "cuda_post_release_delta_bytes": 0
+  },
+  {
+    "capacity": 8448,
+    "arm": "quantized_all",
+    "source": "9d4b78c24741342c81f1f4b61320e89f501e35d6",
+    "payloads": {
+      "cache_reported_bytes": 260514576,
+      "dense_equivalent_bytes": 311427072,
+      "dense_kv_payload_bytes": 0,
+      "known_cuda_malloc_requests_bytes": 260514576,
+      "old_k_fp16_bytes": 155713536,
+      "q4_v_codes_bytes": 38928384,
+      "q4_v_scale_bytes": 2433024,
+      "recent_fp16_bytes": 37748736,
+      "seq_map_bytes_excluded_from_reported_total": 0,
+      "summaries_counts_and_seq_map_bytes": 25690896
+    },
+    "allocation_wall_ms": 2.394774,
+    "cuda_used_bytes": [
+      4595122176,
+      4855955456,
+      4855955456,
+      4857004032,
+      4596170752
+    ],
+    "rust_tracked_bytes": [
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192
+    ],
+    "nvml_boundary_mib": [
+      4377,
+      4626,
+      4626,
+      4627,
+      4378
+    ],
+    "sampled_process": {
+      "pid": 3198476,
+      "observations": 16,
+      "peak_mib": 4627
+    },
+    "cuda_allocation_delta_bytes": 260833280,
+    "cuda_post_release_delta_bytes": 1048576
+  },
+  {
+    "capacity": 8448,
+    "arm": "quantized_top8",
+    "source": "9d4b78c24741342c81f1f4b61320e89f501e35d6",
+    "payloads": {
+      "cache_reported_bytes": 260514576,
+      "dense_equivalent_bytes": 311427072,
+      "dense_kv_payload_bytes": 0,
+      "known_cuda_malloc_requests_bytes": 260514576,
+      "old_k_fp16_bytes": 155713536,
+      "q4_v_codes_bytes": 38928384,
+      "q4_v_scale_bytes": 2433024,
+      "recent_fp16_bytes": 37748736,
+      "seq_map_bytes_excluded_from_reported_total": 0,
+      "summaries_counts_and_seq_map_bytes": 25690896
+    },
+    "allocation_wall_ms": 2.280407,
+    "cuda_used_bytes": [
+      4595122176,
+      4855955456,
+      4855955456,
+      4857004032,
+      4596170752
+    ],
+    "rust_tracked_bytes": [
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192,
+      4472456192
+    ],
+    "nvml_boundary_mib": [
+      4377,
+      4626,
+      4626,
+      4627,
+      4378
+    ],
+    "sampled_process": {
+      "pid": 3198944,
+      "observations": 16,
+      "peak_mib": 4627
+    },
+    "cuda_allocation_delta_bytes": 260833280,
+    "cuda_post_release_delta_bytes": 1048576
+  }
+]
