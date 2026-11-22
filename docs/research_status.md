@@ -16,6 +16,27 @@ Phase 4 is pinned at 48c6333 and remote main at e1403e0. The [inventory](experim
 | Small-N and rollback | Research/1121-verifier-correctness 081cc65 records actual two-build rollback/near-tie results. Research/1121-small-n-verification a438032 adds the separately gated six-arm small-row comparison. |
 | Other studies | Research/1121-active-row-kv 2228ea7 binds actual active lengths and idle ownership. Research/1121-gsq-quality 59aaf76 identifies comparable model files and the missing layer dispatch. On independently main-based research/1121-gguf-compatibility, 541cec1 fixes checked shape arithmetic and 1989d82 qualifies it. |
 
+The 64-token packed-prefix output trace is complete on research/1121-output-pruning
+8965fd3. On Phase 4 the terminal hidden row is dead for a KV-only prefix;
+on main the HTTP scheduler immediately consumes its full-prompt final row.
+The entire terminal-layer window in five historical M40 requests was 2.693%
+of prefill and 0.0920% of HTTP wall (medians), below the frozen admission
+gate. Research/1121-sparse-q4-layout a08da81 built the eight-arm Q4 operator
+screen. CPU fixture preparation post-pause (14f2a31) produced identical
+bytes at lower host cost. GPU results are pending. Research/1121-kv-history-boundary
+f1bb7a4 froze two independent preparations of four input cases at
+2051/3210/3203/3200 prompt IDs and built the full-history equivalence check.
+
+The operator paused Gentoo upgrades. Native versus split short HTTP used a
+wall-clock denominator and lacked per-trial host measurements. On consolidation
+b3e6504, a second, independently retained run uses the same executable,
+model, prompt, oracle and flags under the serial GPU lock. Correctness,
+allocation sizes, raw logit comparisons and the historical October traces
+do not need repeats solely due to the upgrade. The post-pause Portage snapshot
+showed PID 48103 stopped, sleeping descendants and no increase in whole CPU
+seconds between the two observations. Check host activity during every
+subsequent timed cohort.
+
 The serial cohorts and their raw logs live under the adjacent research-1121/raw directory. Compiled probes and queued jobs are pending evidence until their completion records, workloads and outputs are audited. The final shortlist and rebuild sequence remain open.
 
 ## October checkpoint
