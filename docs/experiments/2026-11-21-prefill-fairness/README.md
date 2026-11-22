@@ -39,3 +39,17 @@ separately since one stall may affect fewer than 5% of tokens. A qualifying
 stall admits a bounded scheduling prototype; it does not qualify any policy.
 If the arrived request only waited in a queue, count it as waiting rather
 than as a stall in active compute. Do not add a second CPU decoder.
+
+The runner uses the A5 HTTP client and hardware/host monitors from a1b2470
+in the adjacent consolidation worktree. Build the research binary with
+`M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo build --release --locked --features cuda,server --bin m40-llm`.
+Build the analyzer with
+`cargo build --release --locked --no-default-features --example research_fairness_report --target-dir target/cpu`.
+Run `bash docs/experiments/2026-11-21-prefill-fairness/run.sh NEW_DIRECTORY`
+under the serial M40 lock. The output includes completed responses and all
+token samples in the diagnostic run. A sampled time is anchored to the host
+clock. Transport/queue delay, first sample, median/P95/maximum spacing and
+submission-to-completion use distinct boundaries. A host-clock inversion
+greater than 1 ms invalidates correlation. Read `summary.json` and the raw
+GPU/process timelines together. A failure or timeout cannot establish absence
+of starvation.
