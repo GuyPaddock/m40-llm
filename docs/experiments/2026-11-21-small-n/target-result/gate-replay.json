@@ -1,0 +1,63 @@
+{
+  "final_phase": "confirmation",
+  "gate": {
+    "kind": "down_target_gate",
+    "passes_complete_target_gate": true,
+    "scope": "perfect four-token target plus commit versus both controls; partial rejection and correction reported separately",
+    "unstable": false
+  },
+  "summaries": [
+    {
+      "phase": "screen",
+      "control": "serial",
+      "pairs": 5,
+      "median_latency_saving": 0.08933332230522754,
+      "threshold": 0.05,
+      "unstable": false,
+      "latency_saving_ci95": [
+        0.0881961544788638,
+        0.09112960118493157
+      ],
+      "passed": true
+    },
+    {
+      "phase": "screen",
+      "control": "multi_row",
+      "pairs": 5,
+      "median_latency_saving": 0.05982477433814567,
+      "threshold": 0.05,
+      "unstable": false,
+      "latency_saving_ci95": [
+        0.0575217896120939,
+        0.061585449516490615
+      ],
+      "passed": true
+    },
+    {
+      "phase": "confirmation",
+      "control": "serial",
+      "pairs": 20,
+      "median_latency_saving": 0.08941140306830685,
+      "threshold": 0.05,
+      "unstable": false,
+      "latency_saving_ci95": [
+        0.08855840936760331,
+        0.09046327811517513
+      ],
+      "passed": true
+    },
+    {
+      "phase": "confirmation",
+      "control": "multi_row",
+      "pairs": 20,
+      "median_latency_saving": 0.05876368129390377,
+      "threshold": 0.05,
+      "unstable": false,
+      "latency_saving_ci95": [
+        0.058025835554356114,
+        0.05978958614785088
+      ],
+      "passed": true
+    }
+  ]
+}
