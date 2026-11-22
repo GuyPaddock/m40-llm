@@ -326,15 +326,23 @@ impl DecodeSchedulerRequest {
     }
 
     fn step(&mut self) -> Result<DecodeSchedulerStep> {
+        self.step_through(self.ids.len())
+    }
+
+    /// Advance an absolute prefix, sampling only once the complete prompt is valid.
+    fn step_through(&mut self, input_end: usize) -> Result<DecodeSchedulerStep> {
         if self.stopping.should_stop(&self.generated) {
             return Ok(DecodeSchedulerStep::Complete);
         }
         let _kv_runtime_guard = ScopedRuntimeConfig::new(self.session.kv_compression().clone());
         let logits = self
             .session
-            .logits_for_ids(&self.ids, |logits| log_top_logits(logits, 8))?;
+            .logits_for_ids(&self.ids[..input_end], |logits| log_top_logits(logits, 8))?;
         if logits.is_empty() {
             anyhow::bail!("logits_fn returned empty logits");
+        }
+        if input_end < self.prompt_token_len {
+            return Ok(DecodeSchedulerStep::Continue);
         }
         let next = self.sampler.sample(&logits)? as u32;
         self.ids.push(next);
@@ -418,7 +426,7 @@ impl DecodeSchedulerRequest {
 
     fn is_pending_prefill(&self) -> bool {
         self.session.can_forward()
-            && self.session.processed_len() == 0
+            && self.session.processed_len() < self.prompt_token_len
             && self.generated.is_empty()
             && self.prompt_token_len > 1
             && !self.stopping.should_stop(&self.generated)
@@ -608,7 +616,7 @@ fn scheduler_can_use_batched_prefill(
     }
     if !requests
         .iter()
-        .all(DecodeSchedulerRequest::is_pending_prefill)
+        .all(|request| request.is_pending_prefill() && request.session.processed_len() == 0)
     {
         log_batch_prefill_fallback("not all active requests are pending prompt prefill");
         return false;
@@ -762,6 +770,7 @@ fn process_scheduler_batch_tick(
     state: &AppState,
     current_requests: Vec<DecodeSchedulerRequest>,
     active: &mut VecDeque<DecodeSchedulerRequest>,
+    chunk_dense_prefill: bool,
 ) {
     let (prefill_requests, decode_requests, complete_requests) =
         split_scheduler_requests(current_requests);
@@ -781,7 +790,20 @@ fn process_scheduler_batch_tick(
     }
 
     if !prefill_requests.is_empty() {
-        if scheduler_can_use_batched_prefill(state, &prefill_requests) {
+        if chunk_dense_prefill && !decode_requests.is_empty() {
+            // Rotate partial requests behind the other prefills. Only one chunk
+            // runs before this tick's active decodes.
+            let mut pending = prefill_requests.into_iter();
+            let mut request = pending.next().expect("prefill requests are present");
+            active.extend(pending);
+            let end = (request.session.processed_len() + 16).min(request.prompt_token_len);
+            crate::profile::record_launch("server_scheduler_dense_prefill_chunk_tick");
+            match request.step_through(end) {
+                Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
+                Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
+                Err(err) => request.send_error(err),
+            }
+        } else if scheduler_can_use_batched_prefill(state, &prefill_requests) {
             crate::profile::record_launch("server_scheduler_batched_prefill_tick");
             process_scheduler_prefill_tick(state, prefill_requests, active);
         } else if scheduler_can_use_compressed_packed_prefill(state, &prefill_requests) {
@@ -908,6 +930,8 @@ async fn decode_scheduler_loop(
     state: Arc<AppState>,
     mut rx: mpsc::Receiver<DecodeSchedulerCommand>,
 ) {
+    let chunk_dense_prefill = !state.kv_compression.mode.is_enabled()
+        && std::env::var("M40LLM_RESEARCH_DENSE_PREFILL_CHUNKS").as_deref() == Ok("1");
     let mut next_request_id: crate::decode_batch::DecodeRequestId = 1;
     let mut active: VecDeque<DecodeSchedulerRequest> = VecDeque::new();
 
@@ -951,12 +975,21 @@ async fn decode_scheduler_loop(
             let _generation_guard = state.generation_lock.lock().await;
 
             let current_requests: Vec<DecodeSchedulerRequest> = active.drain(..).collect();
-            process_scheduler_batch_tick(&state, current_requests, &mut active);
+            process_scheduler_batch_tick(
+                &state,
+                current_requests,
+                &mut active,
+                chunk_dense_prefill,
+            );
         }
 
         tokio::task::yield_now().await;
     }
 }
+
+#[cfg(all(test, feature = "cuda", nvcc))]
+#[path = "server/prefill_chunk_tests.rs"]
+mod prefill_chunk_tests;
 
 #[cfg(feature = "cuda")]
 fn enqueue_scheduler_request(
