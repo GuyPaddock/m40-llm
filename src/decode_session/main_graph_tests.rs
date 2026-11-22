@@ -32,7 +32,7 @@ fn slot_bits(model: &LoadedModel, sequence: u32, length: u32) -> Result<Vec<u16>
     let mut words = Vec::new();
     model.cuda.synchronize_stream(CudaStream::Decode)?;
     model.cuda.synchronize_stream(CudaStream::Prefill)?;
-    for layer in 0..model.model_config.block_count as usize {
+    for layer in 0..model.model_config.block_count {
         let slot = model.kv_cache_physical_slot_for_layer_sequence(layer, sequence)?;
         ensure!(
             kv.debug_sequence_length(&model.cuda, slot)? == length,
