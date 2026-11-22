@@ -71,6 +71,12 @@ hardware qualification remains pending. The first cross-revision serving
 cohort found Phase 4 19.423% slower than main on matched dense F16 HTTP.
 [TinyLlama results](experiments/2026-11-21-serving-baseline/tiny-dense/README.md).
 
+All five D3 diagnostic pairs show a much longer gap during a 2,060-token
+prefill than during a 65-token prefill. Both requests matched their
+isolated sampled IDs in all ten trials. The instrumentation-off series
+is underway. Its workload checks are required before the scheduling
+prototype advances. [Diagnostic results and replay](https://github.com/GuyPaddock/m40-llm/blob/ef04859cb48bd20702e75bbb79cad0a91eae5c4e/docs/experiments/2026-11-21-prefill-fairness/diagnostic/README.md).
+
 The [closed-direction register](experiments/2026-11-21-closed-directions/README.md)
 records nine October dispositions and exact reopening conditions. The [dense
 quality audit](experiments/2026-11-21-kv-audit/README.md) reviewed all eight
