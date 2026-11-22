@@ -16,3 +16,22 @@ Compare throughput, time to first token, complete request time and the
 relative gain separately across cohorts. Keep startup/preparation figures
 conditional on OS cache state. Command from the consolidation worktree under
 the exclusive M40 lock: `bash docs/experiments/2026-11-21-native-split/repeat.sh NEW_OUTPUT_DIRECTORY`.
+
+## Per-arm inference residency
+
+The timing process retained both models. Measure the native and selective
+down/vocabulary configurations in two fresh normal server processes,
+one model resident at a time. Use the existing isolated-server probe,
+the archived flags and the original 65-ID prompt with a 512-token cap.
+Require all 36 layers, sequential prefill, both cold and warm traces
+matching the original 512 IDs, and 37 split tensors totaling 1,192,935,424
+prepared bytes in the candidate. Reject a mismatched dispatch or output.
+The native process must have preparation disabled.
+
+Run `bash docs/experiments/2026-11-22-q8-ownership/server-peak.sh NEW_DIRECTORY native-split`
+under the same M40 lock. Retain each server PID, 250 ms process samples,
+whole-device snapshots, load-through-health and cold/warm request windows,
+and host RSS high-water mark. Use these two runs to price the peak memory
+increase and its ratio to the retained weight bytes. The paired timing
+cohorts supply the speed verdict. No new timing or kernel search follows
+from a memory observation.
