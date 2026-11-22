@@ -36,3 +36,22 @@ prefill overlaps the short request's actual decode window. Compare P95,
 makespan, throughput, per-request waiting and starvation with the same
 requests in isolation. Any scheduling prototype requires a repeatable delay
 during real baseline overlap.
+
+The CPU admission probe dd81f05 on research/1121-main-baseline excluded
+Qwen Q8_0 and Q4_0 from main. The two revisions agreed on the complete 46
+TinyLlama IDs and stop IDs. [Phase 4 TinyLlama input](tiny-input-ids.json).
+The server runner verifies that identity again before launching either arm.
+
+After building the release native server, build the two client/provenance
+examples with `cargo build --locked --release --no-default-features --example research_http_load --example research_serving_ids`.
+The retained Phase 4 server includes the optional token timing change at
+3f8db89; primary requests clear it. The diagnostic buffered runs enable
+the sample clock and token-ID logging. The separately warmed stream uses
+ordinary tracing-off execution. Run each cohort from this worktree under
+exclusive M40 ownership using `bash docs/experiments/2026-11-21-serving-baseline/run.sh COHORT NEW_DIRECTORY`.
+Cohorts are tiny-dense, tiny-default, qwen-short, qwen-medium and qwen-long.
+Release binaries and source identities are checked against their original
+builds. Sampled process VRAM is recorded every 250 ms; load-to-health,
+request intervals and CLI process measurements have separate boundaries.
+Five alternating pairs each use a fresh process and a full warmup per arm to
+avoid jointly resident models changing backend or allocation decisions.
