@@ -12,6 +12,12 @@ use std::{
 #[derive(Parser)]
 struct Args {
     directory: PathBuf,
+    /// Summarize a single HTTP client trace in the directory.
+    #[arg(long)]
+    client_run: Option<String>,
+    /// Include each client's sampling clock in a single diagnostic trace.
+    #[arg(long, requires = "client_run")]
+    diagnostic: bool,
 }
 
 #[derive(Deserialize)]
@@ -143,6 +149,12 @@ fn summarize(load: &Load, diagnostic: bool) -> Result<Value> {
 
 fn main() -> Result<()> {
     let args = Args::parse();
+    if let Some(name) = args.client_run {
+        let trace = load(&args.directory, &name)?;
+        let row = summarize(&trace, args.diagnostic)?;
+        println!("{}", serde_json::to_string_pretty(&row)?);
+        return Ok(());
+    }
     let mut summary = Vec::new();
     let mut overlaps = Vec::new();
     let mut passing = 0;

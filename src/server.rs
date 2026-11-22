@@ -878,6 +878,9 @@ fn process_scheduler_batch_tick(
         return;
     }
     crate::profile::record_launch("server_scheduler_batched_decode_tick");
+    if server_batch_log_enabled() {
+        eprintln!("[server] completed batched decode rows={}", items.len());
+    }
 
     for mut request in requests {
         let token_idx = prepared
