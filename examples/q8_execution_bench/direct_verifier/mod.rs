@@ -1,5 +1,6 @@
 //! One bounded full-target experiment. No drafting or generation integration.
 mod correctness;
+mod down_comparison;
 mod measurement;
 use crate::run::verification::protocol;
 
@@ -14,7 +15,7 @@ use m40_llm::{
         Q8AttentionProjectionBackend, Q8FfnConfig,
     },
     tokenizer::Tokenizer,
-    verification::VerificationSession,
+    verification::{VerificationDownProjection, VerificationSession},
 };
 use serde_json::{json, Value};
 use std::{
@@ -34,6 +35,7 @@ struct Trace {
     output: String,
 }
 struct Frozen {
+    down: VerificationDownProjection,
     browser: Trace,
     tasks: Vec<Trace>,
     stop_ids: Vec<u32>,
@@ -90,6 +92,7 @@ fn read_frozen() -> Result<Frozen> {
         "wrong frozen workload"
     );
     Ok(Frozen {
+        down: VerificationDownProjection::Serial,
         browser,
         tasks,
         stop_ids: serde_json::from_value(rows[0]["candidate"]["stop_ids"].clone())?,
@@ -101,9 +104,10 @@ fn new_session<'m>(
     model: &'m mut LoadedModel,
     stops: &[u32],
     is_direct: bool,
+    down: VerificationDownProjection,
 ) -> Result<VerificationSession<'m>> {
     if is_direct {
-        VerificationSession::new_direct_four_rows(model, stops)
+        VerificationSession::with_down_projection(model, stops, down)
     } else {
         VerificationSession::new(model, stops)
     }
@@ -187,7 +191,20 @@ fn target_dispatch(
         .collect()
 }
 
-fn require_target_dispatch(dispatch: &BTreeMap<&str, u64>, is_direct: bool) -> Result<()> {
+fn require_target_dispatch(
+    dispatch: &BTreeMap<&str, u64>,
+    is_direct: bool,
+    down: VerificationDownProjection,
+) -> Result<()> {
+    let shared = is_direct && down == VerificationDownProjection::SharedWeights;
+    let combined = is_direct && down != VerificationDownProjection::Serial;
+    let separate_down = if shared {
+        3
+    } else if combined {
+        130
+    } else {
+        511
+    };
     for (name, count) in [
         (
             "ffn_q8_joint_four_rows_128",
@@ -199,7 +216,8 @@ fn require_target_dispatch(dispatch: &BTreeMap<&str, u64>, is_direct: bool) -> R
         ),
         ("qkv_f32xq8_0_gguf_packed_warp", 511 * 36),
         ("gemm_f32xq8_0_gguf_coltile4_packed_warp", 511 * 36),
-        ("gemm_f32xq8_separate_f32", 511 * 37),
+        ("gemm_f32xq8_separate_f32", 511 + separate_down * 36),
+        ("q8_small_rows", if shared { 127 * 36 } else { 0 }),
     ] {
         ensure!(
             dispatch.get(name).copied().unwrap_or(0) == count,
@@ -215,6 +233,10 @@ fn validate_correctness(rows: &[Value], frozen: &Frozen, executable: &str) -> Re
     ensure!(
         manifest["kind"] == "direct_verifier_manifest"
             && manifest["executable_sha256"] == executable
+            && manifest.get("down_projection").map_or(
+                frozen.down == VerificationDownProjection::Serial,
+                |mode| *mode == json!(frozen.down),
+            )
             && manifest["correctness_only"] == true
             && manifest["quality_sha256"] == frozen.reference["artifact_sha256"][QUALITY]
             && manifest["model_sha256"] == frozen.reference["model"]["sha256"]
@@ -310,7 +332,13 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
             && args.trials == 5,
         "direct verifier requires release/cuBLAS, rows4, iterations10, initial trials5; statistical extensions are automatic"
     );
-    let frozen = read_frozen()?;
+    let mut frozen = read_frozen()?;
+    frozen.down = match args.verifier_down.as_deref() {
+        None | Some("serial") => VerificationDownProjection::Serial,
+        Some("multi-row") => VerificationDownProjection::MultiRow,
+        Some("shared-weights") => VerificationDownProjection::SharedWeights,
+        _ => anyhow::bail!("unknown verifier down schedule"),
+    };
     let environment: BTreeMap<_, _> = std::env::vars()
         .filter(|(k, _)| k.starts_with("M40LLM_") || k == "CUDA_VISIBLE_DEVICES")
         .collect();
@@ -327,7 +355,9 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "research requires clean committed source"
     );
     let executable_sha256 = file_sha256(&std::env::current_exe()?)?;
-    if !args.direct_verifier_correctness_only {
+    if let Some(dir) = &args.compare_verifier_down {
+        down_comparison::validate_reports(dir, &mut frozen, &executable_sha256)?;
+    } else if !args.direct_verifier_correctness_only {
         let path = args
             .direct_verifier_correctness_report
             .as_ref()
@@ -368,12 +398,15 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "prepared_payload_hashes":prepared_hashes,
         "logical_sources":model.q8_execution.logical_sources(),"source_bytes":model.weights_len,
         "dense_kv_bytes":model.kv_cache.as_ref().unwrap().actual_bytes(),"correctness_only":args.direct_verifier_correctness_only,
+        "down_projection":frozen.down,"is_down_comparison":args.compare_verifier_down.is_some(),
         "trials":args.trials,"rows":4,"build_profile":"release","nvcc":command_output("nvcc",&["--version"])?,
         "cuda_flags":["-O3","sm_52","compute_52","no fast math"],"gpu":inspect_gpu()?,
         "scope":"fully direct target research; shared prompt SGEMM permitted, target SGEMM prohibited; no HTTP claim"}),
     )?;
     if args.direct_verifier_correctness_only {
         correctness::run(&mut model, &frozen, &tokenizer, &mut out)?;
+    } else if args.compare_verifier_down.is_some() {
+        down_comparison::measure(&mut model, &mut frozen, &mut out)?;
     } else {
         measurement::run(&mut model, &frozen, &mut out)?;
     }
@@ -424,7 +457,7 @@ mod tests {
     /// vocabulary rows, wrong targets or failed numerical evidence to timing.
     #[test]
     fn test_correctness_admission_requires_complete_behavior() -> Result<()> {
-        let frozen = read_frozen()?;
+        let mut frozen = read_frozen()?;
         let mut rows = vec![
             json!({"kind":"direct_verifier_manifest","executable_sha256":"unit",
             "correctness_only":true,"quality_sha256":frozen.reference["artifact_sha256"][QUALITY],
@@ -464,6 +497,11 @@ mod tests {
         changed[1]["actual_token_ids"][0] = json!(0);
         assert!(validate_correctness(&changed, &frozen, "unit").is_err());
         assert!(validate_correctness(&rows, &frozen, "wrong-executable").is_err());
+        // A serial report cannot authorize timing the new weight-sharing path.
+        frozen.down = VerificationDownProjection::SharedWeights;
+        assert!(validate_correctness(&rows, &frozen, "unit").is_err());
+        rows[0]["down_projection"] = json!(VerificationDownProjection::SharedWeights);
+        validate_correctness(&rows, &frozen, "unit")?;
         Ok(())
     }
 }

@@ -85,6 +85,12 @@ struct Args {
     /// Fixed fully direct target prototype, not speculative generation.
     #[arg(long, conflicts_with_all=["direct_q8_feasibility","verification_trace","ffn_inputs","sparse_inputs"])]
     direct_four_row_verifier: bool,
+    /// Four-row down backend for a source-bound correctness or measurement run.
+    #[arg(long, requires="direct_four_row_verifier", value_parser=["serial","multi-row","shared-weights"])]
+    verifier_down: Option<String>,
+    /// Compare all three down schedules using this directory of passing correctness reports.
+    #[arg(long, requires="direct_four_row_verifier", conflicts_with_all=["verifier_down","direct_verifier_correctness_only","direct_verifier_correctness_report"])]
+    compare_verifier_down: Option<PathBuf>,
     /// Complete frozen correctness checks without primary timing.
     #[arg(
         long,

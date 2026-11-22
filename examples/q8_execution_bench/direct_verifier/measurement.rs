@@ -9,7 +9,7 @@ fn millis(began: Instant) -> f64 {
     began.elapsed().as_secs_f64() * 1000.
 }
 
-fn run_arm(model: &mut LoadedModel, frozen: &Frozen, is_direct: bool) -> Result<Value> {
+pub(super) fn run_arm(model: &mut LoadedModel, frozen: &Frozen, is_direct: bool) -> Result<Value> {
     let trace = &frozen.browser;
     let ctx = model.cuda.clone();
     let start = ctx.create_event()?;
@@ -21,7 +21,7 @@ fn run_arm(model: &mut LoadedModel, frozen: &Frozen, is_direct: bool) -> Result<
     start.record(CudaStream::Decode)?;
     let total = Instant::now();
     let setup = Instant::now();
-    let mut session = new_session(model, &frozen.stop_ids, is_direct)?;
+    let mut session = new_session(model, &frozen.stop_ids, is_direct, frozen.down)?;
     let session_setup_ms = millis(setup);
     let session_scratch_bytes = session.scratch_bytes();
     let tracked_after_setup = CudaContext::total_device_bytes();
@@ -99,7 +99,7 @@ fn run_arm(model: &mut LoadedModel, frozen: &Frozen, is_direct: bool) -> Result<
         "timed final dense lengths differ"
     );
     let dispatch = target_dispatch(&before_target, &after_target);
-    require_target_dispatch(&dispatch, is_direct)?;
+    require_target_dispatch(&dispatch, is_direct, frozen.down)?;
     let batch_sum: f64 = batches_ms.iter().sum();
     let serial_sum: f64 = serial_steps_ms.iter().sum();
     Ok(
@@ -118,8 +118,12 @@ fn run_arm(model: &mut LoadedModel, frozen: &Frozen, is_direct: bool) -> Result<
     )
 }
 
-fn rejection(model: &mut LoadedModel, frozen: &Frozen, accepted: usize) -> Result<Value> {
-    let mut s = new_session(model, &frozen.stop_ids, true)?;
+pub(super) fn rejection(
+    model: &mut LoadedModel,
+    frozen: &Frozen,
+    accepted: usize,
+) -> Result<Value> {
+    let mut s = new_session(model, &frozen.stop_ids, true, frozen.down)?;
     s.prefill(&frozen.browser.prompt)?;
     let mut draft = frozen.browser.tokens[..4].to_vec();
     draft[accepted] = (draft[accepted] + 1) % 151936;

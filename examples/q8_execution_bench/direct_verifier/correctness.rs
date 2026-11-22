@@ -66,15 +66,26 @@ fn compare_logits(actual: &[f32], expected: &[f32]) -> Result<Value> {
         sum += d;
         equal &= a.to_bits() == b.to_bits();
     }
+    let bytes: Vec<u8> = actual
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect();
+    let digest = ring::digest::digest(&ring::digest::SHA256, &bytes);
+    let digest: String = digest
+        .as_ref()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
     Ok(
-        json!({"values":actual.len(),"max_abs_diff":max,"mean_abs_diff":sum/actual.len() as f64,"is_bitwise_equal":equal,"has_tolerance_passed":true}),
+        json!({"values":actual.len(),"max_abs_diff":max,"mean_abs_diff":sum/actual.len() as f64,
+        "is_bitwise_equal":equal,"has_tolerance_passed":true,"actual_fp32le_sha256":digest}),
     )
 }
 
 fn browser(model: &mut LoadedModel, frozen: &Frozen, out: &mut File) -> Result<Vec<u16>> {
     let trace = &frozen.browser;
     let (reference_logits, reference_kv) = {
-        let mut s = new_session(model, &frozen.stop_ids, false)?;
+        let mut s = new_session(model, &frozen.stop_ids, false, frozen.down)?;
         ensure!(
             s.prefill(&trace.prompt)? == trace.tokens[0],
             "serial prompt differs"
@@ -90,7 +101,7 @@ fn browser(model: &mut LoadedModel, frozen: &Frozen, out: &mut File) -> Result<V
         }
         (logits, snapshot(&s, 576)?)
     };
-    let mut s = new_session(model, &frozen.stop_ids, true)?;
+    let mut s = new_session(model, &frozen.stop_ids, true, frozen.down)?;
     ensure!(
         s.prefill(&trace.prompt)? == trace.tokens[0],
         "direct prompt differs"
@@ -138,7 +149,7 @@ fn browser(model: &mut LoadedModel, frozen: &Frozen, out: &mut File) -> Result<V
     let after = profile::snapshot();
     let counters = profile::counter_delta(&before, &after);
     let dispatch = target_dispatch(&before, &after);
-    require_target_dispatch(&dispatch, true)?;
+    require_target_dispatch(&dispatch, true, frozen.down)?;
     ensure!(
         counters.cublas_calls == 0,
         "target verification entered cuBLAS"
@@ -185,12 +196,12 @@ fn transactions(
     {
         let alias = model.kv_cache.as_ref().unwrap().clone();
         ensure!(
-            new_session(model, &frozen.stop_ids, true).is_err(),
+            new_session(model, &frozen.stop_ids, true, frozen.down).is_err(),
             "aliased cache accepted"
         );
         drop(alias);
     }
-    let mut s = new_session(model, &frozen.stop_ids, true)?;
+    let mut s = new_session(model, &frozen.stop_ids, true, frozen.down)?;
     for forced_partial in [false, true] {
         for accepted in 0..4 {
             s.prefill(&trace.prompt)?;
@@ -246,7 +257,7 @@ fn transactions(
     );
     drop(s);
     {
-        let mut stopped = new_session(model, &[trace.tokens[0]], true)?;
+        let mut stopped = new_session(model, &[trace.tokens[0]], true, frozen.down)?;
         stopped.prefill(&trace.prompt)?;
         let result = stopped.begin(&trace.tokens[..4], false)?.commit()?;
         ensure!(
@@ -258,7 +269,7 @@ fn transactions(
     }
     model.allocate_kv_cache_for_layers(68)?;
     {
-        let mut small = new_session(model, &frozen.stop_ids, true)?;
+        let mut small = new_session(model, &frozen.stop_ids, true, frozen.down)?;
         small.prefill(&trace.prompt)?;
         ensure!(
             small.begin(&trace.tokens[..4], false).is_err(),
@@ -283,7 +294,7 @@ fn quality(
 ) -> Result<()> {
     for trace in &frozen.tasks {
         for is_direct in [false, true] {
-            let mut s = new_session(model, &frozen.stop_ids, is_direct)?;
+            let mut s = new_session(model, &frozen.stop_ids, is_direct, frozen.down)?;
             let first = s.prefill(&trace.prompt)?;
             let mut actual = vec![first];
             let mut index = 0;
