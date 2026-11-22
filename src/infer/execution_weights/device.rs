@@ -123,18 +123,14 @@ impl DeviceQ8ExecutionWeight {
         rows: usize,
     ) -> Result<()> {
         let (m, n, k) = self.validate_projection_buffers(input, output, rows)?;
-        ensure!(rows <= 16, "small-row projection supports at most 16 rows");
-        let DeviceQ8ExecutionView::SeparateScalesValues { scales, values, .. } = self.view() else {
-            anyhow::bail!("small-row projection requires separate weight planes");
-        };
-        self.ctx.q8_small_rows_async(
+        self.enqueue_projection_async(
             input.as_ptr(),
-            scales.as_ptr(),
-            values.as_ptr(),
             output.as_mut_ptr(),
             m,
             n,
             k,
+            CudaStream::Decode,
+            Q8ProjectionLaunch::SharedRows,
         )
     }
 
@@ -319,6 +315,24 @@ impl DeviceQ8ExecutionWeight {
             "prepared Q8 projection shape mismatch"
         );
         match (self.view(), launch) {
+            (
+                DeviceQ8ExecutionView::SeparateScalesValues { scales, values, .. },
+                Q8ProjectionLaunch::SharedRows,
+            ) => {
+                ensure!(
+                    m <= 16 && matches!(stream, CudaStream::Decode),
+                    "small-row projection supports up to 16 rows on the decode stream"
+                );
+                self.ctx.q8_small_rows_async(
+                    input,
+                    scales.as_ptr(),
+                    values.as_ptr(),
+                    output,
+                    m,
+                    n,
+                    k,
+                )
+            }
             (
                 DeviceQ8ExecutionView::SeparateScalesValues { scales, values, .. },
                 Q8ProjectionLaunch::Separate(config),

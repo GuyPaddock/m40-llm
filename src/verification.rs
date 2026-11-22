@@ -7,6 +7,15 @@ use crate::{
 };
 use anyhow::{ensure, Context, Result};
 
+/// Lossless prepared down-projection schedules for the research four-row verifier.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VerificationDownProjection {
+    Serial,
+    MultiRow,
+    SharedWeights,
+}
+
 /// Exclusive mutable model ownership prevents workspace/cache interleaving.
 pub struct VerificationSession<'m> {
     model: &'m mut LoadedModel,
@@ -105,9 +114,19 @@ impl<'m> VerificationSession<'m> {
     /// Bounded research prototype, never selected by generation defaults.
     /// Keeps the original SGEMM constructor available only as its old control.
     pub fn new_direct_four_rows(model: &'m mut LoadedModel, stop_tokens: &[u32]) -> Result<Self> {
+        Self::with_down_projection(model, stop_tokens, VerificationDownProjection::Serial)
+    }
+
+    /// Select a measured four-row down schedule on an exclusively owned verifier.
+    pub fn with_down_projection(
+        model: &'m mut LoadedModel,
+        stop_tokens: &[u32],
+        down_projection: VerificationDownProjection,
+    ) -> Result<Self> {
         let mut session = Self::new(model, stop_tokens)?;
         session.direct_workspace = Some(crate::infer::DirectVerificationWorkspace::new(
             session.model,
+            down_projection,
         )?);
         Ok(session)
     }

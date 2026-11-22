@@ -1,5 +1,7 @@
-//! Fixed research schedule. All projections except the gate remain one-row.
+//! Four-row verification on a private workspace with model-owned Q8 weights.
 use super::{LoadedModel, QkvBiasPtrs};
+use crate::infer::execution_weights::{Q8ProjectionLaunch, Q8SeparateLaunch};
+use crate::verification::VerificationDownProjection;
 use crate::{
     gguf::GgmlDType,
     infer::{
@@ -15,12 +17,16 @@ const KV: usize = 256;
 
 /// Held by the exclusive verification session, never the model's shared scratch.
 pub(crate) struct DirectVerificationWorkspace {
+    down_projection: VerificationDownProjection,
     storage: ForwardWorkspace,
     bytes: usize,
 }
 
 impl DirectVerificationWorkspace {
-    pub(crate) fn new(model: &LoadedModel) -> Result<Self> {
+    pub(crate) fn new(
+        model: &LoadedModel,
+        down_projection: VerificationDownProjection,
+    ) -> Result<Self> {
         let cache = model
             .kv_cache
             .as_ref()
@@ -79,6 +85,7 @@ impl DirectVerificationWorkspace {
             );
         }
         Ok(Self {
+            down_projection,
             storage: ForwardWorkspace::new_with_rows(&model.cuda, D, KV, H, 4, model.q8_ffn, 0)?,
             bytes: ForwardWorkspace::estimated_bytes(D, KV, H, 4, model.q8_ffn, 0)?,
         })
@@ -256,16 +263,39 @@ impl LoadedModel {
             } else {
                 ws.scratch_a
             };
+            let launch = match workspace.down_projection {
+                VerificationDownProjection::Serial => None,
+                VerificationDownProjection::MultiRow => {
+                    Some(Q8ProjectionLaunch::Separate(Q8SeparateLaunch::new(4, 256)?))
+                }
+                VerificationDownProjection::SharedWeights => Some(Q8ProjectionLaunch::SharedRows),
+            };
+            if let Some(launch) = launch {
+                self.q8_execution
+                    .get_separate_weight(w.w_down.dptr)
+                    .context("missing direct down owner")?
+                    .enqueue_projection_async(
+                        ws.dhid,
+                        ws.dy_mlp,
+                        4,
+                        D as i32,
+                        H as i32,
+                        crate::cuda::CudaStream::Decode,
+                        launch,
+                    )?;
+            }
             for index in 0..4 {
                 let down = row(ws.dy_mlp, index, D);
-                self.mlp_down_proj_f32xf16_gguf_f32_async(
-                    row(ws.dhid, index, H),
-                    1,
-                    H as i32,
-                    w.w_down.dptr,
-                    D as i32,
-                    down,
-                )?;
+                if launch.is_none() {
+                    self.mlp_down_proj_f32xf16_gguf_f32_async(
+                        row(ws.dhid, index, H),
+                        1,
+                        H as i32,
+                        w.w_down.dptr,
+                        D as i32,
+                        down,
+                    )?;
+                }
                 self.cuda.residual_add_f32_async(
                     row(ws.d_x1, index, D),
                     down,

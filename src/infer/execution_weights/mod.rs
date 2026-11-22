@@ -38,6 +38,7 @@ pub use cache::Q8ExecutionCache;
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Q8ProjectionLaunch {
     Separate(Q8SeparateLaunch),
+    SharedRows,
     Tiled(Q8TiledLaunch),
 }
 
