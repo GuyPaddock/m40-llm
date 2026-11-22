@@ -32,3 +32,23 @@ five-pair screen, dispersion extension and twenty-pair confirmation rule.
 Stop if the mode is unsupported and record the actual server error. An
 unsupported control cannot support a speed claim. This is a baseline of
 the shipped server paths; a scheduler change requires separate D3 evidence.
+
+## Reproduction
+
+Use the primary D3 release server built from 29d1c32 (timers disabled).
+Build 18b76c3 separately with
+`M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo build --locked --release --features cuda,server --bin m40-llm`
+for the diagnostic server. It emits a row count after each successful
+multirow target forward. Only the diagnostic uses that new server. Save
+it to the adjacent raw/serving-concurrency-build-01/diagnostic-server.
+Both executables are pinned in [binaries.sha256](binaries.sha256).
+Build the CPU report with `CARGO_TARGET_DIR=target/cpu cargo build --locked --release --no-default-features --example research_fairness_report`.
+
+Run `bash docs/experiments/2026-11-21-serving-concurrency/run.sh CACHE CLIENTS NEW_DIRECTORY`
+under the common exclusive lock, once per choice of default/dense and
+1/2/4 clients. All runs retain their primary client records, instrumented
+companion, peak-memory timeline and independent arm timings, including
+output-divergent runs. Use eligibility.json before interpreting paired
+throughput. The two-client CPU [accounting check](check-accounting.sh)
+reconstructed a 40 ms makespan and 100 aggregate tokens/s, checked TTFT
+and P95 gaps, identified a divergent output and rejected invalid counts.
