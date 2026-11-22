@@ -165,3 +165,13 @@ bytes in all four arms. It cannot resolve these native allocation
 differences or establish whole-process peak savings. The complete replay
 also matches every constructor to a specific free-generation or
 dense-trajectory record before accepting its cache accounting.
+
+Use the boundary packager after the hardware runner exits. It requires
+the final allocation check and the post-run device snapshot, verifies all
+raw checksums after extraction, then repeats the numerical replay from
+the archive. It publishes into a fresh directory after both replays match.
+
+```bash
+bash docs/experiments/2026-11-21-kv-audit/pack-history.sh \
+    ../raw/kv-history-boundary-01 ../raw/kv-history-inputs.json ../raw/kv-boundary-package-01
+```
