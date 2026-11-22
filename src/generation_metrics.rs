@@ -1,6 +1,6 @@
 //! Request-owned wall-clock measurements, excluding HTTP transport and admission queues.
 
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 
@@ -20,10 +20,17 @@ pub struct GenerationMetrics {
     /// Diagnostic request-relative sample times, including any sampled stop token.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token_elapsed_ms: Option<Vec<f64>>,
+    /// Host clock at the monotonic origin, for same-host client correlation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_origin_unix_ns: Option<u64>,
+    /// Sampled IDs in the diagnostic run, including a sampled EOS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sampled_ids: Option<Vec<u32>>,
 }
 
 pub(crate) struct GenerationTimer {
     started_at: Instant,
+    origin_unix_ns: Option<u64>,
     first_token_at: Option<Instant>,
     last_token_at: Option<Instant>,
     token_elapsed_ms: Option<Vec<f64>>,
@@ -31,13 +38,30 @@ pub(crate) struct GenerationTimer {
 
 impl GenerationTimer {
     pub(crate) fn new(started_at: Instant) -> Self {
+        Self::with_sample_timing(
+            started_at,
+            std::env::var("M40LLM_RESEARCH_TOKEN_TIMINGS").as_deref() == Ok("1"),
+        )
+    }
+
+    fn with_sample_timing(started_at: Instant, enabled: bool) -> Self {
+        let origin_unix_ns = enabled
+            .then(|| {
+                SystemTime::now()
+                    .checked_sub(started_at.elapsed())?
+                    .duration_since(UNIX_EPOCH)
+                    .ok()?
+                    .as_nanos()
+                    .try_into()
+                    .ok()
+            })
+            .flatten();
         Self {
+            origin_unix_ns,
             started_at,
             first_token_at: None,
             last_token_at: None,
-            token_elapsed_ms: (std::env::var("M40LLM_RESEARCH_TOKEN_TIMINGS").as_deref()
-                == Ok("1"))
-            .then(Vec::new),
+            token_elapsed_ms: enabled.then(Vec::new),
         }
     }
 
@@ -73,6 +97,8 @@ impl GenerationTimer {
             prefill_elapsed_ms,
             decode_elapsed_ms,
             total_elapsed_ms: self.started_at.elapsed().as_secs_f64() * 1000.0,
+            sampled_ids: self.token_elapsed_ms.as_ref().map(|_| generated.to_vec()),
+            sample_origin_unix_ns: self.origin_unix_ns,
             token_elapsed_ms: self.token_elapsed_ms.take(),
         })
     }
@@ -85,11 +111,18 @@ mod tests {
     /// Captured offsets agree with prefill/decode boundaries and include EOS.
     #[test]
     fn sampled_offsets_include_the_stop_token() -> Result<()> {
-        let mut timer = GenerationTimer::new(Instant::now());
-        timer.token_elapsed_ms = Some(Vec::new());
+        let before = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        let mut timer = GenerationTimer::with_sample_timing(Instant::now(), true);
         timer.record_token();
         timer.record_token();
         let metrics = timer.finish(3, &[7, 9], &StoppingCriteria::new(None, Some(9)))?;
+        let origin = u128::from(metrics.sample_origin_unix_ns.unwrap());
+        // Monotonic and realtime snapshots are distinct system calls.
+        assert!(
+            origin + 1_000_000 >= before
+                && origin <= SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos() + 1_000_000
+        );
+        assert_eq!(metrics.sampled_ids.as_deref(), Some(&[7, 9][..]));
         let samples = metrics.token_elapsed_ms.as_ref().unwrap();
         assert_eq!(samples.len(), metrics.generated_tokens);
         assert_eq!(samples[0], metrics.prefill_elapsed_ms);
@@ -101,12 +134,13 @@ mod tests {
     /// Older reports and timing-disabled runs omit the optional diagnostic.
     #[test]
     fn metrics_round_trip_without_sample_offsets() -> Result<()> {
-        let mut timer = GenerationTimer::new(Instant::now());
-        timer.token_elapsed_ms = None;
+        let mut timer = GenerationTimer::with_sample_timing(Instant::now(), false);
         timer.record_token();
         let metrics = timer.finish(1, &[7], &StoppingCriteria::new(Some(1), None))?;
         let wire = serde_json::to_value(metrics)?;
-        assert!(wire.get("token_elapsed_ms").is_none());
+        for field in ["token_elapsed_ms", "sample_origin_unix_ns", "sampled_ids"] {
+            assert!(wire.get(field).is_none());
+        }
         let restored: GenerationMetrics = serde_json::from_value(wire)?;
         assert_eq!(restored.generated_tokens, 1);
         assert!(restored.token_elapsed_ms.is_none());
