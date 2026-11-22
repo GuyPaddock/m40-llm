@@ -1,6 +1,8 @@
 use super::{
     config::CacheArm,
-    execution::{allocate_cache, read_cache_state, summarize_dispatch, verify_dispatch},
+    execution::{
+        allocate_cache, read_cache_state, summarize_dispatch, verify_dispatch, CacheGeometry,
+    },
     metrics::select_observation_steps,
 };
 use anyhow::{ensure, Result};
@@ -24,9 +26,19 @@ pub fn collect_prefixes(
     prompt: &[u32],
     continuation: &[u32],
 ) -> Result<PrefixObservations> {
-    allocate_cache(model, arm)?;
+    collect_with_geometry(model, arm, prompt, continuation, CacheGeometry::STANDARD)
+}
+
+pub fn collect_with_geometry(
+    model: &mut LoadedModel,
+    arm: CacheArm,
+    prompt: &[u32],
+    continuation: &[u32],
+    geometry: CacheGeometry,
+) -> Result<PrefixObservations> {
+    allocate_cache(model, arm, geometry)?;
     let steps = select_observation_steps(continuation.len())?;
-    let config = arm.create_config();
+    let config = geometry.config(arm);
     let _scope = ScopedRuntimeConfig::new(config.clone());
     let dimension = model.validate_full_layer_decode()?.0;
     let before = profile::snapshot();
@@ -66,7 +78,7 @@ pub fn collect_prefixes(
         continuation.len(),
         model.model_config.block_count,
     )?;
-    let state = read_cache_state(model, arm, prompt.len() + continuation.len() - 1)?;
+    let state = read_cache_state(model, arm, prompt.len() + continuation.len() - 1, geometry)?;
     Ok(PrefixObservations {
         steps,
         logits,

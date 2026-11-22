@@ -7,6 +7,9 @@ mod execution;
 mod fixture;
 #[cfg(all(test, feature = "cuda", nvcc))]
 mod hardware_tests;
+#[cfg(all(feature = "cuda", nvcc))]
+mod history;
+mod history_inputs;
 #[cfg(any(all(feature = "cuda", nvcc), test))]
 mod metrics;
 mod november;
@@ -30,6 +33,19 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Prepare the 2K equivalence and >64-block quality inputs.
+    PrepareHistory {
+        model: PathBuf,
+        november_inputs: PathBuf,
+        output: PathBuf,
+    },
+    /// Evaluate existing mixed consumers on a frozen history boundary.
+    History {
+        model: PathBuf,
+        november_inputs: PathBuf,
+        inputs: PathBuf,
+        output: PathBuf,
+    },
     /// Measure one cache in a fresh process with the quality model's weight owners.
     Residency {
         #[arg(long)]
@@ -72,6 +88,27 @@ enum Command {
 
 fn main() -> Result<()> {
     match Args::parse().command {
+        Command::PrepareHistory {
+            model,
+            november_inputs,
+            output,
+        } => history_inputs::prepare(&model, &november_inputs, &output),
+        Command::History {
+            model,
+            november_inputs,
+            inputs,
+            output,
+        } => {
+            #[cfg(all(feature = "cuda", nvcc))]
+            {
+                history::run(&model, &november_inputs, &inputs, &output)
+            }
+            #[cfg(not(all(feature = "cuda", nvcc)))]
+            {
+                let _ = (model, november_inputs, inputs, output);
+                anyhow::bail!("history evaluation requires CUDA/NVCC")
+            }
+        }
         Command::Residency {
             model,
             arm,

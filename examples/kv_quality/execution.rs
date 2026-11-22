@@ -19,7 +19,7 @@ use std::{collections::BTreeMap, fs, path::Path};
 
 pub fn load_model(path: &Path) -> Result<LoadedModel> {
     let mut model = load_weights(path)?;
-    allocate_cache(&mut model, CacheArm::Dense)?;
+    allocate_cache(&mut model, CacheArm::Dense, CacheGeometry::STANDARD)?;
     model.validate_full_layer_decode()?;
     Ok(model)
 }
@@ -64,18 +64,44 @@ pub fn load_weights(path: &Path) -> Result<LoadedModel> {
     Ok(model)
 }
 
-pub fn allocate_cache(model: &mut LoadedModel, arm: CacheArm) -> Result<()> {
+#[derive(Clone, Copy)]
+pub struct CacheGeometry {
+    pub capacity: usize,
+    pub block_size: usize,
+    pub requires_full_block_coverage: bool,
+}
+
+impl CacheGeometry {
+    pub const STANDARD: Self = Self {
+        capacity: CAPACITY,
+        block_size: BLOCK,
+        requires_full_block_coverage: true,
+    };
+
+    pub fn config(self, arm: CacheArm) -> m40_llm::kv_compression::KvCompressionConfig {
+        let mut config = arm.create_config();
+        config.block_size = self.block_size as u32;
+        config
+    }
+}
+
+pub fn allocate_cache(
+    model: &mut LoadedModel,
+    arm: CacheArm,
+    geometry: CacheGeometry,
+) -> Result<()> {
     model.cuda.synchronize_stream(CudaStream::Decode)?;
     model.cuda.synchronize_stream(CudaStream::Prefill)?;
-    let config = arm.create_config();
+    let config = geometry.config(arm);
     ensure!(
-        config.recent_window as usize == RECENT && config.block_size as usize == BLOCK,
+        config.recent_window as usize == RECENT
+            && config.block_size as usize == geometry.block_size,
         "cache bounds changed"
     );
     if arm == CacheArm::Dense {
-        model.allocate_kv_cache_for_layers(CAPACITY as u32)?;
+        model.allocate_kv_cache_for_layers(geometry.capacity as u32)?;
     } else {
-        model.allocate_compressed_kv_cache_for_layers(CAPACITY as u32, &config)?;
+        model.allocate_compressed_kv_cache_for_layers(geometry.capacity as u32, &config)?;
     }
     let cache = model.kv_cache.as_ref().context("allocated cache")?;
     ensure!(
@@ -83,7 +109,7 @@ pub fn allocate_cache(model: &mut LoadedModel, arm: CacheArm) -> Result<()> {
         "wrong cache allocation"
     );
     ensure!(
-        cache.max_seq_len() as usize == CAPACITY
+        cache.max_seq_len() as usize == geometry.capacity
             && cache.max_batch_size() == model.model_config.block_count,
         "wrong cache capacity/slots"
     );
@@ -130,12 +156,18 @@ pub fn verify_dispatch(
     Ok(())
 }
 
-pub fn read_cache_state(model: &LoadedModel, arm: CacheArm, consumed: usize) -> Result<Value> {
+pub fn read_cache_state(
+    model: &LoadedModel,
+    arm: CacheArm,
+    consumed: usize,
+    geometry: CacheGeometry,
+) -> Result<Value> {
     let cache = model.kv_cache.as_ref().context("allocated cache")?;
     let old_tokens = consumed.saturating_sub(RECENT);
-    let old_blocks = old_tokens.div_ceil(BLOCK);
+    let old_blocks = old_tokens.div_ceil(geometry.block_size);
     ensure!(
-        consumed <= CAPACITY && old_blocks <= 64,
+        consumed <= geometry.capacity
+            && (!geometry.requires_full_block_coverage || old_blocks <= 64),
         "lost full old-block coverage"
     );
     let mut lengths = Vec::new();
@@ -151,7 +183,9 @@ pub fn read_cache_state(model: &LoadedModel, arm: CacheArm, consumed: usize) -> 
             let snapshot = cache.debug_compressed_snapshot(&model.cuda, physical)?;
             ensure!(snapshot.seq_len == length, "compressed length disagrees");
             for (index, &count) in snapshot.block_counts.iter().enumerate() {
-                let expected = old_tokens.saturating_sub(index * BLOCK).min(BLOCK);
+                let expected = old_tokens
+                    .saturating_sub(index * geometry.block_size)
+                    .min(geometry.block_size);
                 ensure!(
                     count as usize == expected,
                     "layer {layer} old block {index} has {count}, expected {expected}"
@@ -169,7 +203,7 @@ pub fn read_cache_state(model: &LoadedModel, arm: CacheArm, consumed: usize) -> 
         }
     }
     Ok(
-        json!({"consumed_tokens":consumed,"physical_lengths":lengths,"is_compressed":cache.is_compressed(),
+        json!({"block_size":geometry.block_size,"capacity":geometry.capacity,"consumed_tokens":consumed,"physical_lengths":lengths,"is_compressed":cache.is_compressed(),
         "old_tokens":old_tokens,"old_blocks":old_blocks,"all_old_blocks_fit_top64":old_blocks<=64,
         "configured_old_block_budget":if arm==CacheArm::Dense {old_blocks} else {old_blocks.min(arm.create_config().top_blocks as usize)},
         "allocated_bytes":cache.actual_bytes(),"dense_equivalent_bytes":cache.dense_equivalent_bytes(),
@@ -182,7 +216,17 @@ pub fn generate_case(
     case: &Case,
     arm: CacheArm,
 ) -> Result<(GeneratedText, Value, Value)> {
-    allocate_cache(model, arm)?;
+    generate_with_geometry(model, case, arm, CacheGeometry::STANDARD, 2112)
+}
+
+pub fn generate_with_geometry(
+    model: &mut LoadedModel,
+    case: &Case,
+    arm: CacheArm,
+    geometry: CacheGeometry,
+    prompt_bound: usize,
+) -> Result<(GeneratedText, Value, Value)> {
+    allocate_cache(model, arm, geometry)?;
     let before = profile::snapshot();
     let generated = generate_text(
         model,
@@ -192,10 +236,10 @@ pub fn generate_case(
             top_k: Some(1),
             seed: Some(0),
             max_tokens: Some(case.task.max_tokens),
-            kv_compression: arm.create_config(),
+            kv_compression: geometry.config(arm),
             reset_kv_cache: true,
             prompt_prefill: PromptPrefill::PackedPrefix {
-                max_prompt_tokens: 2112,
+                max_prompt_tokens: prompt_bound,
             },
             ..Default::default()
         },
@@ -223,6 +267,6 @@ pub fn generate_case(
     );
     let dispatch = summarize_dispatch(&before);
     verify_dispatch(&dispatch, arm, count, model.model_config.block_count)?;
-    let state = read_cache_state(model, arm, generated.token_ids.len() - 1)?;
+    let state = read_cache_state(model, arm, generated.token_ids.len() - 1, geometry)?;
     Ok((generated, dispatch, state))
 }
