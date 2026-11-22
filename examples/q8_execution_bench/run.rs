@@ -23,6 +23,8 @@ use serde_json::{json, Value};
 mod direct_verifier;
 #[path = "ffn/mod.rs"]
 mod ffn;
+#[path = "small_rows.rs"]
+mod small_rows;
 #[path = "sparse_inputs.rs"]
 mod sparse_inputs;
 #[path = "verification.rs"]
@@ -77,6 +79,9 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Compare serial and shared down projections over identical input rows.
+    #[arg(long, conflicts_with_all=["direct_four_row_verifier","direct_q8_feasibility","verification_trace","ffn_inputs","sparse_inputs"])]
+    small_rows: bool,
     /// Fixed fully direct target prototype, not speculative generation.
     #[arg(long, conflicts_with_all=["direct_q8_feasibility","verification_trace","ffn_inputs","sparse_inputs"])]
     direct_four_row_verifier: bool,
@@ -357,17 +362,26 @@ impl Projection<'_> {
     }
 
     fn time(&self, config: Option<ProjectionLaunch>, iterations: usize) -> Result<Value> {
+        self.time_operation(self.stream(config), iterations, || unsafe {
+            self.enqueue(config)
+        })
+    }
+
+    fn time_operation(
+        &self,
+        stream: CudaStream,
+        iterations: usize,
+        mut enqueue: impl FnMut() -> Result<()>,
+    ) -> Result<Value> {
         let start = self.ctx.create_event()?;
         let stop = self.ctx.create_event()?;
         let started_unix_us = SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros();
         let began = Instant::now();
-        start.record(self.stream(config))?;
+        start.record(stream)?;
         for _ in 0..iterations {
-            unsafe {
-                self.enqueue(config)?;
-            }
+            enqueue()?;
         }
-        stop.record(self.stream(config))?;
+        stop.record(stream)?;
         let gpu_ms =
             f64::from(start.elapsed_sync(&stop, "q8_execution_bench")?) / iterations as f64;
         let wall_ms = began.elapsed().as_secs_f64() * 1000.0 / iterations as f64;
@@ -566,7 +580,9 @@ fn run_tensor(
                     input.len() * 4,
                 )?;
             }
-            if args.sparse_inputs {
+            if args.small_rows {
+                small_rows::measure(&projection, file, args, &bytes, &input, tensor)?;
+            } else if args.sparse_inputs {
                 sparse_inputs::measure(&projection, file, args, &bytes, &input, tensor)?;
             } else {
                 measure_rows(&projection, file, args, &bytes, &input, tensor)?;
@@ -578,6 +594,21 @@ fn run_tensor(
 
 pub fn benchmark() -> Result<()> {
     let args = Args::parse();
+    if args.small_rows {
+        ensure!(
+            !cfg!(debug_assertions)
+                && cfg!(have_cublas)
+                && matches!(args.layout, LayoutArg::Separate)
+                && args.rows == [1, 2, 3, 4, 8, 16]
+                && args.tensors
+                    == [
+                        "blk.0.ffn_down.weight",
+                        "blk.17.ffn_down.weight",
+                        "blk.35.ffn_down.weight"
+                    ],
+            "small-row screen requires the frozen layers, row counts, release and cuBLAS"
+        );
+    }
     if args.direct_four_row_verifier {
         return direct_verifier::benchmark(&args);
     }
@@ -646,7 +677,7 @@ pub fn benchmark() -> Result<()> {
         "build_profile":if cfg!(debug_assertions) {"dev"} else {"release"},
         "cuda_flags":["-O3","sm_52","compute_52"],"nvcc":command_output("nvcc", &["--version"])?,
         "gpu":gpu,"trials":args.trials,"rows":args.rows,"requested_iterations":args.iterations,"execution_layout":args.layout,
-        "tiled_access":"vector","sparse_inputs":args.sparse_inputs,
+        "tiled_access":"vector","sparse_inputs":args.sparse_inputs,"small_rows":args.small_rows,
         "rustc":command_output("rustc", &["--version"])?,
         "host_compiler":command_output("g++", &["--version"])?,
         "environment":std::env::vars().filter(|(key,_)| key.starts_with("M40LLM_") || key.starts_with("CUDA_")).collect::<std::collections::BTreeMap<_,_>>(),
