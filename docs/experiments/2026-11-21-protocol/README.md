@@ -40,4 +40,13 @@ The checked-in performance-contexts.json contains the exact request bodies, full
 
 Replay with cargo run --release --locked --example research_context_inputs -- --model MODEL --oracle-report docs/experiments/2026-11-21-native-split/report.jsonl --output NEW.json and compare against the checked-in manifest. Context capacity is separate from the prompt length. Preserve natural stop behavior and actual output counts for every measurement.
 
+For an independent vocabulary check, run
+`bash check-context-ids.sh LLAMA_TOKENIZE QWEN_Q8_GGUF NEW_DIRECTORY`
+from this directory under the benchmark lock. The external llama.cpp tool
+reads the same GGUF vocabulary and merges. Use raw bytes, preserve the
+trailing newline, parse ChatML special tokens and omit automatic BOS.
+Require every token ID to match in order in all three prompts. The result
+directory retains the prompts, emitted IDs, binary and library hashes, and
+per-case decisions. This check exercises tokenization only.
+
 For later cohorts the process-name counts also include the kernel scheduling class and nice value. The initial KV run recorded counts by name only. A host process-tree observation during that run found the top-level emerge and current compiler workers under ordinary scheduling at nice 0, in separate process groups. The benchmark did not adjust their scheduling. Inspect each cohort's actual samples before classifying its load conditions.
