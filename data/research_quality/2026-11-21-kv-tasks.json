@@ -1,0 +1,371 @@
+[
+  {
+    "id": "nov-ledger",
+    "family": "factual_retrieval",
+    "prompt": "The repair ledger lists a blue press under code LARCH and a gray press under code BASALT. Give only the code for the gray press.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "BASALT"
+      ]
+    }
+  },
+  {
+    "id": "nov-platform",
+    "family": "factual_retrieval",
+    "prompt": "In the station bulletin the local train uses platform 2, the ferry shuttle uses platform 5, and the express uses platform 7. Give only the platform number for the ferry shuttle.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "5"
+      ]
+    }
+  },
+  {
+    "id": "nov-drawer",
+    "family": "factual_retrieval",
+    "prompt": "A register puts brass washers in drawer Cedar and steel pins in drawer Alder. Which drawer holds brass washers? Answer with only its name.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "Cedar"
+      ]
+    }
+  },
+  {
+    "id": "nov-crate",
+    "family": "factual_retrieval",
+    "prompt": "Of three crates, Juno contains chalk, Vale contains pencils and Kestrel contains paper. Give only the crate name for paper.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "Kestrel"
+      ]
+    }
+  },
+  {
+    "id": "nov-relay",
+    "family": "multi_fact",
+    "prompt": "A relay test used port 11 on Monday. Tuesday's repeat used port 23 and passed. Give only a JSON object with Tuesday's integer port and boolean passed under those keys.",
+    "max_tokens": 64,
+    "scoring": {
+      "kind": "json_object",
+      "expected": {
+        "port": 23,
+        "passed": true
+      }
+    }
+  },
+  {
+    "id": "nov-museum",
+    "family": "multi_fact",
+    "prompt": "Gallery A closes at noon on Friday. Gallery B opens at nine on Saturday. Return only JSON with keys closing_day_A and opening_day_B, each a weekday.",
+    "max_tokens": 64,
+    "scoring": {
+      "kind": "json_object",
+      "expected": {
+        "closing_day_A": "Friday",
+        "opening_day_B": "Saturday"
+      }
+    }
+  },
+  {
+    "id": "nov-parcel",
+    "family": "multi_fact",
+    "prompt": "Parcel Elm weighs 3 kg and goes to Kent. Parcel Ash weighs 5 kg and goes to Hull. Return only JSON with the integer ash_kg and the string elm_city.",
+    "max_tokens": 64,
+    "scoring": {
+      "kind": "json_object",
+      "expected": {
+        "ash_kg": 5,
+        "elm_city": "Kent"
+      }
+    }
+  },
+  {
+    "id": "nov-staff",
+    "family": "multi_fact",
+    "prompt": "June leads crew P and Noel leads crew Q. Crew P works in bay 8 and crew Q in bay 3. Give only JSON with crew Q's lead and integer bay under keys lead and bay.",
+    "max_tokens": 64,
+    "scoring": {
+      "kind": "json_object",
+      "expected": {
+        "lead": "Noel",
+        "bay": 3
+      }
+    }
+  },
+  {
+    "id": "nov-order",
+    "family": "chat",
+    "prompt": "Alphabetize these names and write them on one line separated by commas and spaces, with no other words: Iris, Fern, Hazel.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "Fern, Hazel, Iris"
+      ]
+    }
+  },
+  {
+    "id": "nov-rewrite",
+    "family": "chat",
+    "prompt": "I asked you to label the box Amber. Correction: use the label Indigo. Return only the final label.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "Indigo"
+      ]
+    }
+  },
+  {
+    "id": "nov-omit",
+    "family": "chat",
+    "prompt": "From the list lime, oat, plum, print the first and last entries joined by a slash, with no spaces or commentary.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "lime/plum"
+      ]
+    }
+  },
+  {
+    "id": "nov-format",
+    "family": "chat",
+    "prompt": "Turn the date 9 March 2031 into YYYY-MM-DD. Reply with the date only.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "2031-03-09"
+      ]
+    }
+  },
+  {
+    "id": "nov-slice",
+    "family": "code_config",
+    "prompt": "What does Python print for print('planet'[1:4])? Reply with only the printed text.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "lan"
+      ]
+    }
+  },
+  {
+    "id": "nov-fallback",
+    "family": "code_config",
+    "prompt": "What integer is printed by this Python program? Reply with only the integer.\nd = {'r': 7}\nprint(d.get('q', 3) + 1)",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "4"
+      ]
+    }
+  },
+  {
+    "id": "nov-loop",
+    "family": "code_config",
+    "prompt": "Write a Python list comprehension for the squares of the numbers in xs. Use x as the loop variable and multiply x by itself. Reply with just the list comprehension.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "[x*x for x in xs]",
+        "[x * x for x in xs]"
+      ]
+    }
+  },
+  {
+    "id": "nov-sql",
+    "family": "code_config",
+    "prompt": "Fill in the one SQL keyword: SELECT team, COUNT(*) FROM runs GROUP BY team ___ COUNT(*) > 2. Reply with the keyword only.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "HAVING"
+      ]
+    }
+  },
+  {
+    "id": "nov-stock",
+    "family": "arithmetic",
+    "prompt": "There are eleven boxes. Four leave and two arrive. Reply only with the final number of boxes.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "9"
+      ]
+    }
+  },
+  {
+    "id": "nov-chain",
+    "family": "arithmetic",
+    "prompt": "The red cart arrives before the blue cart. The green cart arrives after the blue cart. Which color arrives last? Reply with one color only.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "green"
+      ]
+    }
+  },
+  {
+    "id": "nov-cost",
+    "family": "arithmetic",
+    "prompt": "Two tickets cost 6 dollars each. A single 3-dollar coupon applies to the whole order. Give only the final integer price in dollars.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "9"
+      ]
+    }
+  },
+  {
+    "id": "nov-time",
+    "family": "arithmetic",
+    "prompt": "A shift starts at 08:10 and lasts 35 minutes. Give only the end time in HH:MM format.",
+    "max_tokens": 32,
+    "scoring": {
+      "kind": "exact",
+      "answers": [
+        "08:45"
+      ]
+    }
+  },
+  {
+    "id": "nov-lost",
+    "family": "long_form",
+    "prompt": "Write one paragraph of at least 40 words for a visitor who finds a lost notebook. Explain how to protect privacy, bring it to reception and record when it was found. Use the words privacy, reception and time.",
+    "max_tokens": 160,
+    "scoring": {
+      "kind": "concepts",
+      "min_words": 40,
+      "min_paragraphs": 1,
+      "facts": [
+        {
+          "id": "privacy",
+          "aliases": [
+            "privacy"
+          ]
+        },
+        {
+          "id": "reception",
+          "aliases": [
+            "reception"
+          ]
+        },
+        {
+          "id": "when",
+          "aliases": [
+            "time"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "nov-host",
+    "family": "long_form",
+    "prompt": "Write a welcome message of at least 40 words for a neighborhood potluck. Mention the shared table, labels for dishes and cleanup. Use the words table, labels and cleanup.",
+    "max_tokens": 160,
+    "scoring": {
+      "kind": "concepts",
+      "min_words": 40,
+      "min_paragraphs": 1,
+      "facts": [
+        {
+          "id": "table",
+          "aliases": [
+            "table"
+          ]
+        },
+        {
+          "id": "labels",
+          "aliases": [
+            "labels"
+          ]
+        },
+        {
+          "id": "cleanup",
+          "aliases": [
+            "cleanup"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "nov-trail",
+    "family": "long_form",
+    "prompt": "Write at least 40 words explaining how to follow a marked walking trail. Tell a novice how to use the map, recognize a marker and return safely. Include the words map, marker and return.",
+    "max_tokens": 160,
+    "scoring": {
+      "kind": "concepts",
+      "min_words": 40,
+      "min_paragraphs": 1,
+      "facts": [
+        {
+          "id": "map",
+          "aliases": [
+            "map"
+          ]
+        },
+        {
+          "id": "marker",
+          "aliases": [
+            "marker"
+          ]
+        },
+        {
+          "id": "return",
+          "aliases": [
+            "return"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "nov-meeting",
+    "family": "long_form",
+    "prompt": "Write at least 40 words explaining how volunteers can run a short planning meeting. Describe using an agenda, taking notes and choosing a deadline. Include the words agenda, notes and deadline.",
+    "max_tokens": 160,
+    "scoring": {
+      "kind": "concepts",
+      "min_words": 40,
+      "min_paragraphs": 1,
+      "facts": [
+        {
+          "id": "agenda",
+          "aliases": [
+            "agenda"
+          ]
+        },
+        {
+          "id": "notes",
+          "aliases": [
+            "notes"
+          ]
+        },
+        {
+          "id": "deadline",
+          "aliases": [
+            "deadline"
+          ]
+        }
+      ]
+    }
+  }
+]
