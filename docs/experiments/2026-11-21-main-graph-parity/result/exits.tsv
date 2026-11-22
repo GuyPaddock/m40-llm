@@ -1,0 +1,9 @@
+unfixed-on-short	101
+unfixed-on-boundary	101
+unfixed-on-tiny	101
+fixed-on-short	0
+fixed-on-boundary	0
+fixed-on-tiny	0
+fixed-off-short	0
+fixed-off-boundary	0
+fixed-off-tiny	101
