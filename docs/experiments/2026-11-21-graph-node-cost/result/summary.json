@@ -1,0 +1,396 @@
+{
+  "captures": [
+    {
+      "head": 128,
+      "length": 65,
+      "capacity": 8192,
+      "nodes": 1,
+      "capture_us": 220.124,
+      "instantiate_us": 45.409
+    },
+    {
+      "head": 128,
+      "length": 65,
+      "capacity": 8193,
+      "nodes": 2,
+      "capture_us": 169.221,
+      "instantiate_us": 25.02
+    },
+    {
+      "head": 7,
+      "length": 65,
+      "capacity": 8192,
+      "nodes": 1,
+      "capture_us": 12.812,
+      "instantiate_us": 22.351
+    },
+    {
+      "head": 7,
+      "length": 65,
+      "capacity": 8193,
+      "nodes": 1,
+      "capture_us": 9.611,
+      "instantiate_us": 14.718
+    },
+    {
+      "head": 128,
+      "length": 2048,
+      "capacity": 8192,
+      "nodes": 1,
+      "capture_us": 17.428,
+      "instantiate_us": 49.868
+    },
+    {
+      "head": 128,
+      "length": 2048,
+      "capacity": 8193,
+      "nodes": 2,
+      "capture_us": 28.509,
+      "instantiate_us": 42.918
+    }
+  ],
+  "paired_measurements": [
+    {
+      "head": 128,
+      "length": 65,
+      "metric": "event_span_us",
+      "arm_medians_us": {
+        "8192-ordinary": 56.201438903808594,
+        "8192-graph": 56.032960414886475,
+        "8193-ordinary": 56.23279809951782,
+        "8193-graph": 57.62351989746094
+      },
+      "ordinary_capacity_effect": {
+        "median_us": 0.03039836883544922,
+        "first_five_us": 0.023679733276367188,
+        "second_five_us": 0.039038658142089844,
+        "paired_ci95_us": [
+          0.019519329071044922,
+          0.04927873611450195
+        ]
+      },
+      "graph_capacity_effect": {
+        "median_us": 1.5863966941833496,
+        "first_five_us": 1.5868759155273438,
+        "second_five_us": 1.5859174728393555,
+        "paired_ci95_us": [
+          1.5720009803771973,
+          1.6153597831726074
+        ]
+      },
+      "graph_minus_ordinary_effect": {
+        "median_us": 1.5625643730163574,
+        "first_five_us": 1.571202278137207,
+        "second_five_us": 1.5539264678955078,
+        "paired_ci95_us": [
+          1.5371227264404297,
+          1.5865659713745117
+        ]
+      }
+    },
+    {
+      "head": 128,
+      "length": 65,
+      "metric": "wall_us",
+      "arm_medians_us": {
+        "8192-ordinary": 56.31221,
+        "8192-graph": 56.14911,
+        "8193-ordinary": 56.343765000000005,
+        "8193-graph": 57.734404999999995
+      },
+      "ordinary_capacity_effect": {
+        "median_us": 0.021245000000000402,
+        "first_five_us": 0.011260000000000048,
+        "second_five_us": 0.032900000000005036,
+        "paired_ci95_us": [
+          0.005859999999998422,
+          0.04958500000000399
+        ]
+      },
+      "graph_capacity_effect": {
+        "median_us": 1.5805049999999987,
+        "first_five_us": 1.5810600000000008,
+        "second_five_us": 1.5799499999999966,
+        "paired_ci95_us": [
+          1.5719749999999983,
+          1.612565
+        ]
+      },
+      "graph_minus_ordinary_effect": {
+        "median_us": 1.56916,
+        "first_five_us": 1.5698000000000008,
+        "second_five_us": 1.5546799999999976,
+        "paired_ci95_us": [
+          1.5228700000000046,
+          1.6060400000000037
+        ]
+      }
+    },
+    {
+      "head": 128,
+      "length": 65,
+      "metric": "enqueue_us",
+      "arm_medians_us": {
+        "8192-ordinary": 2.887105,
+        "8192-graph": 2.173875,
+        "8193-ordinary": 2.9047549999999998,
+        "8193-graph": 2.2432550000000004
+      },
+      "ordinary_capacity_effect": {
+        "median_us": 0.026690000000000547,
+        "first_five_us": 0.05232000000000081,
+        "second_five_us": -0.04320999999999975,
+        "paired_ci95_us": [
+          -0.09217999999999993,
+          0.26215000000000055
+        ]
+      },
+      "graph_capacity_effect": {
+        "median_us": 0.00711499999999976,
+        "first_five_us": -0.023560000000000247,
+        "second_five_us": 0.17644999999999955,
+        "paired_ci95_us": [
+          -0.28205000000000036,
+          0.17644999999999955
+        ]
+      },
+      "graph_minus_ordinary_effect": {
+        "median_us": -0.06200000000000028,
+        "first_five_us": -0.1003500000000006,
+        "second_five_us": 0.22107999999999972,
+        "paired_ci95_us": [
+          -0.5029800000000009,
+          0.26160000000000005
+        ]
+      }
+    },
+    {
+      "head": 7,
+      "length": 65,
+      "metric": "event_span_us",
+      "arm_medians_us": {
+        "8192-ordinary": 459.71263885498047,
+        "8192-graph": 459.5031929016113,
+        "8193-ordinary": 459.7585678100586,
+        "8193-graph": 459.52112197875977
+      },
+      "ordinary_capacity_effect": {
+        "median_us": 0.042400360107421875,
+        "first_five_us": 0.121307373046875,
+        "second_five_us": 0.04001617431640625,
+        "paired_ci95_us": [
+          0.032634735107421875,
+          0.121307373046875
+        ]
+      },
+      "graph_capacity_effect": {
+        "median_us": 0.03070831298828125,
+        "first_five_us": 0.03231048583984375,
+        "second_five_us": 0.02910614013671875,
+        "paired_ci95_us": [
+          0.0252532958984375,
+          0.0444793701171875
+        ]
+      },
+      "graph_minus_ordinary_effect": {
+        "median_us": -0.01552581787109375,
+        "first_five_us": -0.05504608154296875,
+        "second_five_us": -0.01537322998046875,
+        "paired_ci95_us": [
+          -0.07696151733398438,
+          0.006237030029296875
+        ]
+      }
+    },
+    {
+      "head": 7,
+      "length": 65,
+      "metric": "wall_us",
+      "arm_medians_us": {
+        "8192-ordinary": 459.980185,
+        "8192-graph": 459.8104,
+        "8193-ordinary": 460.04049000000003,
+        "8193-graph": 459.752185
+      },
+      "ordinary_capacity_effect": {
+        "median_us": 0.06439499999999043,
+        "first_five_us": 0.10619000000002643,
+        "second_five_us": 0.061370000000010805,
+        "paired_ci95_us": [
+          -0.040930000000116706,
+          0.10619000000002643
+        ]
+      },
+      "graph_capacity_effect": {
+        "median_us": 0.012734999999963748,
+        "first_five_us": 0.023610000000019227,
+        "second_five_us": -0.013149999999995998,
+        "paired_ci95_us": [
+          -0.028040000000032705,
+          0.08443999999991547
+        ]
+      },
+      "graph_minus_ordinary_effect": {
+        "median_us": -0.01152000000007547,
+        "first_five_us": -0.0012900000000399814,
+        "second_five_us": -0.033029999999882875,
+        "paired_ci95_us": [
+          -0.11800000000002342,
+          0.04077999999995541
+        ]
+      }
+    },
+    {
+      "head": 7,
+      "length": 65,
+      "metric": "enqueue_us",
+      "arm_medians_us": {
+        "8192-ordinary": 2.9889350000000006,
+        "8192-graph": 2.29148,
+        "8193-ordinary": 2.9849550000000002,
+        "8193-graph": 2.33376
+      },
+      "ordinary_capacity_effect": {
+        "median_us": -0.06930999999999998,
+        "first_five_us": -0.08779000000000003,
+        "second_five_us": -0.05082999999999993,
+        "paired_ci95_us": [
+          -0.23297000000000012,
+          0.18788500000000008
+        ]
+      },
+      "graph_capacity_effect": {
+        "median_us": 0.0971200000000001,
+        "first_five_us": 0.16678000000000015,
+        "second_five_us": -0.0014799999999999258,
+        "paired_ci95_us": [
+          -0.0037000000000002586,
+          0.25090000000000034
+        ]
+      },
+      "graph_minus_ordinary_effect": {
+        "median_us": 0.14795499999999984,
+        "first_five_us": 0.28164000000000033,
+        "second_five_us": 0.13814999999999955,
+        "paired_ci95_us": [
+          -0.39914000000000005,
+          0.3109899999999999
+        ]
+      }
+    },
+    {
+      "head": 128,
+      "length": 2048,
+      "metric": "event_span_us",
+      "arm_medians_us": {
+        "8192-ordinary": 1640.984115600586,
+        "8192-graph": 1639.2678833007812,
+        "8193-ordinary": 1640.9444427490234,
+        "8193-graph": 1642.2321319580078
+      },
+      "ordinary_capacity_effect": {
+        "median_us": 0.1120758056640625,
+        "first_five_us": 0.142669677734375,
+        "second_five_us": 0.08148193359375,
+        "paired_ci95_us": [
+          -0.233612060546875,
+          0.27008056640625
+        ]
+      },
+      "graph_capacity_effect": {
+        "median_us": 2.8900146484375,
+        "first_five_us": 2.89337158203125,
+        "second_five_us": 2.867584228515625,
+        "paired_ci95_us": [
+          1.314544677734375,
+          3.1683349609375
+        ]
+      },
+      "graph_minus_ordinary_effect": {
+        "median_us": 2.8369140625,
+        "first_five_us": 2.764434814453125,
+        "second_five_us": 3.10882568359375,
+        "paired_ci95_us": [
+          1.3055419921875,
+          3.155670166015625
+        ]
+      }
+    },
+    {
+      "head": 128,
+      "length": 2048,
+      "metric": "wall_us",
+      "arm_medians_us": {
+        "8192-ordinary": 1641.122675,
+        "8192-graph": 1639.580305,
+        "8193-ordinary": 1641.1880150000002,
+        "8193-graph": 1642.572855
+      },
+      "ordinary_capacity_effect": {
+        "median_us": 0.019890000000145847,
+        "first_five_us": -0.054449999999860665,
+        "second_five_us": 0.07365000000027067,
+        "paired_ci95_us": [
+          -0.17873499999996056,
+          0.20753000000036081
+        ]
+      },
+      "graph_capacity_effect": {
+        "median_us": 2.866525000000138,
+        "first_five_us": 2.8767700000000787,
+        "second_five_us": 2.856280000000197,
+        "paired_ci95_us": [
+          1.3552999999999429,
+          3.2070300000000316
+        ]
+      },
+      "graph_minus_ordinary_effect": {
+        "median_us": 3.0190949999998793,
+        "first_five_us": 2.9994999999996708,
+        "second_five_us": 3.176210000000083,
+        "paired_ci95_us": [
+          1.3653349999997317,
+          3.190950000000157
+        ]
+      }
+    },
+    {
+      "head": 128,
+      "length": 2048,
+      "metric": "enqueue_us",
+      "arm_medians_us": {
+        "8192-ordinary": 3.3166949999999993,
+        "8192-graph": 2.233075,
+        "8193-ordinary": 3.19881,
+        "8193-graph": 2.33941
+      },
+      "ordinary_capacity_effect": {
+        "median_us": -0.3248849999999994,
+        "first_five_us": -0.3043,
+        "second_five_us": -0.37524999999999986,
+        "paired_ci95_us": [
+          -0.4971450000000006,
+          0.4378749999999998
+        ]
+      },
+      "graph_capacity_effect": {
+        "median_us": 0.10287000000000024,
+        "first_five_us": 0.13985000000000003,
+        "second_five_us": -0.06109000000000009,
+        "paired_ci95_us": [
+          -0.23078500000000002,
+          0.22580999999999962
+        ]
+      },
+      "graph_minus_ordinary_effect": {
+        "median_us": 0.3014550000000005,
+        "first_five_us": 0.44415000000000004,
+        "second_five_us": 0.1587600000000009,
+        "paired_ci95_us": [
+          -0.5470549999999998,
+          0.7084849999999998
+        ]
+      }
+    }
+  ]
+}
