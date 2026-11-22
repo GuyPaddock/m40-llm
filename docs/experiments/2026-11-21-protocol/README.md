@@ -12,6 +12,24 @@ For the medium and long performance workloads, retain the same system text and f
 
 ## Diagnostics and decisions
 
+The November worktrees share `research-1121/raw/m40-benchmark.lock`.
+From any of the sibling research worktree roots in this workspace,
+`realpath -e ../raw/m40-benchmark.lock` resolves that existing lock.
+Hold it across warmup, both arms, diagnostics and teardown. For example,
+the D3 launch from the prefill-fairness worktree, with the project
+environment already sourced, is:
+
+```bash
+lock=$(realpath -e ../raw/m40-benchmark.lock) &&
+flock --exclusive "$lock" bash docs/experiments/2026-11-21-prefill-fairness/run.sh \
+    ../raw/prefill-fairness-NEW
+```
+
+Use a fresh output directory for each run. In this session a host check
+found one exclusive holder and 21 waiters on the same device and inode.
+The sole M40 compute process also held a descriptor to that inode.
+The lock is advisory. Check GPU ownership before each comparison.
+
 Before each timed cohort and each benchmark invocation capture GPU UUID, clocks, temperature, memory, active PIDs, source SHA/dirty state, release flags, executable/model hashes, dispatch and exact deterministic input manifest. Check GPU availability throughout the series, isolate the CUDA 12.x sm_52 build and serialize every GPU run. Separate cold wall time, load/repack cost, steady HTTP, resident generation, GPU events, CPU submission/synchronization and tracked/live device memory. Record NVML peak sampling interval and attribution limits. Use stage probes and paired instrumentation off/on when needed. Unavailable service counters remain unknown. Keep completed raw rows and failed attempts.
 
 Use docs/controlled_benchmark.md five alternating pairs; MAD/median over 5% extends once to ten. Use 10,000 paired bootstrap samples, seed zero, and separate twenty fresh confirmation pairs at the existing borderline criterion. General promotion requires at least 5% E2E, greater than twice the larger variation, positive lower paired bound. Memory-only promotion requires at least 10% lower whole-process peak, no lost dense passes and at most 3% wall slowdown. Retain historical specialized gates. For C1 require at least 5% lower complete target verification cost on a supported multi-row shape against the fastest correct existing control, positive lower bound and no correctness failure; label it shape-specific until live requests qualify. Rollback and numerical checks precede timing. Graph correctness can carry independently from speed. A missing or noisy primary measurement is inconclusive.
