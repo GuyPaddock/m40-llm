@@ -380,3 +380,22 @@ counts 18,396 down launches in the serial-down verifier per 512-token
 request. Both multi-row alternatives use 4,680. A saving against the
 serial schedule can include 13,716 fewer launches. The comparison with
 the existing multi-row schedule controls for that difference.
+
+**Why the target uses the split multi-row control.** At four input rows,
+the existing split kernel and the candidate both matched the serial
+control on all 24,576 FP32 outputs across layers 0, 17 and 35. Cached
+cuBLAS SGEMM was the fastest alternative control at this width in the
+operator study. It differed in 21,113 output bit patterns across those
+layers, with maximum absolute difference 0.00000191. Those differences
+are small, but a verifier that requires identical logits and valid KV
+cannot assume that changing the accumulation order is harmless.
+
+SGEMM also used a 90,177,536-byte FP32 expansion for one down matrix.
+Keeping one such expansion for each of the 36 layers would require
+3,096 MiB for their payloads. This is a storage calculation; the study
+measured one expanded matrix at a time. Charging the dequantization on
+every call cost 1.152 ms on layer 0, versus 0.425 ms for already expanded
+SGEMM and 0.370 ms for the candidate. Preserve both SGEMM timings as
+operator controls. The complete-verifier gate compares schedules that
+reuse the same device weights and reproduce the same arithmetic.
+[Three-layer timings and numerical controls](https://github.com/GuyPaddock/m40-llm/blob/16fbcc48878d0bb272f7ca17249954b548ba8013/docs/experiments/2026-11-21-small-n/result/operator-audit.json).
