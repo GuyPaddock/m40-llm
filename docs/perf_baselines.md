@@ -32,6 +32,13 @@ when porting Q8 admission to main. The comparison does not attribute
 the F16 regression to a particular component.
 [Dense F16 measurements and replay](experiments/2026-11-21-serving-baseline/tiny-dense/README.md).
 
+On Phase 4, Qwen Q4_0 ran all 36 layers with its dedicated Q6_K head.
+Default direct mixed KV served 2.887 buffered tok/s and dense KV
+served 2.830 across five alternating 65-input, 32-output pairs with
+identical greedy IDs. Dense decode was faster inside the request. Both
+arms fit their prompt entirely in the recent window.
+[Q4 checkpoint and timings](experiments/2026-11-21-serving-baseline/qwen-q4-short/README.md).
+
 The [candidate matrix](experiments/2026-11-21-integration/candidates.tsv) links each source and raw report. Qwen native-head128 graph replay preserved all 512 IDs and improved paired HTTP throughput by 0.361% [0.269%, 0.477%] at e6567e5. Mixed cache peak residency at e100c54 was 22 MiB higher at capacity 1,024, 3 MiB higher at 3,072 and 47 MiB lower at 8,448. Both results fall below their promotion gates. The four-row Q8 down operator at 16fbcc4 saved about 0.150 ms per layer over four independent calls and 0.100 ms over the existing multi-row split path. Complete-target timings are pending. At 377bec4, holding 4,096 idle tokens in a second slot did not increase active attention latency.
 
 Joint-only compound gate/up ownership removed 1,724,645,376 tracked device bytes. The peak of a fresh loader process fell from 7,671 to 6,024 MiB. Matched 512-token HTTP throughput changed by +0.10% [−0.16%, +0.32%]. [Full ownership results](experiments/2026-11-22-q8-ownership/README.md).
