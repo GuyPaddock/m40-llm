@@ -58,3 +58,12 @@ The [source-isolated index](isolated/index.tsv) includes the archive.
 The independent capture, threshold and paired-timing tests ran separately.
 This compile and CPU regression evidence precedes the capture and charged
 operator measurements on the M40.
+
+## Verifier correctness build
+
+The isolated release-source check at 081cc65 passed formatting, 223
+non-CUDA tests with warnings denied, and the NVCC/cuBLAS CUDA/server
+Clippy invocation. The replay confirmed the checkout and target paths
+and compared the retained command logs byte for byte. The earlier
+hardware transaction checks supply the actual M40 evidence.
+[Archive index](isolated/index.tsv).

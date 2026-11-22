@@ -9,7 +9,7 @@ against the current code, worktree, Git history, and linked raw results.
 Use the [integration matrix](experiments/2026-11-21-integration/README.md)
 for the current 41 dispositions. Graph parity and speculative rollback have
 hardware evidence in both cuBLAS builds. The [evidence audit](experiments/2026-11-21-evidence-audit/README.md)
-includes the original raw logs and verifier source patch. Seven
+includes the original raw logs and verifier source patch. Eight
 [source-isolated build checks](experiments/2026-11-21-build-compatibility/README.md)
 passed. The earlier shared-target runs cannot qualify individual revisions.
 
