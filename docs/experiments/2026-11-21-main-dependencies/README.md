@@ -214,8 +214,11 @@ The same preformatted Qwen text also gains an extra BOS on main.
   and resident layout costs. The charged SwiGLU operator screen at
   be7bf4b admits the three-layer real-model quality check at 5324ba5.
   The driver at 0736f06 reuses the measured arithmetic and existing
-  research exclusions. Keep it outside the stable sequence until
-  the quality and complete-request gates qualify.
+  research exclusions. The measured quality result at d64a2ed stops
+  the zigzag thresholded layout for excess perplexity. Packed kept
+  all four dense-passing answers and proceeds to the 48-case quality
+  gate. Only an expanded quality pass and a paired complete-request
+  benefit can qualify a future packed port.
 - A5 benchmark clients, optional timing clocks, D3 fairness diagnostics
   and oracle adapters are evidence tools. Main-serving changes require
   their own review and measured scheduling case. Preserve main's existing

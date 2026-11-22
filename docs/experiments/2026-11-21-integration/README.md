@@ -204,9 +204,13 @@ The separate real-activation Q4 study passed the charged operator gate
 in both layouts. The packed 50% cutoff saved 41.63–42.95% against full
 packed. The zigzag 25% cutoff saved 42.89–47.19% against full zigzag.
 Both include device selection and compaction, with three measured
-layers on the same checkpoint. The operator errors admit one
-real-model quality study with full and thresholded layouts kept as
-separate arms. [Held-out operator result](https://github.com/GuyPaddock/m40-llm/blob/be7bf4bbfa90eb468b2af53f5c8732e8d1a05c04/docs/experiments/2026-11-22-sparse-q4-live/operator-result/README.md).
+layers on the same checkpoint. Each thresholded arm preserved four
+dense-passing answers. Zigzag thresholding raised the first held-out
+passage's perplexity 4.348%, which stopped that arm at its 3% gate.
+Only packed advances to the broader quality grid. Both arms add
+38,043,648 requested device bytes for weights and 350,212 for scratch.
+[Held-out operator result](https://github.com/GuyPaddock/m40-llm/blob/be7bf4bbfa90eb468b2af53f5c8732e8d1a05c04/docs/experiments/2026-11-22-sparse-q4-live/operator-result/README.md) ·
+[Four-arm quality result](https://github.com/GuyPaddock/m40-llm/blob/d64a2edc93ee60c5f148874b51b6e2eac3174ce5/docs/experiments/2026-11-22-sparse-q4-live/quality-result/README.md).
 
 The [dependency-ordered rebuild](../2026-11-21-main-dependencies/README.md)
 makes native Q8 checkpoint admission distinct from optional prepared

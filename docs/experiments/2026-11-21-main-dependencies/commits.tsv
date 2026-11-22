@@ -88,3 +88,5 @@ e5e176d4b867cba37201e2a5c52d3210bb7383f3	fix(test): seed main graph fixtures in 
 beb1fafd746bab4d8d88f9f9f692b5da6d4e1337	docs(cuda): qualify main graph dispatch repair	Guy Elsmore-Paddock
 ad486431b954a4ac5cb08c9e90f62378429f6c34	docs(perf): qualify isolated Q8 server residency	Guy Elsmore-Paddock
 e1fcebb8f7bf274465f2d4493e0423ba0268c1ff	docs(perf): qualify live copy-only speculation	Guy Elsmore-Paddock
+d64a2edc93ee60c5f148874b51b6e2eac3174ce5	docs(quality): gate thresholded Q4 on model loss	Guy Elsmore-Paddock
+0bb4431cef4023504380ac99c8176740c6eb3e33	docs(quality): freeze the expanded sparse-Q4 gate	Guy Elsmore-Paddock
