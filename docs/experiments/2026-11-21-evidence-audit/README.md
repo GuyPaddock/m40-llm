@@ -32,3 +32,18 @@ The [build compatibility audit](../2026-11-21-build-compatibility/README.md)
 records a different validation issue involving a shared Cargo target.
 The hardware transcripts here identify independent per-worktree release
 builds and their actual device observations.
+
+## Branch and decision provenance
+
+The [Git replay](provenance.py) resolves every October merge base, hashes
+the original report bytes, reconstructs the full modified-path inventory
+against Phase 4 and main, and checks the chronological non-documentation
+commits. On the November 22 matrix at 47cf0f5 it verified 13 topics,
+793 changed-path records and 48 implementation commits. Its 27 decision
+rows referred to 26 distinct source reports with 121 local Markdown
+links. All source commits were reachable from their named local branches.
+Run from the project root with
+`python3 docs/experiments/2026-11-21-evidence-audit/provenance.py`.
+The counts change as new evidence is indexed. The replay checks object
+identity and local link targets. Each research report supplies the
+hardware, workload and qualification boundaries for its conclusions.
