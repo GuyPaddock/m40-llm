@@ -75,6 +75,7 @@ digest=$(sha256sum "$model")
     sha256sum "$bin" "$stats" "$manifest" "$out/request.json"
     cuobjdump -lelf "$bin"
     nvcc --version
+    printf 'process_clock_ticks_per_second=%s\n' "$(getconf CLK_TCK)"
     env | rg '^(CUDA_|M40LLM_)' | sort
     snapshot
 } > "$out/preflight.txt"
@@ -110,8 +111,10 @@ request() {
     assert_owners
     snapshot > "$out/$label.before"
     local wall
+    cat "/proc/${servers[$graph]}/stat" > "$out/$label.cpu-before"
     wall=$(curl -fsS --max-time 900 -H 'Content-Type: application/json' --data-binary "@$body" \
            --output "$out/$label.json" --write-out '%{time_total}' "http://127.0.0.1:$port/generate")
+    cat "/proc/${servers[$graph]}/stat" > "$out/$label.cpu-after"
     jq -ce --arg wall "$wall" --arg label "$label" --argjson graph "$graph" \
       'select(.metrics.generated_tokens>0) | {label:$label,arm:$graph,http_seconds:($wall|tonumber),metrics}' \
       "$out/$label.json" >> "$out/timings.jsonl"
