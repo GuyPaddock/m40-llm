@@ -51,8 +51,18 @@ The real M40 run at f1bb7a4201ca1300af08282215d4bbb95620e8a9 completed
 16 free generations, 16 dense-trajectory replays and 60 paired comparisons.
 All 48 vocabulary readbacks were saved. The tracked device allocation
 counter started and ended at zero. The post-run snapshot reported no
-compute process and zero MiB in use. The complete numerical archive
-and its second independent replay are pending.
+compute process and zero MiB in use. The independent replay verified
+each of the 48 FP32 readbacks and reconstructed the 60 paired
+comparisons again from the extracted archive.
+
+Verify the [package checksums](package.sha256), then extract the
+[complete measurement archive](measurements.tar.gz). From the
+extracted directory, run `sha256sum -c RESULT/raw.sha256`, substituting
+the original result directory for `RESULT`. The
+[independent reader](https://github.com/GuyPaddock/m40-llm/blob/d20018ebf9e439a652675b0c04de148dcd782cbc/docs/experiments/2026-11-21-kv-audit/history.py)
+reads `report.jsonl inputs.json` from the extracted directory and
+reproduces [the complete replay](replay.json). Use the reader's
+siblings from the same commit when running it locally.
 
 [Raw report](report.jsonl.gz) · [Build and device identity](preflight.txt) ·
 [Post-run snapshot](after.txt) · [Frozen protocol](../README.md)
