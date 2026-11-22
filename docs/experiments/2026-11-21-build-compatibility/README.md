@@ -87,3 +87,23 @@ and CUDA/server all-target Clippy with the GPU hidden. The archive
 retains its source-specific target and original logs. The associated
 M40 run exercises three complete allocations in each of two processes.
 [Archive index](isolated/index.tsv).
+
+## Serving, copy and sparse-Q4 revisions
+
+Three fresh targets each passed formatting, warning-free non-CUDA
+tests and all-target CUDA/server Clippy with the GPU hidden. The
+prefill fairness source `8d2c839` passed 226 tests, the copy-only
+verifier `e1fcebb` passed 223, and the sparse-Q4 quality source
+`d64a2ed` passed 224. Each returned zero failures and zero skipped
+tests in its non-CUDA scope. [Source-specific records](isolated/index.tsv).
+
+The expanded packed-Q4 runner at `aef2d62` left the tested core Rust,
+CUDA, Cargo and build files unchanged. Its two release math/evidence
+tests passed and targeted CUDA/server Clippy finished with warnings
+denied. The final release binary contains `sm_52` code. The first
+GPU-hidden preparation finished its type check, tests and Clippy
+during two untimed Qwen streaming warmups. Its time limit stopped the
+standalone link. The later serial build finished the executable.
+[Raw build archive](sparse-q4-extended/sparse-q4-extended-build.tar.gz) ·
+[Archive checksum](sparse-q4-extended/sparse-q4-extended-build.sha256) ·
+[Executable checksum](sparse-q4-extended/sparse-q4-extended.binary.sha256).
