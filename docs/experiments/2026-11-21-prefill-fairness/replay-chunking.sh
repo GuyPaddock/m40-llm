@@ -19,12 +19,19 @@ jq -es '
     all(.[0][]; .[0:2]==[65,128] and (.[3]|length)==128)
 ' "$raw"/four-{baseline,candidate}.json > /dev/null
 
+nvml_timestamp() {
+    local stamp
+    IFS= read -r stamp < "$1"
+    [[ "$stamp" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[,.][0-9]{3} ]]
+    printf '%s/%s/%s %s.%s\n' "${stamp:0:4}" "${stamp:5:2}" "${stamp:8:2}" "${stamp:11:8}" "${stamp:20:3}"
+}
+
 server_peak() {
     local request=$1 prefix="$1-server" pid from through
     pid=$(<"$raw/$prefix.pid")
     [[ "$pid" =~ ^[1-9][0-9]*$ ]]
-    from=$(date -d "$(sed -n '1p' "$raw/$prefix.start")" '+%Y/%m/%d %T.%3N')
-    through=$(date -d "$(sed -n '1p' "$raw/$request.after")" '+%Y/%m/%d %T.%3N')
+    from=$(nvml_timestamp "$raw/$prefix.start")
+    through=$(nvml_timestamp "$raw/$request.after")
     awk -F, -v pid="$pid" -v from="$from" -v through="$through" '
         $2+0==pid && $1 >= from && $1 <= through && $3 ~ /[0-9]+ MiB/ {
             value=$3+0; if (!samples || value>peak) peak=value; samples++
