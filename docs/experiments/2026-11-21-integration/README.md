@@ -1,6 +1,6 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 23 decisions for which the
+The [candidate matrix](candidates.tsv) records 24 decisions for which the
 scope can already be established. Each row has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
@@ -26,6 +26,13 @@ supported paths. Changing that setting would be a separate compatibility
 decision. Both a less aggressive policy and the actual peak-VRAM/speed
 comparison have separate gates. The residency study at e100c54 measured only a 1.01% peak saving at capacity 8,448. Direct-consumer speed is under investigation. The data do not support a single
 quality ranking across every model or workload.
+
+**When compound FFN is enabled, keep joint-only ownership.** The paired
+HTTP control retained identical gate/up weights in two layouts. Eliminating
+the redundant split owners saved 1,647 MiB at the fresh loader peak and
+matched seven full-logit rows. The HTTP interval lay within −0.16% to
++0.32%. This comparison qualifies a memory choice inside compound FFN.
+[Ownership report](../2026-11-22-q8-ownership/README.md).
 
 **Excluded work.** Seven October hypotheses failed their gates, one
 activation-preparation operator has no compatible local model, and the

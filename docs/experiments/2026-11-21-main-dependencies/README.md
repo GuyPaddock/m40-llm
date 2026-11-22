@@ -94,8 +94,11 @@ The same preformatted Qwen text also gains an extra BOS on main.
    nongreedy and unsupported fallbacks. Compare complete FFN, prefill and
    HTTP; the observed short down/vocabulary result carries an extra
    1,192,935,424 bytes and still has a quiet-host repeat outstanding.
-   Compound ownership requires separate `M40LLM_Q8_FFN_OWNERSHIP`
-   evidence. A portfolio comparison with compound is a different baseline.
+   Once compound qualifies, keep the joint-only owner from e83e172 and
+   retain the explicit `M40LLM_Q8_FFN_OWNERSHIP=retain-split` diagnostic.
+   Its [matched ownership comparison](../2026-11-22-q8-ownership/README.md)
+   measured 1,647 MiB less loader peak with exact logits and HTTP
+   non-regression. A portfolio comparison with compound has a different baseline.
 
 ## Conditional paths and explicit exclusions
 
