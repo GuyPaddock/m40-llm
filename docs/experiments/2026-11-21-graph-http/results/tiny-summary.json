@@ -1,0 +1,88 @@
+{
+  "pairs": 5,
+  "ids": 128,
+  "arms": [
+    {
+      "arm": 0,
+      "http_s": 3.253639,
+      "http_tokens_s": 39.34056605542286,
+      "generation_ttft_ms": 1103.049223,
+      "decode_ms_per_interval": 16.903533661417324,
+      "process_cpu_s": 3.26,
+      "process_cpu_seconds_by_trial": [
+        3.25,
+        3.26,
+        3.27,
+        3.27,
+        3.26
+      ],
+      "isolated_trace_peak_mib": 2239,
+      "timed_device_samples": {
+        "samples_per_request": [
+          6,
+          6,
+          7,
+          6,
+          7
+        ],
+        "temperature_c": [
+          60,
+          62
+        ],
+        "clocks_sm_mhz": [
+          1113
+        ],
+        "median_board_gpu_busy_pct": 98.0,
+        "board_memory_mib": [
+          4472,
+          4479
+        ]
+      }
+    },
+    {
+      "arm": 1,
+      "http_s": 3.245183,
+      "http_tokens_s": 39.44307609154861,
+      "generation_ttft_ms": 1114.513192,
+      "decode_ms_per_interval": 16.73515542519685,
+      "process_cpu_s": 3.27,
+      "process_cpu_seconds_by_trial": [
+        3.28,
+        3.26,
+        3.28,
+        3.26,
+        3.27
+      ],
+      "isolated_trace_peak_mib": 2239,
+      "timed_device_samples": {
+        "samples_per_request": [
+          7,
+          7,
+          7,
+          7,
+          7
+        ],
+        "temperature_c": [
+          60,
+          62
+        ],
+        "clocks_sm_mhz": [
+          1113
+        ],
+        "median_board_gpu_busy_pct": 99,
+        "board_memory_mib": [
+          4472,
+          4479
+        ]
+      }
+    }
+  ],
+  "median_paired_decode_saving_ms": 0.1741499055118112,
+  "capture_us": 2396.721,
+  "instantiate_us": 1862.088,
+  "nodes": 330,
+  "diagnostic_replays": 32,
+  "launch_cpu_median_us": 26.9595,
+  "replay_cuda_event_median_ms": 13.61,
+  "setup_only_break_even_intervals": 24.45484530975619
+}
