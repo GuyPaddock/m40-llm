@@ -8,6 +8,12 @@ The [candidate matrix](experiments/2026-11-21-integration/candidates.tsv) links 
 
 Joint-only compound gate/up ownership removed 1,724,645,376 tracked device bytes. The peak of a fresh loader process fell from 7,671 to 6,024 MiB. Matched 512-token HTTP throughput changed by +0.10% [−0.16%, +0.32%]. [Full ownership results](experiments/2026-11-22-q8-ownership/README.md).
 
+At 4281ad8, the repeated direct-versus-staged KV operator grid passed
+144/144 matched groups. Complete wall latency fell by 3.53–20.45%, with
+all 2,340 paired intervals replayed. Three source layers at head128/batch
+one took 7.890–7.905 ms staged and 7.543–7.554 ms direct at context 8,192.
+These times exclude append and cover a single attention operation.
+
 ## 2026-11-21 Maxwell consolidation
 
 Five alternating short Qwen2.5-3B Q8_0 dense HTTP pairs on the M40 produced

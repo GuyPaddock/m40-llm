@@ -1,6 +1,6 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 27 decisions for which the
+The [candidate matrix](candidates.tsv) records 28 decisions for which the
 scope can already be established. Each row has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
@@ -24,9 +24,9 @@ dense-passing long answers. Top-64 retained all ten where every historical
 block fit, and both arms retained all 19 short passes. The profile already defaults to top-8 on
 supported paths. Changing that setting would be a separate compatibility
 decision. At capacity 8,448, e100c54 measured a 1.01% peak saving for mixed KV.
-Main already consumes this storage directly. Its matched October operator
-benefit and the pending whole-request comparison have separate rows from
-the lossy historical-block policy.
+Main already consumes this storage directly. In November, all 144 matched operator comparisons reproduced the October
+benefit. The live HTTP comparison and the lossy historical-block policy
+have separate qualification gates.
 
 **When compound FFN is enabled, keep joint-only ownership.** The paired
 HTTP control retained identical gate/up weights in two layouts. Eliminating
