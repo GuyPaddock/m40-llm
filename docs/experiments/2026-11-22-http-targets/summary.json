@@ -1,0 +1,56 @@
+{
+  "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+  "prompt_tokens": 65,
+  "generated_tokens": 512,
+  "october_27": {
+    "pairs": 5,
+    "compound_tok_s": 50.91042598728391,
+    "official_tok_s": 43.1947300161657,
+    "relative_gain": 0.17862586404014102,
+    "output_hashes": [
+      {
+        "runtime": "m40-llm",
+        "sha256": [
+          "cf6dae05bd87581ff637777afe1b26f515ba092b3550ed2aefff222280e4364d"
+        ]
+      },
+      {
+        "runtime": "ollama",
+        "sha256": [
+          "cc8850a02e8761a180b2880f37d5d5053536f9dfe76e85052ef305e1281bcd59"
+        ]
+      }
+    ],
+    "targets": [
+      {
+        "target_tok_s": 53.06,
+        "required_throughput_gain": 0.04222266797085927,
+        "required_request_saving_ms": 407.425669074255
+      },
+      {
+        "target_tok_s": 56.15314902101541,
+        "required_throughput_gain": 0.10297935898318733,
+        "required_request_saving_ms": 938.9577026153838
+      }
+    ]
+  },
+  "october_29": {
+    "confirmation_pairs": 20,
+    "control_tok_s": 50.523256390000306,
+    "portfolio_tok_s": 52.54852277287111,
+    "same_cohort_gain": 0.040085824382286805,
+    "relative_to_historical_official": 0.21654939741965595,
+    "targets": [
+      {
+        "target_tok_s": 53.06,
+        "required_throughput_gain": 0.009733427318968424,
+        "required_request_saving_ms": 93.92225381288699
+      },
+      {
+        "target_tok_s": 56.15314902101541,
+        "required_throughput_gain": 0.06859614805395142,
+        "required_request_saving_ms": 625.4542873540158
+      }
+    ]
+  }
+}

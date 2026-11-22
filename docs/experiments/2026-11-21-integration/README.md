@@ -57,6 +57,12 @@ its frozen 3% gate and fell below the general November 5% threshold.
 [Compound comparison](../2026-10-27-maxwell-compound-runtime.md).
 [Portfolio comparison](../2026-10-29-portfolio-runtime.md).
 
+On the frozen 65-prompt-token, 512-output-token workload, the portfolio's
+52.548523 HTTP tok/s leaves 93.92 ms per request to reach 53.06, or
+625.45 ms to reach the 56.153149 target. The latter is 1.30 times the
+October official Ollama result. The paired November gate remains 5%.
+[Historical request budgets](../2026-11-22-http-targets/README.md).
+
 **Excluded work.** The original channel selector, ShiftAdd, additional
 multi-row gate/up fusion, lossless KV compression and DualPace all missed
 their October gates. The later causal-selector and general adaptive
