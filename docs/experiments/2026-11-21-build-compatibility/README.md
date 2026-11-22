@@ -28,7 +28,7 @@ their individual studies.
 ## First source-isolated results
 
 **PASS for formatting, the invoked non-CUDA tests, and CUDA/server
-compilation on the five revisions below.** Each started with an empty
+compilation on the six revisions below.** Each started with an empty
 target directory named for its complete source commit. The test binaries
 ran from that directory. Both build logs identify the expected worktree.
 
@@ -39,8 +39,9 @@ ran from that directory. Both build logs identify the expected worktree.
 | graph-dispatch | 66f21e3 | 223 |
 | q8-projections | 110f8c7 | 223 |
 | quantized-kv | 44f15e9 | 224 |
+| small-n-verification | 5faa6ad | 223 |
 
-All five suites reported zero failures. Consolidation again executed
+All six suites reported zero failures. Consolidation again executed
 `metrics_round_trip_without_sample_offsets`, `sampled_offsets_include_the_stop_token`
 and `test_november_kv_answers_cover_all_families`. This resolves the
 three missing checks in its prior shared-target run. The [new index](isolated/index.tsv)
