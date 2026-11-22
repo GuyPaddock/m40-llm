@@ -31,3 +31,26 @@ Dependencies for B3/C1 run from the model's actual projection storage and activa
 ## Replay
 
 For each row of branches.tsv, inspect the document with git show TIP:REPORT and pipe its bytes into sha256sum. Resolve each file in paths.tsv by git rev-parse TIP:PATH. Recompute topic commits with git log --reverse BASE..TIP -- . ':!docs'. Retrieve reports by SHA even if historical worktrees have disappeared. The blob inventory proves object identity only; retained raw runs and their stated hardware boundaries determine each measurement's scope.
+
+## November disposition of each October topic
+
+| October topic | Current decision and evidence |
+|---|---|
+| Channel selection | Close the original ternary predictor. Preserve explicit supplied-index Q4 execution and host packing for the C4 control. Live thresholding uses a different input signal and must pass its own costs and quality gates. |
+| ShiftAdd | Close. Its tested layout lost against both prepared-Q8 controls. |
+| Gate/up fusion | Close the additional generic multi-row sweep. Keep the existing single-row fusion. C1 shares prepared **down** weights across verifier rows. |
+| Activation preparation | Defer. The retained savings require an admitted checkpoint with the matching rotation. |
+| Legacy graphs | Preserve the original failed cache-state case. Use the repaired arithmetic as the comparison baseline. |
+| Lossless KV | Close. The measured attention and append penalties outweigh the small storage reduction. |
+| Quantized KV | Keep the direct mixed consumer already present on main. Port the independent scale barriers. The matched throughput evidence remains scoped to the operator and current serving cohorts. |
+| Soft-MTP | Defer pending a compatible checkpoint and measured learned-draft acceptance. |
+| DualPace | Close the independent CPU decode engine under the measured cost model. |
+| Graph dispatch follow-up | The Phase 4 repair passed exact state checks. The Qwen graph HTTP comparison missed the speed gate and the extra fallback node missed the pruning gate. The main port still needs the corrected boundary and full-session checks. |
+| KV quality follow-up | Reject broader top-8 use. It dropped dense-passing answers in the expanded suite. Top-64 preserved all four dense-passing boundary cases and still needs broader validation at lengths where its budget excludes history. |
+| Selector follow-up | Keep all three previous-token, channel-history and sketch policies closed. |
+| Adaptive drafting follow-up | Keep the general controller closed. Copy-only drafting depends on the complete target verification result. |
+
+The [candidate matrix](../2026-11-21-integration/candidates.tsv) carries the
+exact source hashes, tests and measurement boundaries. The [closure register](../2026-11-21-closed-directions/README.md)
+preserves the frozen failure criteria and the specific evidence that
+could reopen a closed direction.
