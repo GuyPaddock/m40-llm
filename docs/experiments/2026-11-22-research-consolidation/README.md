@@ -50,9 +50,13 @@ record for negative and prerequisite-limited studies.
   families lost 64.21% on that historical request. When compound FFN is
   already enabled, releasing duplicate split owners saved 1,647 MiB
   in fresh isolated processes and matched measured logits. The paired
-  request interval was −0.16% to +0.32%.
+  request interval was −0.16% to +0.32%. Combined packet and argmax
+  dispatch improved 3.842% against an already prepared joint-FFN
+  control, below the 5% November gate. It reached 52.469 HTTP tok/s
+  against the historical 56.153149 target.
   [Selective preparation](../2026-11-21-native-split/README.md) ·
-  [Compound ownership](../2026-11-22-q8-ownership/README.md).
+  [Compound ownership](../2026-11-22-q8-ownership/README.md) ·
+  [Paired portfolio retest](https://github.com/GuyPaddock/m40-llm/blob/7ff9d33f48c831c4218b5027d6a1cbf01d6c0ad3/docs/experiments/2026-11-21-q8-economics/portfolio/README.md).
 - **Four-row verification.** Across 20 fresh rounds, median transaction
   latency fell from 56.417 to 53.102 ms against the fastest exact control.
   All 511 full-logit row digests and 10,616,832 valid FP16 KV words

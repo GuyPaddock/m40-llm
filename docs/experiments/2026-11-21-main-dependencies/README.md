@@ -158,7 +158,13 @@ The same preformatted Qwen text also gains an extra BOS on main.
    retain the explicit `M40LLM_Q8_FFN_OWNERSHIP=retain-split` diagnostic.
    Its [matched ownership comparison](../2026-11-22-q8-ownership/README.md)
    measured 1,647 MiB less loader peak with exact logits and HTTP
-   non-regression. A portfolio comparison with compound has a different baseline.
+   non-regression. The combined packet and argmax portfolio at 7ff9d33
+   reproduces a 3.842% gain against the already prepared joint-FFN
+   control. That falls below the November 5% gate and the 56.153149
+   historical target. All arms owned 1,192,935,424 packet bytes.
+   Keep the narrower selective-preparation comparison separate from
+   the portfolio and position the latter after its full owners and
+   compound dependencies.
 
 ## Conditional paths and explicit exclusions
 

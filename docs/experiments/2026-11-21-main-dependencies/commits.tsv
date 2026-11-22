@@ -78,3 +78,4 @@ c8ddabec804e1b4f7eccbf7082d4c567de1fc76c	docs(perf): qualify direct TinyLlama KV
 837e0708edda8ca4d74aabcf6436e18dfffad6bc	docs(perf): qualify four-row shared verifier	Guy Elsmore-Paddock
 08907997d87cb47e87abbbf0eb2debe086a634a4	docs(research): freeze live copy verifier test	Guy Elsmore-Paddock
 16b29d0cc3e84d041af378f4634e8303475152b8	test(cuda): compare live copy verifier schedules	Guy Elsmore-Paddock
+7ff9d33f48c831c4218b5027d6a1cbf01d6c0ad3	docs(perf): qualify the paired Q8 portfolio	Guy Elsmore-Paddock

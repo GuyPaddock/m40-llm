@@ -126,6 +126,14 @@ its frozen 3% gate and fell below the general November 5% threshold.
 [Compound comparison](../2026-10-27-maxwell-compound-runtime.md).
 [Portfolio comparison](../2026-10-29-portfolio-runtime.md).
 
+The November joint-FFN portfolio retest used 120 paired HTTP requests and
+exact sampled IDs, logit and KV checks. The combined dispatch gained
+3.842% across the twenty fresh pairs (3.750–3.996%). It cleared the
+original 3% gate and fell short of the 5% November gate. Peak process
+residency was 14,395 MiB with both servers present. All five variants
+already paid for the same 1,192,935,424 bytes of packets.
+[November paired portfolio result](https://github.com/GuyPaddock/m40-llm/blob/7ff9d33f48c831c4218b5027d6a1cbf01d6c0ad3/docs/experiments/2026-11-21-q8-economics/portfolio/README.md).
+
 On the frozen 65-prompt-token, 512-output-token workload, the portfolio's
 52.548523 HTTP tok/s leaves 93.92 ms per request to reach 53.06, or
 625.45 ms to reach the 56.153149 target. The latter is 1.30 times the
