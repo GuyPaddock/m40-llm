@@ -1,0 +1,1 @@
+{"source_revision":"c49e2083f85bda2c32b6fcd0d69f9c2d732ea7c5","model_sha256":"4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d","executable_sha256":"85df424712a9da22afd7f9518078d48cdc4172d8fe3b14eaa665a4651fbce525","capacity":3072,"recent_window":1024,"block_size":32,"quantized_all_top_blocks":64,"quantized_top8_top_blocks":8}
