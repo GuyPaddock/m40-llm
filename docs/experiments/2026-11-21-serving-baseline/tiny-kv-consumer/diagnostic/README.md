@@ -21,6 +21,18 @@ memory peaked at 6,224 MiB staged and 6,208 MiB direct. Each process
 owned its own cache. The warmed tracing-off series determines the
 complete-request performance verdict and its variability.
 
+The pinned GGUF header has 32 query heads, four KV heads, embedding
+width 2,048 and model context 2,048. The local llama.cpp GGUF reader at
+d327bf1 independently reproduced those values. On Phase 4,
+`DecodeSession::new_for_sequence_with_kv_config` clips staging capacity
+to `min(1024 + 64 × 32, 2048) = 2048`. `ExactBlockStagingWorkspace`
+requests a per-query-head FP16 key plane, FP16 value plane, 32-bit token
+positions and 32-bit counts. With head dimension 64, these add up to
+17,039,488 bytes per staged session. The direct arm omits that
+workspace and reads the existing mixed cache. The allocation
+calculation explains the scale of the observed 16 MiB difference.
+Process memory includes CUDA allocator rounding and other allocations.
+
 [Dispatch replay](dispatch.json) · [Staged response](calibrate-0.json) ·
 [Direct response](calibrate-1.json) · [Build and device identity](preflight.txt).
 The full stage logs remain in `research-1121/raw/tiny-kv-consumer-01`
