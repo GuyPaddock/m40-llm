@@ -13,6 +13,8 @@ mod november;
 #[cfg(all(feature = "cuda", nvcc))]
 mod prefix;
 #[cfg(all(feature = "cuda", nvcc))]
+mod residency;
+#[cfg(all(feature = "cuda", nvcc))]
 mod run;
 
 use anyhow::Result;
@@ -28,6 +30,17 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Measure one cache in a fresh process with the quality model's weight owners.
+    Residency {
+        #[arg(long)]
+        model: PathBuf,
+        #[arg(long, value_parser=["dense","top64","top8"])]
+        arm: String,
+        #[arg(long)]
+        capacity: u32,
+        #[arg(long)]
+        output: PathBuf,
+    },
     /// Freeze the separate November expansion without invoking inference.
     PrepareNovember {
         #[arg(long)]
@@ -59,6 +72,22 @@ enum Command {
 
 fn main() -> Result<()> {
     match Args::parse().command {
+        Command::Residency {
+            model,
+            arm,
+            capacity,
+            output,
+        } => {
+            #[cfg(all(feature = "cuda", nvcc))]
+            {
+                residency::measure(&model, &arm, capacity, &output)
+            }
+            #[cfg(not(all(feature = "cuda", nvcc)))]
+            {
+                let _ = (model, arm, capacity, output);
+                anyhow::bail!("residency requires CUDA/NVCC")
+            }
+        }
         Command::PrepareNovember { model, output } => november::prepare(&model, &output),
         Command::Run {
             model,

@@ -18,7 +18,14 @@ use serde_json::{json, Value};
 use std::{collections::BTreeMap, fs, path::Path};
 
 pub fn load_model(path: &Path) -> Result<LoadedModel> {
-    let mut model = LoadedModel::from_gguf_with_q8_runtime(
+    let mut model = load_weights(path)?;
+    allocate_cache(&mut model, CacheArm::Dense)?;
+    model.validate_full_layer_decode()?;
+    Ok(model)
+}
+
+pub fn load_weights(path: &Path) -> Result<LoadedModel> {
+    let model = LoadedModel::from_gguf_with_q8_runtime(
         gguf::load_gguf(path)?,
         fs::read(path)?,
         -1,
@@ -54,8 +61,6 @@ pub fn load_model(path: &Path) -> Result<LoadedModel> {
             && model.q8_attention_projection.backend() == Q8AttentionProjectionBackend::Native,
         "unexpected projection/prefill configuration"
     );
-    allocate_cache(&mut model, CacheArm::Dense)?;
-    model.validate_full_layer_decode()?;
     Ok(model)
 }
 
