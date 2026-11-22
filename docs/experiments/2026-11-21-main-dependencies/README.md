@@ -7,6 +7,12 @@ The final feature selection depends on the serial M40 runs. All existing
 defaults, including compressed KV for supported generation, remain the
 reference behavior.
 
+GitHub resolved both branch names to the same full commits on November
+22. The pinned main worktree was clean when both patch checks ran.
+Recheck the remote heads at final handoff.
+[Remote main](https://github.com/GuyPaddock/m40-llm/commit/e1403e0dbe2037cd8fc2b0af32addf97a4df3488) ·
+[Remote Phase 4](https://github.com/GuyPaddock/m40-llm/commit/48c63332462e009964e891be1cabaf139e3b50f8).
+
 The ledger records each source commit's full Git ID, subject and original
 author. For a future port of an intact patch, preserve its Git author and
 record the source hash in the port's commit message. For a port assembled
