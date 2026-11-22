@@ -50,3 +50,13 @@ directory retains the prompts, emitted IDs, binary and library hashes, and
 per-case decisions. This check exercises tokenization only.
 
 For later cohorts the process-name counts also include the kernel scheduling class and nice value. The initial KV run recorded counts by name only. A host process-tree observation during that run found the top-level emerge and current compiler workers under ordinary scheduling at nice 0, in separate process groups. The benchmark did not adjust their scheduling. Inspect each cohort's actual samples before classifying its load conditions.
+
+For cohorts with timestamped before/after snapshots and the scheduling-class
+sampler, run `python3 request-host-load.py RAW_DIRECTORY REQUEST_LABEL ...`
+from this directory. Each group count is the number of samples in which
+that process name, nice level, scheduling class and state appeared.
+Pressure values are the maximum sampled ten-second averages over each
+request. They include other host activity. The maximum unsampled interval
+includes both request boundaries. An empty sample set gives no evidence
+about process state. Even a sampled stopped emerge process cannot establish
+what every descendant did between observations.
