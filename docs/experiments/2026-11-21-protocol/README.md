@@ -23,3 +23,7 @@ Each topic must commit a hypothesis, scope, strongest control and stopping crite
 ## Source and measurement integrity
 
 The source inventory uses full Git hashes and a separate report SHA-256. Independent audits must replay raw rows, actual counts, stops, memory and quality metrics, and try malformed/mismatched records where appropriate. Store large replay inputs under durable local artifact storage and link hashes. Preserve all historical raw evidence. Do not modify runtime defaults. Final integrations require a separate authorization after the rebuild-from-main plan.
+
+### Sampling token latency
+
+For a diagnostic companion set M40LLM_RESEARCH_TOKEN_TIMINGS=1 and request include_metrics on the buffered generation endpoint. token_elapsed_ms contains one request-relative monotonic wall offset per sampled ID, including sampled stop tokens. Its first value is generation-admission TTFT; adjacent differences are the inter-token observations. Compute per-request median/P95 and report the pooled distribution separately. Client TTFT includes transport/queueing and still requires client observations. The ordinary buffered timing arm omits this setting. Compare it with the instrumented arm before interpreting diagnostics.
