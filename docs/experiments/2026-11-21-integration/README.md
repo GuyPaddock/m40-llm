@@ -21,7 +21,13 @@ verifier into main by themselves. [Archived CUDA evidence](../2026-11-21-evidenc
 
 **Do not broaden aggressive KV selection.** Top-8 lost three of ten
 dense-passing long answers. Top-64 retained all ten where every historical
-block fit, and both arms retained all 19 short passes. The profile already defaults to top-8 on
+block fit, and both arms retained all 19 short passes. At 3,203 prompt
+tokens, the relay task had 69 eligible historical blocks. Top-64 again
+matched the dense answer, while top-8 changed the Boolean from true to
+false. This repeats one task at a longer context and leaves the original
+ten-case denominator intact. [Relay generations](../2026-11-21-kv-audit/history-relay-generations.json).
+
+The profile already defaults to top-8 on
 supported paths. Changing that setting would be a separate compatibility
 decision. At capacity 8,448, e100c54 measured a 1.01% peak saving for mixed KV.
 Main already consumes this storage directly. In November, all 144 matched operator comparisons reproduced the October
