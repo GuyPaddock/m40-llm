@@ -3,6 +3,7 @@
 # Supply the parent benchmark shell PID. Run at the same cadence for both arms.
 set -eu
 benchmark_pid=$1
+clock_ticks=$(getconf CLK_TCK)
 while kill -0 "$benchmark_pid" 2>/dev/null; do
     date --iso-8601=ns
     cat /proc/loadavg
@@ -12,7 +13,17 @@ while kill -0 "$benchmark_pid" 2>/dev/null; do
             sed "s/^/$resource /" "/proc/pressure/$resource"
         fi
     done
-    ps -eo comm=,ni=,cls=,stat= | awk '
+    ps -eo comm=,ni=,cls=,stat=,pid= | awk -v hz="$clock_ticks" '
+        $1 ~ /^qemu-system/ {
+            path = "/proc/" $5 "/stat"
+            if ((getline row < path) > 0) {
+                sub(/^.*\) /, "", row)
+                split(row, stat)
+                print "vm", "pid=" $5, "start_ticks=" stat[20],
+                    "cpu_ticks=" stat[12]+stat[13], "ticks_per_second=" hz
+            }
+            close(path)
+        }
         $1 ~ /^(emerge|ebuild|cc1|cc1plus|rustc|ld|ld\.lld|ninja|make)$/ {
             groups[$1 " nice=" $2 " class=" $3 " state=" substr($4,1,1)]++
         }

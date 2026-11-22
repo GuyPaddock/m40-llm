@@ -1,0 +1,66 @@
+2026-11-22T03:03:07,603370359-05:00
+100
+37220 (qemu-system-x86) utime=29821490 stime=3977896 starttime=197329
+VM 16 1
+VM 17 1
+VM 18 1
+VM 19 1
+VM 20 1
+VM 21 1
+VM 22 1
+VM 23 1
+VM 24 1
+VM 25 1
+VM 31 9
+VM 48 2
+VM 49 1
+VM 50 1
+VM 51 1
+VM 52 1
+VM 53 1
+VM 54 1
+VM 55 1
+VM 56 1
+VM 57 1
+VM 63 3
+0-30,32-62
+some avg10=0.10 avg60=0.70 avg300=0.83 total=290576586
+full avg10=0.00 avg60=0.00 avg300=0.00 total=0
+some avg10=0.58 avg60=0.56 avg300=0.86 total=445221023
+full avg10=0.10 avg60=0.26 avg300=0.62 total=426997399
+some avg10=0.00 avg60=0.00 avg300=0.00 total=1042474
+full avg10=0.00 avg60=0.00 avg300=0.00 total=977523
+2026-11-22T03:03:12,613876730-05:00
+100
+37220 (qemu-system-x86) utime=29830185 stime=3978876 starttime=197329
+VM 16 1
+VM 17 1
+VM 18 1
+VM 19 1
+VM 20 1
+VM 21 1
+VM 22 1
+VM 23 1
+VM 24 1
+VM 25 1
+VM 31 9
+VM 48 2
+VM 49 1
+VM 50 1
+VM 51 1
+VM 52 1
+VM 53 1
+VM 54 1
+VM 55 1
+VM 56 1
+VM 57 1
+VM 63 3
+0-30,32-62
+some avg10=0.36 avg60=0.70 avg300=0.83 total=290625482
+full avg10=0.00 avg60=0.00 avg300=0.00 total=0
+some avg10=0.77 avg60=0.60 avg300=0.87 total=445286163
+full avg10=0.05 avg60=0.23 avg300=0.61 total=427041025
+some avg10=0.00 avg60=0.00 avg300=0.00 total=1042485
+full avg10=0.00 avg60=0.00 avg300=0.00 total=977533
+gpu_uuid, pid, process_name, used_gpu_memory [MiB]
+GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, 3326775, /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/research-1121/prefill-fairness/target/release/m40-llm, 3564 MiB

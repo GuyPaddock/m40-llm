@@ -60,3 +60,21 @@ request. They include other host activity. The maximum unsampled interval
 includes both request boundaries. An empty sample set gives no evidence
 about process state. Even a sampled stopped emerge process cannot establish
 what every descendant did between observations.
+
+### Windows VM on the benchmark host
+
+The operator reported that the Windows 11 VM had been running throughout
+the November session and chose to keep it running for the current suite.
+At 03:03 EST on November 22, QEMU used 96.75 CPU-seconds over 5.011
+seconds of wall time, or 19.31 logical CPUs on average. Its thread
+affinities overlapped CPUs eligible for the inference server. Only the
+inference server appeared in the M40 compute-process snapshot. Earlier
+trials lack per-VM CPU counters. This sample cannot assign a magnitude
+or direction to any effect on those timings. [Host observation](vm-observation.txt).
+
+New host monitors record QEMU PID, start ticks, cumulative CPU ticks and
+clock frequency. For adjacent samples with the same PID and start ticks,
+divide the CPU-tick delta by the frequency and elapsed wall seconds to
+obtain average logical CPUs used. Preserve VM-on measurements as their
+own cohort if a clean-host repeat is authorized. Reuse the exact model,
+binary, flags, input and alternating schedule for that comparison.
