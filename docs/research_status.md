@@ -7,7 +7,7 @@ against the current code, worktree, Git history, and linked raw results.
 ## November consolidation
 
 Use the [integration matrix](experiments/2026-11-21-integration/README.md)
-for the current 39 dispositions. Graph parity and speculative rollback have
+for the current 41 dispositions. Graph parity and speculative rollback have
 hardware evidence in both cuBLAS builds. The [evidence audit](experiments/2026-11-21-evidence-audit/README.md)
 includes the original raw logs and verifier source patch. Seven
 [source-isolated build checks](experiments/2026-11-21-build-compatibility/README.md)
@@ -95,8 +95,16 @@ compares default and dense caches at 1/2/4 clients, with an independent
 completed-batch-width trace. Research/1121-main-graph-parity 63ea66a
 adapts graph attention to main without Phase 4 projection APIs. 4efc654
 binds the fixed and unfixed grids plus the eight-position TinyLlama F16
-full-logit/cache checks. Their release builds are verified; hardware
-evidence for the main-based repair is pending.
+full-logit/cache checks. Both fixed short grids passed on the M40. The
+boundary fixture used an incomplete seed and the TinyLlama fixture
+validated before allocating slots. The original logs are archived.
+Corrected fixtures are queued against both original and repaired images.
+[Main graph evidence](https://github.com/GuyPaddock/m40-llm/blob/dd0a9a64cbf591771587b8c2163fb703033467a1/docs/experiments/2026-11-21-main-graph-parity/first-run/README.md).
+
+At head128, the extra captured attention fallback added 1.569–3.019 µs
+of wall time per replay at the two measured live lengths. The operator
+cost misses the headroom gate for a pruning prototype.
+[Node costs and replay](https://github.com/GuyPaddock/m40-llm/blob/6bb6a1bb70ee5feac13f2d7b98a639825b40943e/docs/experiments/2026-11-21-graph-node-cost/result/README.md).
 
 The charged Q4 sparse screen at 19e6db8 passed its fixed-mask gate for lossless packed and zigzag weights at 25% and 50% active inputs. Native-layout indexing failed. Research/1121-sparse-q4-live 55591ac freezes the same-checkpoint live study.
 

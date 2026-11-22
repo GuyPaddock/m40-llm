@@ -11,6 +11,12 @@ The same short request retained all 128 sampled IDs. Tracing-off
 workloads matched their diagnostic outputs, counts and stops.
 [Serving results and raw measurements](https://github.com/GuyPaddock/m40-llm/blob/a37d0bc8b9d9537f626b696868857f88dd80ada2/docs/experiments/2026-11-21-prefill-fairness/result/README.md).
 
+Two simultaneous short Qwen Q8_0 clients with direct mixed KV gained
+21.557% median aggregate HTTP throughput with batching over the
+generation mutex, with 128 matching sampled IDs. The peak rose from
+3,312 to 3,501 MiB. Diagnostic P95 inter-token gaps rose from about 150
+to 228 ms. [Two-client report](https://github.com/GuyPaddock/m40-llm/blob/c708a507a3d28a8bdbb1f634fb4ed45d055239f6/docs/experiments/2026-11-21-serving-concurrency/default-two/README.md).
+
 After Portage paused, five fresh alternating Qwen Q8_0 HTTP pairs
 reproduced the benefit of preparing only down and vocabulary weights.
 Throughput rose from 31.922 to 35.681 tok/s on the dense 65-input,

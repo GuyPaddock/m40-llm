@@ -1,6 +1,6 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 39 decisions for which the
+The [candidate matrix](candidates.tsv) records 41 decisions for which the
 scope can already be established. Each row has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
@@ -14,7 +14,11 @@ a reproduced failing input and a passing isolated main-based repair.
 It introduces no CUDA dependency.
 
 **Correctness before performance.** The graph state repair passes the
-Phase 4 M40 grid and failure paths. The main-based graph run is queued.
+Phase 4 M40 grid and failure paths. On main both repaired builds passed
+96 short attention comparisons. Boundary and full-session setup failed
+in both runtime revisions. The corrected fixtures are queued.
+[First main graph run](https://github.com/GuyPaddock/m40-llm/blob/dd0a9a64cbf591771587b8c2163fb703033467a1/docs/experiments/2026-11-21-main-graph-parity/first-run/README.md).
+
 On main, the Q8 eviction repair passed the guarded fixture and all ten
 attention cases with cuBLAS enabled and disabled. The unfixed eviction
 control passed, leaving direct reproduction of the race on main
@@ -25,6 +29,12 @@ order support a narrow Tier 1 port. The bulk Q8 builder is compile-covered.
 The verifier rollback and near-tie cases should
 accompany any future verifier port. They do not warrant bringing the
 verifier into main by themselves. [Archived CUDA evidence](../2026-11-21-evidence-audit/README.md).
+
+The graph fallback node adds 1.569–3.019 µs synchronized wall time
+per head128 attention replay at the two sampled lengths. The implied
+36-layer cost is about 0.109 ms at the longer of the two tested lengths.
+That misses the frozen threshold for a pruning prototype.
+[Measured node counts and paired timings](https://github.com/GuyPaddock/m40-llm/blob/6bb6a1bb70ee5feac13f2d7b98a639825b40943e/docs/experiments/2026-11-21-graph-node-cost/result/README.md).
 
 **Do not broaden aggressive KV selection.** Top-8 lost three of ten
 dense-passing long answers. Top-64 retained all ten where every historical
@@ -96,6 +106,15 @@ on the opt-in dense buffered scheduler. Both clients matched their
 isolated IDs. The five tracing-off pairs matched the instrumented work.
 This admits a 16-position chunking test with cache and output parity
 and paired latency gates. [Completed serving baseline](https://github.com/GuyPaddock/m40-llm/blob/a37d0bc8b9d9537f626b696868857f88dd80ada2/docs/experiments/2026-11-21-prefill-fairness/result/README.md).
+
+Two simultaneous short requests gained 21.56% aggregate throughput in
+the opt-in compressed buffered scheduler. Both clients returned the same
+IDs and the batched process peaked 189 MiB higher. The first client's
+TTFT and both clients' median token gaps rose, while the second client
+started sooner. The prompts fit in the recent ring. The measured gain
+qualifies this concurrency cohort and leaves historical-block serving
+and general defaults open.
+[Two-client result](https://github.com/GuyPaddock/m40-llm/blob/c708a507a3d28a8bdbb1f634fb4ed45d055239f6/docs/experiments/2026-11-21-serving-concurrency/default-two/README.md).
 
 **Excluded work.** The original channel selector, ShiftAdd, additional
 multi-row gate/up fusion, lossless KV compression and DualPace all missed
