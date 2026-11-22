@@ -55,3 +55,23 @@ builds. Sampled process VRAM is recorded every 250 ms; load-to-health,
 request intervals and CLI process measurements have separate boundaries.
 Five alternating pairs each use a fresh process and a full warmup per arm to
 avoid jointly resident models changing backend or allocation decisions.
+
+## Local Qwen Q4_0 secondary baseline
+
+The Phase 4 CPU loader mapped all 36 standard layers at width 2048 and FFN
+width 11008 on the local Q4_0 GGUF, SHA-256
+670d82d0fbee6289b661eb323612c65bd2e97ec8c65cdbd9131aa44d30e9816a.
+Its dedicated Q6_K output.weight has 151936 vocabulary rows. The
+[admission record](qwen-q4-admission.json) retains the 65 raw prompt IDs
+and both stop IDs. The primary Q8 request has the same prompt IDs.
+Main e1403e0 could not map this model (admission dd81f05).
+
+Run the existing protocol with cohort `qwen-q4-short`. Freeze a 32-token
+cap, natural EOS, greedy sampling, context 1024 and identical weights in
+both arms. Compare Phase 4 default KV against explicit dense through the
+CLI, streaming and buffered HTTP. Apply the same parity, five paired trials,
+variability and stopping rules as the primary short comparison. Reject
+fallback-only execution at the full-layer log check. A missing GPU path
+ends this cohort at the first failed validation. This is a short-context
+secondary baseline. It supplies neither a historical-block quality result
+nor a matched speed comparison between different weight quantizations.

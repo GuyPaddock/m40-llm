@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# run.sh qwen-{short,medium,long}|tiny-{default,dense} NEW_OUTPUT_DIR
+# run.sh qwen-{short,medium,long,q4-short}|tiny-{default,dense} NEW_OUTPUT_DIR
 set -euo pipefail
 source "$(dirname "$0")/server.sh"
 cohort=$1
 tiny_hash=76bd2d476450b35a43d294470b091e21d81624a4f3d70d2542c07bd8fbefad93
 qwen_hash=4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d
+ids_args=()
 if [[ "$cohort" == tiny-default || "$cohort" == tiny-dense ]]; then
     start_study "$2" "$HOME/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf" "$tiny_hash"
     admission="$workspace/main-baseline/docs/experiments/2026-11-21-main-baseline/models.jsonl.gz"
@@ -16,22 +17,37 @@ if [[ "$cohort" == tiny-default || "$cohort" == tiny-dense ]]; then
     layers=22
 else
     shape=${cohort#qwen-}
-    case "$shape" in short|medium|long) ;; *) exit 2 ;; esac
-    start_study "$2" "$HOME/.ollama/models/blobs/sha256-$qwen_hash" "$qwen_hash"
+    case "$shape" in
+        short|medium|long) start_study "$2" "$HOME/.ollama/models/blobs/sha256-$qwen_hash" "$qwen_hash" ;;
+        q4-short)
+            shape=short
+            ids_args+=(--check-layers)
+            start_study "$2" "$HOME/.cache/m40-llm/models/qwen2.5-3b-instruct-q4_0.gguf" 670d82d0fbee6289b661eb323612c65bd2e97ec8c65cdbd9131aa44d30e9816a
+            ;;
+        *) exit 2 ;;
+    esac
     jq -e --arg shape "$shape" '.cases[]|select(.name==$shape)' "$manifest" > "$out/case.json"
-    jq '.request' "$out/case.json" > "$out/request.json"
+    if [[ "$cohort" == qwen-q4-short ]]; then
+        jq '.request | .max_tokens=32' "$out/case.json" > "$out/request.json"
+    else
+        jq '.request' "$out/case.json" > "$out/request.json"
+    fi
     prompt_count=$(jq .prompt_token_count "$out/case.json")
     context=$(jq .context "$out/case.json")
     stop_ids=$(jq -sc 'map(select(.kind=="manifest"))[0].m40_stop_token_ids' "$consolidation/docs/experiments/2026-11-21-native-split/report.jsonl")
     layers=36
 fi
 ids_tool="$consolidation/target/release/examples/research_serving_ids"
-"$ids_tool" "$model" "$out/request.json" > "$out/phase4-prompt-ids.json"
+"$ids_tool" "${ids_args[@]}" "$model" "$out/request.json" > "$out/phase4-prompt-ids.json"
 sha256sum "$ids_tool" "$out/request.json" >> "$out/preflight.txt"
 if [[ "$cohort" == tiny-* ]]; then
     jq -e --slurpfile phase4 "$out/phase4-prompt-ids.json" '.inputs[0].ids == $phase4[0].ids and .inputs[0].stop_ids == $phase4[0].stop_ids' "$out/model.json"
 else
     jq -e --slurpfile phase4 "$out/phase4-prompt-ids.json" '.prompt_ids == $phase4[0].ids' "$out/case.json"
+fi
+if [[ "$cohort" == qwen-q4-short ]]; then
+    jq -e '.mapping | .layers==36 and .width==2048 and .head.width==.width and .head.name=="output.weight" and .head.dtype=="Q6K" and .head.tied==false' "$out/phase4-prompt-ids.json"
+    stop_ids=$(jq -c '.stop_ids' "$out/phase4-prompt-ids.json")
 fi
 jq '.stream=true|del(.include_metrics)' "$out/request.json" > "$out/stream-request.json"
 configure() {
