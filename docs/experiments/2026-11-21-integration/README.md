@@ -50,8 +50,9 @@ matched seven full-logit rows. The HTTP interval lay within −0.16% to
 **Start Q8 work on main with the missing layer and output-head support.**
 The strongest measured prepared-weight subset uses only down and
 vocabulary weights. It improved the short dense HTTP request by 11.73%
-against native Q8 and cost 1,192,935,424 extra device bytes. Its quiet-host
-repeat and single-model residency evidence still matter for a port. The
+against native Q8 and cost 1,192,935,424 extra device bytes. After the upgrade pause, five fresh pairs reproduced an 11.776% gain
+(11.579–11.828%) with all 512 IDs unchanged. The single-model peak
+memory comparison remains open. The
 earlier all-family setting lost 64.21% on HTTP; preparing QKV and output
 alongside down and vocabulary lost 6.71% with native MLP. Both losing
 settings matched the control's 512 generated IDs.

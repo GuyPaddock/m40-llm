@@ -104,7 +104,8 @@ The same preformatted Qwen text also gains an extra BOS on main.
    and q8_family_selection where applicable. Verify native multirow,
    nongreedy and unsupported fallbacks. Compare complete FFN, prefill and
    HTTP; the observed short down/vocabulary result carries an extra
-   1,192,935,424 bytes and still has a quiet-host repeat outstanding.
+   1,192,935,424 bytes. The post-pause repeat at e25b2ed reproduced an
+   11.776% gain. The isolated peak-residency comparison remains open.
    Once compound qualifies, keep the joint-only owner from e83e172 and
    retain the explicit `M40LLM_Q8_FFN_OWNERSHIP=retain-split` diagnostic.
    Its [matched ownership comparison](../2026-11-22-q8-ownership/README.md)
