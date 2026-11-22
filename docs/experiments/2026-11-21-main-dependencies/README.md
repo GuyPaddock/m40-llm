@@ -128,6 +128,12 @@ results at 87b1ef7 matched every within-arm output and diverged across
 arms at the first sampled ID, with median HTTP times of 489.292 s
 default and 373.309 s dense. Keep both baselines in main-port tests.
 [Medium Qwen baseline](../2026-11-21-serving-baseline/qwen-medium/README.md).
+At 8,197 prompt IDs the default CLI and buffered traces still agreed.
+The dense CLI generated zero tokens by the one-hour request ceiling
+and stopped at 721a52b. Retain that upper-context failure in admission
+tests. Phase 4's ordinary head128 launcher uses its generic one-thread
+path above 8192. The focused M40 test at 86e15af measures this boundary
+separately in the pinned code. [Long-serving feasibility](../2026-11-21-serving-baseline/qwen-long/README.md).
 
 4. **Native Q8 layer projection.** Use the shape and block-stride checks,
    `m40llm_*` CUDA entry points, non-CUDA stubs, Rust wrappers and native

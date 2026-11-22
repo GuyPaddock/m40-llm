@@ -45,6 +45,13 @@ sampled IDs. Their separate median HTTP times were 489.292 and
 373.309 s, with sampled process peaks of 3,332 and 3,320 MiB.
 [Medium CLI, streaming and HTTP evidence](experiments/2026-11-21-serving-baseline/qwen-medium/README.md).
 
+The long Qwen request used 8,197 prompt IDs and 128 output slots.
+Default buffered and streaming diagnostics took 2,601.471 and
+2,602.566 s. The default CLI and buffered output IDs matched. Dense
+KV emitted zero sampled tokens by the 3,600 s request bound. The
+stopped dense process peaked at 3,536 MiB and the default servers
+at 3,488 MiB. [Long diagnostics and stop evidence](experiments/2026-11-21-serving-baseline/qwen-long/README.md).
+
 On Phase 4, Qwen Q4_0 ran all 36 layers with its dedicated Q6_K head.
 Default direct mixed KV served 2.887 buffered tok/s and dense KV
 served 2.830 across five alternating 65-input, 32-output pairs with

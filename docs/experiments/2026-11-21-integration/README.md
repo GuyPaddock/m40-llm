@@ -183,6 +183,12 @@ differed with a 2,060-token input. The five trial ranges were
 independent baselines for later ports and leave cache defaults outside
 the proposed review series. [Medium serving result](../2026-11-21-serving-baseline/qwen-medium/README.md).
 
+The 8,197-token Qwen default CLI and buffered diagnostic matched all
+128 output IDs. They and the streaming diagnostic finished in about
+43 minutes. The dense diagnostic reached the existing one-hour
+request bound with zero outputs. Preserve the dense feasibility stop
+and separate default timings. [Long serving result](../2026-11-21-serving-baseline/qwen-long/README.md).
+
 The matched dense two-client cohort gained 59.495% aggregate
 throughput. Both clients reached their first sample sooner and
 returned the same 128 IDs. P95 token gaps rose from about

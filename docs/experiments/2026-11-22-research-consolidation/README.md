@@ -59,6 +59,12 @@ record for negative and prerequisite-limited studies.
   Buffered medians were 489.292 and 373.309 s, with peaks of 3,332 and
   3,320 MiB respectively. Both remain separate workload baselines.
   [Medium CLI, streaming and buffered metrics](../2026-11-21-serving-baseline/qwen-medium/README.md).
+- **Long Qwen feasibility.** Default mixed KV returned 128 matching CLI
+  and buffered IDs after an 8,197-token prompt. Buffered and streaming
+  requests finished in about 43 minutes. The dense CLI produced zero
+  sampled IDs at the one-hour request limit. This leaves a default
+  diagnostic and a dense feasibility failure, with no paired speed
+  verdict. [Long scope and retained stop](../2026-11-21-serving-baseline/qwen-long/README.md).
 - **Prepared Q8.** Preparing only down and vocabulary layouts had the
   strongest measured short HTTP result against native Q8. Preparing all
   families lost 64.21% on that historical request. When compound FFN is
