@@ -1,0 +1,44 @@
+e1403e0dbe2037cd8fc2b0af32addf97a4df3488	fix(cuda): synchronize compressed kv debug reads
+48c63332462e009964e891be1cabaf139e3b50f8	docs(research): close runtime follow-up study
+dd81f0501e099eb94fff5353ec0b62c03cb3ac9c	docs(bench): record main checkpoint admission
+a1b247089775ef612e0681154e90dbddc47cd90e	feat(bench): qualify normal serving entry points
+f351a2836445c26a6be6de0ef7dd40730082530a	test(server): measure prefill during active decode
+541cec19c91fe5289d9645c0e16c08834b2be125	fix(gguf): check tensor shape products once
+1989d823eef4f94f05af0df1c334d312c3f0674e	docs(gguf): qualify checked tensor layouts
+e930d2109f7940804c2aa17f8f5fede83ae18fe1	fix(cuda): retain Q8 scale synchronization
+a898ac28004aaaad23924526e1eb3ce7afdd2079	test(cuda): check Q8 KV scales on main
+75ed22f6d1a0ced788900349130b768a639fbece	fix(cuda): synchronize Q8 history scales
+dbceae10ee5e8f78d6a92611807aa4c6d46f5c0f	fix(cuda): preserve graph attention dispatch
+e2b4739d8ec73b8387086dc09f9552e158fba9b0	fix(cuda): preserve graph attention dispatch
+bfae1119d6c4467174ba2e7554adb44db0856ce4	docs(research): reproduce graph cache divergence
+66f21e30a8452c11f8bbc97aa4f6dfd11885b2f8	perf(research): pair graph and ordinary HTTP
+7f3bcfd20d381442759bcf37b25ba5c510d1589f	feat(cuda): batch direct compressed kv attention
+97102a1c17568a87d29e0a5aa79018de2259e2b3	perf(research): reuse matched KV operator grid
+9489bb6e292b4d7dc3427fe74a83e4c766f14930	feat(bench): measure resident KV allocations
+f1bb7a4201ca1300af08282215d4bbb95620e8a9	test(quality): compare full and clipped KV history
+6f9e57311170a07f8326a28f07313ce9e5f86e91	feat(cuda): add fused q8 projection primitive
+b0fb85198c80bf1c88f06e439204d0955de01aec	feat(infer): select projection backend by memory budget
+616d628cf3f01cec84987bac5f9a2e7ac5bf06e1	fix(infer): support q8 tied output embeddings
+2f7b89aa5321d34b9f21ed04e76e912cd0e78deb	test(cuda): add q8 generation canary
+33891e8816a46110717f96dd6b12d101130d7370	refactor(infer): own Q8 execution weight views
+81948df80ceb9a66beea6a5d7feaa52fc52f1f1e	fix(cuda): account for dropped model weights
+11f2fb667b33e51d03a53da77d039178181c7012	feat(infer): prepare model-owned Q8 layouts
+a48d87bc6a57396ae4dc14128439066020358862	perf(cuda): separate Q8 scales and values
+4db3c1e54e0b58ed045eb9a3a4e44a17d35d5cba	perf(cuda): use prepared Q8 for fused QKV
+e2dbc616b0995c1de90f85cf78b051e8a42ed242	perf(cuda): reuse prepared Q8 in fused MLP
+b76177dbc27e5337b81cb7e16a1106e3e90f81a2	perf(infer): use prepared Q8 greedy logits
+3d176fe820b0031e1ddd09faa0309c0eab624a43	feat(infer): select prepared Q8 families
+dd8c5f60340100ff854bbc8593bb68f9b5ed053d	fix(infer): preserve native down reduction order
+05607ab724db6097a3091ab0615196573623350a	feat(infer): select split-plane FP32 FFN
+e5a06accf0f29a582938c8d8982dcff4764d4a35	feat(infer): load opt-in compound FFN pairs
+e83e1722610b27e3d36eb6e855d7409baea83e29	feat(infer): add joint-only weight ownership
+f6aafd1ae1cba967a2e063c4357bfe9c54848fc3	perf(research): reproduce Q8 ownership cohorts
+0b7992b9da863473f2d13214bbb37ef6751a265e	feat(infer): add transactional verification
+9aff60ad522ca4c1c14806b06479333b90cc345c	feat(research): add direct four-row verification
+9d55c9abe2d28f1a48b01aa490e7ec4b712a9992	test(infer): verify consecutive rollback states
+fc487e89fd700f50135e885d9d38b3d8893f2a45	test(cuda): check close Q8 head predictions
+081cc65d2d21834813bc2c4ccccdc3fe92dd2a64	docs(research): verify packed rollback on M40
+06765706fa6d9bbe4bcf122828bc689867ad24a7	feat(cuda): reuse Q8 weights across input rows
+a438032f85c8d9f1cb516cf1a7c3d7810bb59747	test(bench): gate small-row timing on parity
+3df1dd2556b0d66a46a7544568aa7105274c3b49	feat(infer): retain Q4 channel packing
+9a6800383efc50f8cd4ea1ac7a8de59b318832a7	feat(cuda): retain selected Q4 execution
