@@ -72,3 +72,10 @@ base=docs/experiments/2026-10-28-direct-verifier
 jq -es --slurpfile quality "$q" --slurpfile correct "$base-correctness.jsonl" \
   -f "$d/target.jq" "$base-measurement.jsonl" | diff - "$d/october-target.json"
 ```
+
+For the three-schedule study, run
+`bash "$d/replay-target-gate.sh" MEASUREMENT_JSONL RESEARCH_HTTP_PAIRS`.
+This reconstructs resampling from the measured target rates and compares
+both bootstrap bounds before converting throughput to latency reduction.
+The final phase must apply the same latency gate against both controls.
+Changing a recorded confirmation bound caused the replay to fail.
