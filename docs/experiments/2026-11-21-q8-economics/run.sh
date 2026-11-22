@@ -3,6 +3,8 @@
 set -euo pipefail
 model=$(realpath "$1")
 out=$(realpath -m "$2")
+section=${3:-all}
+case "$section" in all|portfolio) ;; *) exit 2 ;; esac
 mkdir "$out"
 ref=docs/experiments/2026-10-27-compound-reference.json
 bin=target/release/examples/joint_only
@@ -39,10 +41,19 @@ run_phase() {
     "$bin" --model "$model" --phase "$phase" --output "$out/$name.jsonl" "$@" > "$out/$name.log" 2>&1
     snapshot > "$out/$name.after"
 }
-run_phase load-retain load --ownership retain-split
-run_phase load-joint load --ownership joint-only
-run_phase quality quality
-run_phase http http --quality-report "$out/quality.jsonl"
-run_phase dataflow dataflow --ownership joint-only --quality-report "$out/quality.jsonl" --profile-report "$out/stages.jsonl"
+profile_status=0
+if [[ "$section" == all ]]; then
+    run_phase load-retain load --ownership retain-split
+    run_phase load-joint load --ownership joint-only
+    run_phase quality quality
+    run_phase http http --quality-report "$out/quality.jsonl"
+    # Profiling has its own perturbation gate. Keep the portfolio's independent
+    # quality prerequisite and end-to-end timings reachable after a failure.
+    (set -e; run_phase dataflow dataflow --ownership joint-only --quality-report "$out/quality.jsonl" --profile-report "$out/stages.jsonl") &
+    phase_pid=$!
+    wait "$phase_pid" || profile_status=$?
+    printf '%d\n' "$profile_status" > "$out/dataflow.exit"
+fi
 run_phase portfolio-quality portfolio-quality
 run_phase portfolio-http portfolio-http --quality-report "$out/portfolio-quality.jsonl"
+exit "$profile_status"
