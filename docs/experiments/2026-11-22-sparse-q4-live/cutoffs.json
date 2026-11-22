@@ -1,0 +1,91 @@
+{
+  "calibration_artifact_sha256": "9bdd15952f4af2adfe39c09f192880ab86815adde9d54aaba2921c2c6398bcd6",
+  "calibration_report_sha256": "c7386d85f0e41fbe156aa25140e89adeb65831fb305c003e66d850d742816014",
+  "corpus_sha256": "2a1270959ef105a3ec19e0be0ab888048fb619880fd4f014ce216acfb8710c38",
+  "layers": [
+    {
+      "cutoffs": [
+        0.0,
+        0.024985965341329575,
+        0.05871416628360748
+      ],
+      "down": {
+        "byte_offset": 430290944,
+        "dtype": "Q4_0",
+        "name": "blk.0.ffn_down.weight",
+        "shape": [
+          11008,
+          2048
+        ],
+        "source_sha256": "109cf9ba10c2a5def4c8a73256442ec35a4d5696f70c736f6871a33f887022df"
+      },
+      "layer": 0,
+      "retained_values": [
+        385280,
+        192640,
+        96320
+      ],
+      "rows": 35,
+      "values": 385280
+    },
+    {
+      "cutoffs": [
+        0.0,
+        0.11531174927949905,
+        0.23754067718982697
+      ],
+      "down": {
+        "byte_offset": 820699136,
+        "dtype": "Q4_0",
+        "name": "blk.17.ffn_down.weight",
+        "shape": [
+          11008,
+          2048
+        ],
+        "source_sha256": "71d24892858af10b832b709acc4b53c57f8e060f4dfd644287cca838890ef6d8"
+      },
+      "layer": 17,
+      "retained_values": [
+        385280,
+        192640,
+        96320
+      ],
+      "rows": 35,
+      "values": 385280
+    },
+    {
+      "cutoffs": [
+        0.0,
+        0.35809656977653503,
+        0.7496800422668457
+      ],
+      "down": {
+        "byte_offset": 1948545024,
+        "dtype": "Q4_0",
+        "name": "blk.35.ffn_down.weight",
+        "shape": [
+          11008,
+          2048
+        ],
+        "source_sha256": "04560c0a9a3387587610b1da623d1ab5adb870b502ee92747d14f175178b2ffd"
+      },
+      "layer": 35,
+      "retained_values": [
+        385280,
+        192640,
+        96320
+      ],
+      "rows": 35,
+      "values": 385280
+    }
+  ],
+  "model_sha256": "670d82d0fbee6289b661eb323612c65bd2e97ec8c65cdbd9131aa44d30e9816a",
+  "quantiles": [
+    "zero",
+    "nearest-rank 50%",
+    "nearest-rank 75%"
+  ],
+  "retain": "abs(value) > cutoff",
+  "schema_version": 1,
+  "source_weights_sha256": "15e4cdd7aaad81f498a290435ee1069c379f59c0bfff0f3b215892d907d37024"
+}

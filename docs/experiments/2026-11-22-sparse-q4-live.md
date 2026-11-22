@@ -72,6 +72,28 @@ makes model qualification inconclusive. An operator advantage or a Q8
 model's previous calibration cannot qualify Q4 inference. Keep all
 branch work explicit and experimental.
 
+## Captured inputs
+
+**PASS for the frozen dense capture.** A release M40 build at
+`a971f9011a09096ad49095c541363ad883b1fd40` captured 35 calibration
+and 36 held-out SwiGLU rows per layer at layers 0, 17 and 35. All
+12 captured generations matched the uninstrumented dense IDs and
+both processes ended at zero tracked device bytes. The 50th- and
+75th-percentile calibration cutoffs retained exactly 192,640 and
+96,320 of 385,280 values per layer. The separate CPU replay
+reproduced the complete cutoff document byte for byte. The held-out
+vectors and report remained separate from calibration. Capture adds
+no performance or approximate-inference quality result.
+
+The [capture checksum list](2026-11-22-sparse-q4-live/capture.sha256)
+names the original records in `research-1121/raw/sparse-q4-live-01`,
+including both full vector files and their 56 MiB of JSON payload.
+Verify from that durable directory with `sha256sum -c` and the
+checksum list's absolute path. The
+[frozen cutoff document](2026-11-22-sparse-q4-live/cutoffs.json)
+can be replayed with the release CPU example
+`sparse_q4_calibrate calibration.json calibration.jsonl NEW_CUTOFFS.json`.
+
 ## Capture and threshold replay
 
 From this worktree, source `scripts/dev-env.sh` and build the tools.
