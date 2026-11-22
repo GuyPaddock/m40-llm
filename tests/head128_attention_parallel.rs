@@ -584,3 +584,74 @@ fn benchmark_head128_geometries() -> Result<()> {
     }
     Ok(())
 }
+
+/// Time the existing dense dispatch immediately below and above the cache span
+/// limit, with the same query geometry and a separate FP64 attention reference.
+#[test]
+#[ignore = "isolated release M40 boundary diagnostic"]
+fn benchmark_dense_head128_context_boundary() -> Result<()> {
+    let _lock = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    ensure!(
+        !cfg!(debug_assertions),
+        "use --release for attention timing"
+    );
+    let _backend = EnvRestore::set("M40LLM_ATTN_HEAD128_KERNEL", "fast");
+    let _logs = EnvRestore::set("M40LLM_ATTN_LOG", "1");
+    let initial_bytes = CudaContext::total_device_bytes();
+    let fixture = Fixture::new(8445)?;
+    let query = fixture.upload_query(8192, 1.0)?;
+    let lengths = [8192usize, 8193];
+    let references = lengths.map(|length| fixture.cpu_attention(0, length, &query));
+    let enqueue = |length| unsafe {
+        fixture.kv.attention_last_token_f32_gqa_async(
+            &fixture.ctx,
+            0,
+            fixture.q.as_ptr(),
+            Q_HEADS,
+            length as u32,
+            fixture.output.as_mut_ptr(),
+        )
+    };
+    eprintln!(
+        "{}",
+        serde_json::json!({"kind":"boundary_manifest","lengths":lengths,
+            "capacity":8448,"q_heads":Q_HEADS,"kv_heads":KV_HEADS,"head_dim":DIM,
+            "fp16_cache_bytes":fixture.kv.actual_bytes(),
+            "timing":"one ordinary dense attention call per warmed sample"})
+    );
+    for length in lengths {
+        enqueue(length)?;
+        fixture.ctx.synchronize_stream(CudaStream::Decode)?;
+    }
+    for pair in 0..3 {
+        let order = if pair % 2 == 0 { [0, 1] } else { [1, 0] };
+        for index in order {
+            let length = lengths[index];
+            let start = fixture.ctx.create_event()?;
+            let stop = fixture.ctx.create_event()?;
+            let wall = Instant::now();
+            start.record(CudaStream::Decode)?;
+            enqueue(length)?;
+            stop.record(CudaStream::Decode)?;
+            fixture.ctx.synchronize_stream(CudaStream::Decode)?;
+            let wall_ms = wall.elapsed().as_secs_f64() * 1000.0;
+            let event_ms = start.elapsed_ready(&stop)?.expect("completed events");
+            let actual = fixture.read(&fixture.output)?;
+            let (max_error, mean_error) =
+                check_close(&actual, &references[index], "dense boundary");
+            eprintln!(
+                "{}",
+                serde_json::json!({"kind":"boundary_trial","pair":pair,"cache_length":length,
+                    "cuda_event_ms":event_ms,"host_wall_ms":wall_ms,
+                    "checked_output_values":actual.len(),"max_abs_error":max_error,
+                    "mean_abs_error":mean_error})
+            );
+        }
+    }
+    drop(fixture);
+    ensure!(
+        CudaContext::total_device_bytes() == initial_bytes,
+        "device bytes did not release"
+    );
+    Ok(())
+}
