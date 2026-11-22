@@ -39,9 +39,41 @@ identical greedy IDs. Dense decode was faster inside the request. Both
 arms fit their prompt entirely in the recent window.
 [Q4 checkpoint and timings](experiments/2026-11-21-serving-baseline/qwen-q4-short/README.md).
 
-The [candidate matrix](experiments/2026-11-21-integration/candidates.tsv) links each source and raw report. Qwen native-head128 graph replay preserved all 512 IDs and improved paired HTTP throughput by 0.361% [0.269%, 0.477%] at e6567e5. Mixed cache peak residency at e100c54 was 22 MiB higher at capacity 1,024, 3 MiB higher at 3,072 and 47 MiB lower at 8,448. Both results fall below their promotion gates. The four-row Q8 down operator at 16fbcc4 saved about 0.150 ms per layer over four independent calls and 0.100 ms over the existing multi-row split path. Complete-target timings are pending. At 377bec4, holding 4,096 idle tokens in a second slot did not increase active attention latency.
+The [candidate matrix](experiments/2026-11-21-integration/candidates.tsv)
+links each source and raw report. Qwen native-head128 graph replay preserved
+all 512 IDs and improved paired HTTP throughput by 0.361% [0.269%, 0.477%]
+at e6567e5. Mixed cache peak residency at e100c54 was 22 MiB higher at
+capacity 1,024, 3 MiB higher at 3,072 and 47 MiB lower at 8,448. Both
+results fell below their promotion gates. At 377bec4, holding 4,096 idle
+tokens in a second slot did not increase active attention latency.
+
+The four-row Q8 down operator at 16fbcc4 saved about 0.150 ms per layer
+over four independent calls and 0.100 ms over the multi-row split path.
+Twenty fresh complete-target rounds reduced median transaction latency
+from 56.417 to 53.102 ms against the faster correct control, a paired
+5.876% saving [5.803%, 5.979%]. Full logits and valid FP16 KV matched,
+including forced rejection and ordinary correction. The live copy
+control then gained 2.551% and 1.308% over existing multi-row copy in two
+resident requests, with the same prepared weights.
+[Target verification](https://github.com/GuyPaddock/m40-llm/blob/837e0708edda8ca4d74aabcf6436e18dfffad6bc/docs/experiments/2026-11-21-small-n/target-result/README.md) ·
+[Copy workload](https://github.com/GuyPaddock/m40-llm/blob/e1fcebb8f7bf274465f2d4493e0423ba0268c1ff/docs/experiments/2026-11-22-copy-verifier/result/README.md).
 
 Joint-only compound gate/up ownership removed 1,724,645,376 tracked device bytes. The peak of a fresh loader process fell from 7,671 to 6,024 MiB. Matched 512-token HTTP throughput changed by +0.10% [−0.16%, +0.32%]. [Full ownership results](experiments/2026-11-22-q8-ownership/README.md).
+
+Fresh single-server Qwen Q8_0 diagnostics put selective prepared down
+and vocabulary at 4,414 MiB sampled peak, versus 3,275 MiB native, and
+17.322 s launch-to-health, versus 6.233 s. Inside the separate compound
+FFN configuration, joint-only ownership reduced sampled server peak
+from 7,807 to 6,160 MiB. Both comparisons matched all sampled IDs.
+[Isolated process residency](experiments/2026-11-22-q8-ownership/server-peaks/README.md).
+
+Charged sparse-Q4 thresholding saved 41.63–42.95% operator time in the
+matched packed layout and 42.89–47.19% in zigzag. On Qwen Q4_0, zigzag
+thresholding raised one held-out passage's perplexity 4.348% and stopped
+at the frozen 3% model gate. Packed passed the initial four-answer and
+two-passage gate. Complete-request speed requires broader quality evidence.
+[Operator replay](https://github.com/GuyPaddock/m40-llm/blob/be7bf4bbfa90eb468b2af53f5c8732e8d1a05c04/docs/experiments/2026-11-22-sparse-q4-live/operator-result/README.md) ·
+[Initial quality](https://github.com/GuyPaddock/m40-llm/blob/d64a2edc93ee60c5f148874b51b6e2eac3174ce5/docs/experiments/2026-11-22-sparse-q4-live/quality-result/README.md).
 
 At 4281ad8, the repeated direct-versus-staged KV operator grid passed
 144/144 matched groups. Complete wall latency fell by 3.53–20.45%, with
