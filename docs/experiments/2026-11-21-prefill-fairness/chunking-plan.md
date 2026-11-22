@@ -67,3 +67,9 @@ Recompute the decision from the captured raw files with `python3
 docs/experiments/2026-11-21-prefill-fairness/score-chunking.py OUTPUT_DIRECTORY`.
 The interval uses 10,000 bootstrap resamples of the valid paired
 maximum-gap reductions with seed zero.
+
+Run `bash docs/experiments/2026-11-21-prefill-fairness/replay-chunking.sh
+OUTPUT_DIRECTORY RESEARCH_FAIRNESS_REPORT` on the finished archive.
+It recalculates the diagnostic clocks from raw client responses, verifies
+work equality across tracing modes, observes the recorded server flags
+and reports per-arm NVML process peaks from startup through completion.
