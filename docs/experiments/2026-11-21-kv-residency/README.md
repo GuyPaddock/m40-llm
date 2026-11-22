@@ -87,6 +87,29 @@ final observation. There was no GPU owner after process exit. A single
 allocation per process cannot distinguish one-time initialization from
 accumulation across cache lifetimes. This limits reuse qualification.
 
+### Capacity at which mixed payload first gets smaller
+
+At this geometry, a dense position uses 36,864 bytes across all layers.
+The mixed historical arrays reserve 23,328 bytes per capacity position.
+The fixed recent ring costs 37,748,736 bytes and each historical
+summary block costs 110,736 bytes across the 36 layers. The 144-byte
+length map is common to both arms. The independently reconstructed
+allocation requests put mixed 4,464 bytes above dense at capacity
+3,402 and 9,072 bytes below at 3,403. Mixed stays smaller at every
+subsequent capacity in the 1,024–8,448 range. Those adjacent capacities
+were calculated from the allocator formula. The three capacities in the
+table were measured on the M40. The crossover does not predict the exact
+NVML peak or justify changing the cache policy at a particular length.
+
+```sh
+jq -n '
+  def difference($n):
+    37748736 - 13536*$n + 110736*([1,(($n-1024)/32|ceil)]|max);
+  [range(1024;8449) | {capacity:., extra_mixed_bytes:difference(.)}] |
+  {last_larger:map(select(.extra_mixed_bytes>=0))[-1],
+   first_smaller:map(select(.extra_mixed_bytes<0))[0]}'
+```
+
 The [raw archive](live/measurements.tar.gz) includes all nine process
 records, model and executable hashes, build and dispatch flags, host
 load, sampler observations and timestamps. Archive SHA-256
