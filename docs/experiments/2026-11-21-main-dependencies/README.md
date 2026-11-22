@@ -252,7 +252,10 @@ path already computes logits at every position. An initial chunking
 experiment can retain that arithmetic and discard intermediate results.
 It samples only after the full prompt completes. Both cuBLAS builds
 passed exact dense KV, queue progression, cancellation and slot reuse
-at c0cdbcb. The full HTTP qualification continues separately with
+at c0cdbcb. The first diagnostic at f233345 matched all 160 IDs. The
+shared serving harness reused the trial index and stopped after the
+pair. The readiness correction at 3ac7bb4 leaves the executable and
+qualification workload unchanged. The full HTTP qualification uses
 `M40LLM_RESEARCH_DENSE_PREFILL_CHUNKS=1` as the only arm change.
 
 Both revisions classify a request as pending prefill only while
