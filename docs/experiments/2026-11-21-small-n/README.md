@@ -64,7 +64,7 @@ after the runner's clean exit and final GPU snapshot. The audit requires
 all 108 numerical controls and 540 timed intervals, three actual GGUF
 weights, six widths and the frozen arm order in each of five rounds.
 The guard binary additionally exercises odd input and output dimensions,
-zero scales and activations, and writes beyond the requested output.
+zero scales and activations, and sentinels after the requested output.
 
 For each weight and width, report separate wall and CUDA-event medians,
 MAD/median, and paired control-minus-shared savings against all five
