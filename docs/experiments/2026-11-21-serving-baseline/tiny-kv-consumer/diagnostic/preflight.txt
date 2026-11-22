@@ -1,0 +1,26 @@
+2026-11-22T04:28:27,286749086-05:00
+b3258cd5e1ad92dfae3e873dc42a6da25fc002a8
+e1403e0dbe2037cd8fc2b0af32addf97a4df3488
+/mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf: OK
+/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/research-1121/consolidation/target/release/m40-llm: OK
+/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/research-1121/main-reference/target/release/m40-llm: OK
+76bd2d476450b35a43d294470b091e21d81624a4f3d70d2542c07bd8fbefad93  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf
+a6462eb0b64326c47eb465a9bed257700794438f0a32b01296f2f454a6554036  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/research-1121/consolidation/target/release/m40-llm
+68c13529ab6182de91810181964d5b74b6ed93636f0a149e6bf7347a6fa4519c  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/research-1121/main-reference/target/release/m40-llm
+8d2a032a1f993309b12dfb8be6f24b4ef18bd72a73a5ee7e3d90ad05da00bbc0  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/research-1121/consolidation/target/release/examples/research_http_load
+7d0b0038af46a468998d81ef606ca1754ddca75598c18be5b744d906cbe0a148  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/research-1121/consolidation/target/release/examples/research_http_pairs
+a3d3b51c9ce58eb893a74d0efece48f49a112e0a290ce457ddbcdf00530288c1  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/research-1121/consolidation/docs/experiments/2026-11-21-protocol/performance-contexts.json
+ELF file    1: m40-llm.1.sm_52.cubin
+ELF file    1: m40-llm.1.sm_52.cubin
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2025 NVIDIA Corporation
+Built on Fri_Feb_21_20:23:50_PST_2025
+Cuda compilation tools, release 12.8, V12.8.93
+Build cuda_12.8.r12.8/compiler.35583870_0
+process_clock_ticks_per_second=100
+2026-11-22T04:28:44,820448734-05:00
+uuid, name, driver_version, pstate, temperature.gpu, clocks.current.sm [MHz], clocks.current.memory [MHz], memory.used [MiB], utilization.gpu [%]
+GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P8, 34, 324 MHz, 405 MHz, 0 MiB, 0 %
+pid, process_name, used_gpu_memory [MiB]
+9708df3f00246ef34b12f92aa43f28194f0a79aa97c13d7e262adb12a0ce7f5e  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/research-1121/consolidation/target/release/examples/research_serving_ids
+71a7ceb74107e0e9c75e2d8ad7de026983c98058b781e167fefb7309f8d7c8ad  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/research-1121/raw/tiny-kv-consumer-01/request.json
