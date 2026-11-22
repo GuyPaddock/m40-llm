@@ -1,0 +1,4 @@
+2026-11-21T21:23:58-05:00
+5e3a7d9e99155f652b5ca82bdd786e0def566485
+uuid, driver_version, temperature.gpu, memory.used [MiB]
+GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, 580.159.04, 36, 0 MiB

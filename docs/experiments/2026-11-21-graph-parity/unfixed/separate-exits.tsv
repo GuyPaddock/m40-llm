@@ -1,0 +1,4 @@
+test_native_q8_graph_sequences	101
+test_native_q8_graph_capture_cancellation	101
+test_native_q8_graph_first_launch_rejection	101
+test_native_q8_graph_later_launch_rejection	101
