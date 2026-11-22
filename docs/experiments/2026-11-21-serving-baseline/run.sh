@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# run.sh qwen-{short,medium,long,q4-short}|tiny-{default,dense} NEW_OUTPUT_DIR
+# run.sh qwen-{short,medium,long,q4-short}|tiny-{default,dense,kv-consumer} NEW_OUTPUT_DIR
 set -euo pipefail
 source "$(dirname "$0")/server.sh"
 cohort=$1
 tiny_hash=76bd2d476450b35a43d294470b091e21d81624a4f3d70d2542c07bd8fbefad93
 qwen_hash=4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d
 ids_args=()
-if [[ "$cohort" == tiny-default || "$cohort" == tiny-dense ]]; then
+if [[ "$cohort" == tiny-default || "$cohort" == tiny-dense || "$cohort" == tiny-kv-consumer ]]; then
     start_study "$2" "$HOME/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf" "$tiny_hash"
     admission="$workspace/main-baseline/docs/experiments/2026-11-21-main-baseline/models.jsonl.gz"
     gzip -dc "$admission" | jq -cs --arg h "$tiny_hash" 'map(select(.sha256==$h and .mapped_all and .mapped_head))|if length==1 then .[0] else error("TinyLlama admission") end' > "$out/model.json"
@@ -15,6 +15,12 @@ if [[ "$cohort" == tiny-default || "$cohort" == tiny-dense ]]; then
     stop_ids=$(jq -c '.inputs[0].stop_ids' "$out/model.json")
     context=$(jq .context "$out/model.json")
     layers=22
+    if [[ "$cohort" == tiny-kv-consumer ]]; then
+        fixture=470f091879782806371e76d20ef4d1c83d9d186a:docs/experiments/2026-11-21-kv-runs
+        git -C "$consolidation" show "$fixture/tiny-consumer-request.json" > "$out/request.json"
+        git -C "$consolidation" show "$fixture/tiny-consumer-ids.json" > "$out/expected-ids.json"
+        prompt_count=$(jq -er '.length|select(.==1390)' "$out/expected-ids.json")
+    fi
 else
     shape=${cohort#qwen-}
     case "$shape" in
@@ -40,7 +46,9 @@ fi
 ids_tool="$consolidation/target/release/examples/research_serving_ids"
 "$ids_tool" "${ids_args[@]}" "$model" "$out/request.json" > "$out/phase4-prompt-ids.json"
 sha256sum "$ids_tool" "$out/request.json" >> "$out/preflight.txt"
-if [[ "$cohort" == tiny-* ]]; then
+if [[ "$cohort" == tiny-kv-consumer ]]; then
+    cmp "$out/phase4-prompt-ids.json" "$out/expected-ids.json"
+elif [[ "$cohort" == tiny-* ]]; then
     jq -e --slurpfile phase4 "$out/phase4-prompt-ids.json" '.inputs[0].ids == $phase4[0].ids and .inputs[0].stop_ids == $phase4[0].stop_ids' "$out/model.json"
 else
     jq -e --slurpfile phase4 "$out/phase4-prompt-ids.json" '.prompt_ids == $phase4[0].ids' "$out/case.json"
@@ -52,9 +60,19 @@ fi
 jq '.stream=true|del(.include_metrics)' "$out/request.json" > "$out/stream-request.json"
 configure() {
     local arm=$1
+    clear_flags
     binary="$phase4_bin"
     binary_args=(--max-context-tokens "$context")
-    if [[ "$cohort" == tiny-* ]]; then
+    if [[ "$cohort" == tiny-kv-consumer ]]; then
+        binary_args+=(--kv-compress-mode block-select-exact --kv-exact-old-backing fp16-k-q4-v
+            --kv-recent-window 1024 --kv-compress-block 32 --kv-compress-top-blocks 64)
+        if [[ "$arm" == 0 ]]; then
+            export M40LLM_KV_EXACT_BLOCK_STAGING=1
+            binary_args+=(--kv-exact-old-attention staged)
+        else
+            binary_args+=(--kv-exact-old-attention fp16-k-q4-v-direct)
+        fi
+    elif [[ "$cohort" == tiny-* ]]; then
         if [[ "$arm" == 0 ]]; then binary="$main_bin"; binary_args=(); fi
         if [[ "$cohort" == tiny-dense ]]; then binary_args+=(--kv-compress-mode off); fi
     elif [[ "$arm" == 1 ]]; then
@@ -64,7 +82,6 @@ configure() {
 # Untimed separate CLI ID trace and streamed HTTP timing companion for each arm.
 for arm in 0 1; do
     configure "$arm"
-    clear_flags
     export M40LLM_DECODE_LOG=1 M40LLM_RESEARCH_TOKEN_TIMINGS=1
     prompt=$(jq -r '.prompt' "$out/request.json"; printf x)
     prompt=${prompt%x}
@@ -75,16 +92,22 @@ for arm in 0 1; do
     /usr/bin/time -f 'wall_s=%e user_s=%U sys_s=%S peak_rss_kib=%M' -o "$out/cli-$arm.time" \
         "$binary" generate "$model" "$prompt" --prompt-format raw --max-tokens "$maximum" --top-k 1 --seed 0 --require-sm52 "${binary_args[@]}" > "$out/cli-$arm.stdout" 2> "$out/cli-$arm.stderr"
     gpu_snapshot > "$out/cli-$arm.after"
+    if [[ "$cohort" == tiny-kv-consumer ]]; then export M40LLM_PROFILE_LOG=1; fi
     start_server "$binary" "trace-$arm" "${binary_args[@]}"
     call_clients "calibrate-$arm" 0 "$out/request.json"
     rg -q "mapped $layers standard layers" "$out/trace-$arm.log"
     rg -q "(full-layer forward|packed prefix prefill) enabled layers=$layers" "$out/trace-$arm.log"
+    if [[ "$cohort" == tiny-kv-consumer ]]; then
+        operation=fp16_k_q4_v_old_direct
+        if [[ "$arm" == 0 ]]; then operation=staged_fp16_k_q4_v_old; fi
+        rg -q "op=attention_last_token_f32_gqa_block_select_exact_${operation} launches=[1-9]" "$out/trace-$arm.log"
+    fi
     rg 'sampled token id=[0-9]+' "$out/trace-$arm.log" | sed -E 's/.*sampled token id=([0-9]+).*/\1/' | jq -s '.' > "$out/ids-$arm.json"
     rg 'sampled token id=[0-9]+' "$out/cli-$arm.stderr" | sed -E 's/.*sampled token id=([0-9]+).*/\1/' | jq -s '.' > "$out/cli-ids-$arm.json"
     cmp "$out/ids-$arm.json" "$out/cli-ids-$arm.json"
     jq -e --argjson cap "$maximum" 'length>0 and length<=$cap' "$out/ids-$arm.json" >/dev/null
     stop_server
-    clear_flags
+    configure "$arm"
     start_server "$binary" "stream-$arm" "${binary_args[@]}"
     call_clients "stream-warm-$arm" 0 "$out/stream-request.json"
     call_clients "stream-measured-$arm" 0 "$out/stream-request.json"
@@ -99,7 +122,6 @@ series() {
         for arm in "$((trial%2))" "$((1-trial%2))"; do
             label="$phase-$trial-$arm"
             configure "$arm"
-            clear_flags
             start_server "$binary" "server-$label" "${binary_args[@]}"
             call_clients "warm-$label" 0 "$out/request.json"
             call_clients "$label" 0 "$out/request.json"

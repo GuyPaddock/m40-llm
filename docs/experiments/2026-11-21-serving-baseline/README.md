@@ -75,3 +75,24 @@ fallback-only execution at the full-layer log check. A missing GPU path
 ends this cohort at the first failed validation. This is a short-context
 secondary baseline. It supplies neither a historical-block quality result
 nor a matched speed comparison between different weight quantizations.
+
+## Direct versus staged historical KV in a complete request
+
+Run cohort `tiny-kv-consumer` with the Phase 4 release server for both
+arms. Qwen2.5-3B uses 128-wide heads and its mixed staged runtime is
+unsupported. TinyLlama F16 uses 64-wide heads and supports both consumers.
+The fixed input at `research/1121-quantized-kv` commit `470f091`
+contains 64 archive lines inside the TinyLlama chat template. The tokenizer
+produced 1,390 prompt IDs. The generation cap is 32. With a 1,024-token
+recent window, 32-token blocks and top-64, all historical blocks fit in
+both arms. Each uses the same FP16 K and Q4 V backing at capacity 2,048.
+
+Arm 0 explicitly requests staged attention and its session workspace.
+Arm 1 uses the existing direct consumer. Check the diagnostic HTTP
+operation names, complete CLI/HTTP IDs, stop and prompt accounting before
+ranking equivalent requests. Only the diagnostic HTTP run enables per-op
+profiling. The ordinary stream and alternating buffered trials include
+their respective full prefill, append and decode costs. Retain differences
+in prefill mode and residency. The normal 5% request gate and confirmation
+rules apply. A result on TinyLlama cannot establish an equivalent Qwen
+comparison or attribute the entire wall-time difference to one kernel.
