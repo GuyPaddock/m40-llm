@@ -27,3 +27,9 @@ The source inventory uses full Git hashes and a separate report SHA-256. Indepen
 ### Sampling token latency
 
 For a diagnostic companion set M40LLM_RESEARCH_TOKEN_TIMINGS=1 and request include_metrics on the buffered generation endpoint. token_elapsed_ms contains one request-relative monotonic wall offset per sampled ID, including sampled stop tokens. Its first value is generation-admission TTFT; adjacent differences are the inter-token observations. Compute per-request median/P95 and report the pooled distribution separately. Client TTFT includes transport/queueing and still requires client observations. The ordinary buffered timing arm omits this setting. Compare it with the instrumented arm before interpreting diagnostics.
+
+### November 21 host activity amendment
+
+The operator reported a concurrent Gentoo system upgrade after the first native/split run. No time-aligned host series was captured for that run. Its paired interval measures within-cohort variability. It cannot estimate bias from persistent CPU contention, I/O, NUMA effects or host-side CUDA submission delays. Preserve the original measurements. Keep within-device correctness findings separate from latency qualification. Do not suspend the upgrade.
+
+For remaining timed cohorts launch `bash docs/experiments/2026-11-21-protocol/host-load.sh "$$" > HOST.log &` from the host-visible benchmark shell. Capture CPU availability, /proc/loadavg, CPU counters and pressure, I/O and memory pressure, and counts of relevant compiler/package processes. Stop only the sampler owned by the cohort at teardown. Compare timestamps with each arm and GPU utilization/clocks/temperature. Keep all rows. Repeat borderline, load-correlated or host-sensitive promotion decisions in a quieter cohort. Preserve independent statistics rather than pooling unlike host conditions. Unknown background load is an explicit limitation for CPU, HTTP, cold-load and fairness conclusions.
