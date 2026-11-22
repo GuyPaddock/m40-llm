@@ -71,3 +71,22 @@ evidence. Insufficient dense coverage or an unsupported normal Q4 path
 makes model qualification inconclusive. An operator advantage or a Q8
 model's previous calibration cannot qualify Q4 inference. Keep all
 branch work explicit and experimental.
+
+## Capture and threshold replay
+
+From this worktree, source `scripts/dev-env.sh` and build the tools.
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo build --locked --release --features cuda,server --target-dir target/capture --example model_quality
+cargo build --locked --release --no-default-features --target-dir target/capture --example sparse_q4_calibrate
+flock ../raw/m40-benchmark.lock bash docs/experiments/2026-11-22-sparse-q4-live/capture.sh ../raw/sparse-q4-live-01
+```
+
+The calibration tool checks the checkpoint and corpus identities, the six
+task histories, and the capture artifact digest. For each layer it pools
+absolute FP32 magnitudes from the eligible generated rows and takes the
+nearest-rank 50th and 75th percentiles. The selector retains values whose
+magnitude strictly exceeds the cutoff. Ties are discarded. The runner
+writes the threshold digest before opening the held-out split and checks it
+again after the run. Both splits use the original dense GGUF and explicitly
+disabled graph and prepared-weight paths. These observations are untimed.
