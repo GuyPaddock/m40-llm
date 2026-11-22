@@ -79,3 +79,4 @@ for phase in diagnostic primary; do
     done
 done
 gpu_snapshot > "$out/complete.txt"
+python3 "$study/score-chunking.py" "$out" > "$out/summary.json"

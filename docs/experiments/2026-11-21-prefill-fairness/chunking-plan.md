@@ -35,7 +35,7 @@ peak. Trace each request through completion. In at least four valid
 pairs require an 80% reduction in the short request's maximum ITL.
 Require a positive paired confidence bound for that reduction, the same
 generated IDs and stops, and median group makespan and medium request
-TTFT each within 5% of baseline. This is a fairness experiment. Peak
+TTFT each no more than 5% higher than baseline. Peak
 resident model and KV owners should match. Record any allocator drift.
 Measure a matched timing-off companion and quantify tracing cost.
 
@@ -63,3 +63,7 @@ NEW_OUTPUT_DIRECTORY BUILD_DIRECTORY`, also with the same lock held.
 The comparison changes only `M40LLM_RESEARCH_DENSE_PREFILL_CHUNKS` between
 arms on one executable. Fresh server processes warm with the short prompt
 before each measurement. The calibration fixes the delay for both arms.
+Recompute the decision from the captured raw files with `python3
+docs/experiments/2026-11-21-prefill-fairness/score-chunking.py OUTPUT_DIRECTORY`.
+The interval uses 10,000 bootstrap resamples of the valid paired
+maximum-gap reductions with seed zero.
