@@ -119,3 +119,5 @@ their respective full prefill, append and decode costs. Retain differences
 in prefill mode and residency. The normal 5% request gate and confirmation
 rules apply. A result on TinyLlama cannot establish an equivalent Qwen
 comparison or attribute the entire wall-time difference to one kernel.
+
+The [dense TinyLlama comparison](tiny-dense/README.md) records the first completed cross-revision cohort with matching CLI and HTTP token IDs.
