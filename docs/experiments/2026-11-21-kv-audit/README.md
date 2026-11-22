@@ -76,3 +76,20 @@ use the arm array `["dense","quantized_all","quantized_top8"]`. The check
 rejects missing or duplicate task/context rows within any selected arm.
 Review the corresponding compressed continuations for meaning and
 degeneration, including new repetition absent from the dense answer.
+
+## Preserving all vocabulary scores
+
+The [archive tool](pack.sh) requires the final completion marker before
+opening a destination. It runs the independent numerical replay, retains
+all generation and host records, and stores each case's complete FP32
+vectors in its own reproducibly ordered tar.zst. Every original file and
+every transport file has a SHA-256 entry. The [restore tool](unpack.sh)
+checks both manifests. A round trip on the completed ledger-short case
+restored its nine vocabulary arrays and five report/provenance files
+byte-for-byte. The incomplete broad grid was rejected before packaging.
+
+```sh
+bash "$study/pack.sh" ORIGINAL_RUN FROZEN_INPUTS NEW_BUNDLE
+bash "$study/unpack.sh" NEW_BUNDLE NEW_REPLAY_DIRECTORY
+python3 "$study/replay.py" NEW_REPLAY_DIRECTORY/report.jsonl NEW_REPLAY_DIRECTORY/inputs.json
+```
