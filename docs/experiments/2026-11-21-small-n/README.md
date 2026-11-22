@@ -56,3 +56,30 @@ suite with warnings denied (223 reported passes, zero failures), and
 CUDA/server all-target Clippy with NVCC and cuBLAS enabled. The [build
 records](build/status.tsv) include exits, exact commands and compressed
 logs. The CPU-only run contributes no GPU parity or timing evidence.
+
+## Independent operator accounting
+
+Run `jq -s --slurpfile budget docs/experiments/2026-11-21-small-n/target-budget.json -f docs/experiments/2026-11-21-small-n/operator-audit.jq RAW/report.jsonl`
+after the runner's clean exit and final GPU snapshot. The audit requires
+all 108 numerical controls and 540 timed intervals, three actual GGUF
+weights, six widths and the frozen arm order in each of five rounds.
+The guard binary additionally exercises odd input and output dimensions,
+zero scales and activations, and writes beyond the requested output.
+
+For each weight and width, report separate wall and CUDA-event medians,
+MAD/median, and paired control-minus-shared savings against all five
+alternatives. With five paired samples the exact 95% percentile bootstrap
+interval for the sample median of differences is the observed minimum
+and maximum: each extreme alone occurs as the resampled median with
+probability 0.05792. No independence across tensor families is presumed.
+Report both the fastest existing control and the serial control actually
+used by the four-row target. Warm SGEMM retains a 90,177,536-byte expanded
+weight; dequant-plus-SGEMM charges its preparation in the timed interval.
+
+To screen whether the direct verifier could benefit, multiply the average
+of the three median four-row savings by 36. Also report the largest observed
+pair scaled to 36 as a sensitivity check. Neither estimate measures an
+unobserved layer or a full verification. A synthetic control with a 0.1 ms
+saving per layer produced 3.6 ms on both clocks while retaining a faster
+existing multirow control. Changed output bits, a duplicate arm position
+and a missing width all failed analysis. These are analysis checks only.
