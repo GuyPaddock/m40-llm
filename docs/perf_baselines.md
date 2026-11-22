@@ -2,6 +2,10 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-11-22 Maxwell qualification
+
+The [candidate matrix](experiments/2026-11-21-integration/candidates.tsv) links each source and raw report. Qwen native-head128 graph replay preserved all 512 IDs and improved paired HTTP throughput by 0.361% [0.269%, 0.477%] at e6567e5. Mixed cache peak residency at e100c54 was 22 MiB higher at capacity 1,024, 3 MiB higher at 3,072 and 47 MiB lower at 8,448. Both results fall below their promotion gates. The four-row Q8 down operator at 16fbcc4 saved about 0.150 ms per layer over four independent calls and 0.100 ms over the existing multi-row split path. Complete-target timings are pending. At 377bec4, holding 4,096 idle tokens in a second slot did not increase active attention latency.
+
 ## 2026-11-21 Maxwell consolidation
 
 Five alternating short Qwen2.5-3B Q8_0 dense HTTP pairs on the M40 produced

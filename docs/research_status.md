@@ -7,7 +7,7 @@ against the current code, worktree, Git history, and linked raw results.
 ## November consolidation
 
 Use the [integration matrix](experiments/2026-11-21-integration/README.md)
-for the first 17 dispositions. Graph parity and speculative rollback have
+for the current 23 dispositions. Graph parity and speculative rollback have
 hardware evidence in both cuBLAS builds. The [evidence audit](experiments/2026-11-21-evidence-audit/README.md)
 includes the original raw logs and verifier source patch. Six
 [source-isolated build checks](experiments/2026-11-21-build-compatibility/README.md)
@@ -17,11 +17,11 @@ Phase 4 is pinned at 48c6333 and remote main at e1403e0. The [inventory](experim
 
 | Study | November evidence or outstanding decision |
 |---|---|
-| Graph | On research/1121-graph-dispatch, bfae111 records four failing unrepaired paths and e2b4739 passes the exact dispatch and replay checks with cuBLAS on and off. Full-model HTTP and setup diagnostics use 66f21e3. Speed qualification is open. |
-| KV | On research/1121-quantized-kv, c484536 retains all dense answers (19/24 short and 10/24 long pass). At 44f15e9, top-8 loses two long dense-passing answers. At 46b4a46 the 3072-position allocation reconciles to the byte. Full generation and logit replay, measured device residency and matched staging remain separate decisions. |
+| Graph | On research/1121-graph-dispatch, bfae111 records four failing unrepaired paths and e2b4739 passes the exact dispatch and replay checks with cuBLAS on and off. Full-model HTTP and setup diagnostics use 66f21e3. The Qwen native-head128 HTTP gain was 0.361% at e6567e5, below the 5% gate. TinyLlama synchronous F16 fell back before capture. |
+| KV | On research/1121-quantized-kv, c484536 retains all dense answers (19/24 short and 10/24 long pass). At 9d4b78c, top-8 loses three long dense-passing answers and top-64 retains all 29 passes where all history fits. At 46b4a46 the 3072-position allocation reconciles to the byte. At e100c54, mixed backing saves 47 MiB of 4,674 MiB whole-process peak at capacity 8,448. Matched consumer timing and beyond-top-64 quality remain open. |
 | Prepared Q8 | Research/1121-q8-projections 110f8c7 recovers all 36 layer timings in five M40 configurations. Gate/up/SwiGLU and down projection dominate the remaining projection cost. The November short split comparison uses a different baseline from the compound and portfolio runs. |
-| Small-N and rollback | Research/1121-verifier-correctness 081cc65 records actual two-build rollback/near-tie results. Research/1121-small-n-verification a438032 adds the separately gated six-arm small-row comparison. |
-| Other studies | Research/1121-active-row-kv 2228ea7 binds actual active lengths and idle ownership. Research/1121-gsq-quality 59aaf76 identifies comparable model files and the missing layer dispatch. On independently main-based research/1121-gguf-compatibility, 541cec1 fixes checked shape arithmetic and 1989d82 qualifies it. |
+| Small-N and rollback | Research/1121-verifier-correctness 081cc65 records actual two-build rollback/near-tie results. Research/1121-small-n-verification 16fbcc4 passes four-row operator admission on three weights. The complete-target binary is pinned at cfb0c58. |
+| Other studies | Research/1121-active-row-kv 377bec4 closes idle-slot indexing with exact outputs at four idle lengths and a distinct two-active positive control. Research/1121-gsq-quality 59aaf76 identifies comparable model files and the missing layer dispatch. On independently main-based research/1121-gguf-compatibility, 541cec1 fixes checked shape arithmetic and 1989d82 qualifies it. |
 
 The 64-token packed-prefix output trace is complete on research/1121-output-pruning
 8965fd3. On Phase 4 the terminal hidden row is dead for a KV-only prefix;
