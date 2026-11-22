@@ -30,6 +30,7 @@ for arm in "${arms[@]}"; do
     if [[ "$2" == compound ]]; then
         rg -q 'packed prefix prefill enabled layers=36' "$raw/$arm.log"
         rg -q '^M40LLM_Q8_PREFILL_BACKEND=dequant-sgemm$' "$raw/$arm.start"
+        rg -q '^M40LLM_PREFILL_CHUNK_SIZE=128$' "$raw/$arm.start"
         if [[ "$arm" == joint-only ]]; then owner=JointOnly; else owner=RetainSplit; fi
         rg -q "ownership=$owner" "$raw/$arm.log"
     else
