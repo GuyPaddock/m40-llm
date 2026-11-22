@@ -2,7 +2,7 @@
 
 import unittest
 
-from history import Geometry, check_cache, passed
+from history import Geometry, check_cache, passed, storage
 
 
 class BoundaryAuditTests(unittest.TestCase):
@@ -31,3 +31,11 @@ class BoundaryAuditTests(unittest.TestCase):
         self.assertFalse(passed('{"passed":true,"port":23,"extra":1}', rubric))
         self.assertFalse(passed('invalid', rubric))
         self.assertTrue(passed(" KeSTrel\n", {"kind":"exact","answers":["Kestrel"]}))
+
+    def test_block_width_changes_only_summary_storage(self) -> None:
+        """Doubling block width halves the block summary count while preserving raw K/V backing."""
+        small, large = storage(32), storage(64)
+        self.assertEqual(sum(small.values()), 143931024)
+        self.assertEqual(sum(large.values()), 138615696)
+        self.assertEqual(small.pop("summary_index_bytes") - large.pop("summary_index_bytes"), 5315328)
+        self.assertEqual(small, large)

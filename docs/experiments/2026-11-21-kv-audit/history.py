@@ -54,13 +54,58 @@ def passed(output: str, rubric: Rubric) -> bool:
             and all(type(actual[k]) is type(v) and actual[k] == v for k, v in expected.items()))
 
 
+def storage(block_size: int) -> dict[str, int]:
+    """Reconstruct the fixed Qwen cache allocation by native storage component."""
+    layers, kv_heads, head_width, capacity, recent = 36, 2, 128, 4096, 1024
+    elements = layers * kv_heads * head_width
+    old_blocks = (capacity - recent + block_size - 1) // block_size
+    return {
+        "recent_fp16_bytes": elements * recent * 4,
+        "old_k_fp16_bytes": elements * capacity * 2,
+        "q4_old_v_payload_bytes": elements * capacity // 2,
+        "q4_old_v_scale_bytes": layers * kv_heads * capacity * 4,
+        "summary_index_bytes": layers * (old_blocks * (kv_heads * head_width * 12 + 4) + 4),
+    }
+
+
+def check_constructors(log: Path, cases: set[str]) -> int:
+    """Associate constructor diagnostics with each generation or aligned prefix replay."""
+    expected = {(phase, case, arm) for phase in ("generation","prefixes")
+                for case in cases for arm in ARMS if arm != "dense"}
+    seen: set[tuple[str, str, str]] = set()
+    owner = None
+    for line in log.read_text().splitlines():
+        if line.startswith("boundary "):
+            _, phase, case, arm = line.split()
+            owner = (phase, case, arm)
+        elif line.startswith("[kv-compress]"):
+            if owner is None:
+                raise ValueError("unowned cache constructor")
+            if owner[1] not in cases:
+                continue
+            if owner not in expected or owner in seen:
+                raise ValueError(f"unexpected or duplicate constructor {owner}")
+            seen.add(owner)
+            fields = dict(field.split("=", 1) for field in line.split()[1:] if "=" in field)
+            parts = storage(64 if owner[2] == "full_mixed" else 32)
+            for field,value in parts.items():
+                check_value(value, int(fields[field]), field)
+            check_value(sum(parts.values()), int(fields["actual_allocated_bytes"]), "native allocation total")
+            check_value(150994944, int(fields["dense_equivalent_bytes"]), "native dense equivalent")
+            check_value(8 if owner[2] == "top8" else 64, int(fields["top_blocks"]), "constructor top blocks")
+            check_value("fp16-k-q4-v-direct", fields["exact_old_attention"], "consumer")
+    check_value(expected, seen, "mixed cache constructor coverage")
+    return len(seen)
+
+
 def check_cache(state: Geometry, arm: str, consumed: int, control: bool) -> None:
     """Check selected history coverage and the device-read sequence length in every layer."""
     size = 64 if arm == "full_mixed" else 32
     old = max(0, consumed - 1024)
     blocks = (old + size - 1) // size
     budget = min(8 if arm == "top8" else 64, blocks) if arm != "dense" else blocks
-    for field, expected in (("old_blocks", blocks), ("old_tokens", old), ("capacity", 4096),
+    allocated = 150994944 if arm == "dense" else sum(storage(size).values())
+    for field, expected in (("allocated_bytes", allocated), ("old_blocks", blocks), ("old_tokens", old), ("capacity", 4096),
                             ("consumed_tokens", consumed), ("physical_lengths", [consumed] * 36),
                             ("block_size", size), ("configured_old_block_budget", budget),
                             ("is_compressed", arm != "dense"), ("all_old_blocks_fit_top64", blocks <= 64)):
@@ -178,7 +223,9 @@ def replay_history(report: Path, inputs: Path) -> dict[str, object]:
         rows_used += len(rows)
     check_value(rows_used, len(records), "unexpected/duplicate report rows")
     check_value(filenames, {p.name for p in directory.iterdir()}, "readback file set")
-    return {"source":manifest["source"], "report_sha256":hashlib.sha256(report.read_bytes()).hexdigest(),
+    constructors = check_constructors(report.with_name("run.log"), {c["id"] for c in cases})
+    return {"cache_constructors":constructors,"components_32":storage(32),"components_64":storage(64),
+            "source":manifest["source"], "report_sha256":hashlib.sha256(report.read_bytes()).hexdigest(),
             "vectors":len(filenames), "cases":summaries, "tracked_bytes_after":records[-1]["final_bytes"]}
 
 

@@ -1,0 +1,28 @@
+boundary generation nov-crate-2048 dense
+boundary generation nov-crate-3200 dense
+boundary prefixes nov-crate-2048 dense
+boundary generation nov-crate-2048 full_mixed
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=150994944 actual_allocated_bytes=138615696 recent_fp16_bytes=37748736 old_k_fp16_bytes=75497472 q4_old_v_payload_bytes=18874368 q4_old_v_scale_bytes=1179648 summary_index_bytes=5315472 compression_ratio=0.918
+boundary prefixes nov-crate-2048 full_mixed
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=150994944 actual_allocated_bytes=138615696 recent_fp16_bytes=37748736 old_k_fp16_bytes=75497472 q4_old_v_payload_bytes=18874368 q4_old_v_scale_bytes=1179648 summary_index_bytes=5315472 compression_ratio=0.918
+boundary generation nov-crate-2048 top64
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=150994944 actual_allocated_bytes=143931024 recent_fp16_bytes=37748736 old_k_fp16_bytes=75497472 q4_old_v_payload_bytes=18874368 q4_old_v_scale_bytes=1179648 summary_index_bytes=10630800 compression_ratio=0.953
+boundary prefixes nov-crate-2048 top64
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=150994944 actual_allocated_bytes=143931024 recent_fp16_bytes=37748736 old_k_fp16_bytes=75497472 q4_old_v_payload_bytes=18874368 q4_old_v_scale_bytes=1179648 summary_index_bytes=10630800 compression_ratio=0.953
+boundary generation nov-crate-2048 top8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=150994944 actual_allocated_bytes=143931024 recent_fp16_bytes=37748736 old_k_fp16_bytes=75497472 q4_old_v_payload_bytes=18874368 q4_old_v_scale_bytes=1179648 summary_index_bytes=10630800 compression_ratio=0.953
+boundary prefixes nov-crate-2048 top8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=150994944 actual_allocated_bytes=143931024 recent_fp16_bytes=37748736 old_k_fp16_bytes=75497472 q4_old_v_payload_bytes=18874368 q4_old_v_scale_bytes=1179648 summary_index_bytes=10630800 compression_ratio=0.953
+boundary prefixes nov-crate-3200 dense
+boundary generation nov-crate-3200 full_mixed
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=150994944 actual_allocated_bytes=138615696 recent_fp16_bytes=37748736 old_k_fp16_bytes=75497472 q4_old_v_payload_bytes=18874368 q4_old_v_scale_bytes=1179648 summary_index_bytes=5315472 compression_ratio=0.918
+boundary prefixes nov-crate-3200 full_mixed
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=150994944 actual_allocated_bytes=138615696 recent_fp16_bytes=37748736 old_k_fp16_bytes=75497472 q4_old_v_payload_bytes=18874368 q4_old_v_scale_bytes=1179648 summary_index_bytes=5315472 compression_ratio=0.918
+boundary generation nov-crate-3200 top64
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=150994944 actual_allocated_bytes=143931024 recent_fp16_bytes=37748736 old_k_fp16_bytes=75497472 q4_old_v_payload_bytes=18874368 q4_old_v_scale_bytes=1179648 summary_index_bytes=10630800 compression_ratio=0.953
+boundary prefixes nov-crate-3200 top64
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=150994944 actual_allocated_bytes=143931024 recent_fp16_bytes=37748736 old_k_fp16_bytes=75497472 q4_old_v_payload_bytes=18874368 q4_old_v_scale_bytes=1179648 summary_index_bytes=10630800 compression_ratio=0.953
+boundary generation nov-crate-3200 top8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=150994944 actual_allocated_bytes=143931024 recent_fp16_bytes=37748736 old_k_fp16_bytes=75497472 q4_old_v_payload_bytes=18874368 q4_old_v_scale_bytes=1179648 summary_index_bytes=10630800 compression_ratio=0.953
+boundary prefixes nov-crate-3200 top8
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=150994944 actual_allocated_bytes=143931024 recent_fp16_bytes=37748736 old_k_fp16_bytes=75497472 q4_old_v_payload_bytes=18874368 q4_old_v_scale_bytes=1179648 summary_index_bytes=10630800 compression_ratio=0.953

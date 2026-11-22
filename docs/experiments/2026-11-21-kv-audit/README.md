@@ -152,3 +152,16 @@ cohort passes these checks.
 PYTHONDONTWRITEBYTECODE=1 python3 docs/experiments/2026-11-21-kv-audit/history.py \
     ../raw/kv-history-boundary-01/report.jsonl ../raw/kv-history-inputs.json
 ```
+
+At capacity 4,096, [twelve native constructor records](history-crate-constructors.txt) across the first two
+complete cases agree with the allocation formula for the three mixed arms.
+The native total is 143,931,024 bytes with 32-token blocks and 138,615,696
+with 64-token blocks. The 5,315,328-byte difference comes entirely from
+the number of block summaries, counts and accumulators. The recent ring,
+old K, packed old V and V scales are identical. Top-8 and top-64 both
+allocate the same 143,931,024 bytes at width 32. The dense K/V payload
+is 150,994,944 bytes. The Rust tracked-device counter was 4,472,663,048
+bytes in all four arms. It cannot resolve these native allocation
+differences or establish whole-process peak savings. The complete replay
+also matches every constructor to a specific free-generation or
+dense-trajectory record before accepting its cache accounting.
