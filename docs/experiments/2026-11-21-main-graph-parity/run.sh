@@ -4,8 +4,9 @@ set -euo pipefail
 artifacts=$(realpath "${1:?compiled binaries}")
 out=$(realpath -m "${2:?fresh destination}")
 model=$(realpath "${3:?pinned TinyLlama F16 GGUF}")
-mkdir "$out"
 study=$(realpath docs/experiments/2026-11-21-main-graph-parity)
+binary_hashes=$(realpath "${4:-$study/binaries.sha256}")
+mkdir "$out"
 for variable in $(compgen -e | rg '^M40LLM_' || true); do unset "$variable"; done
 export M40LLM_ENABLE_NVCC=1 M40LLM_FORCE_M40=1 M40LLM_RESEARCH_TINY_MODEL="$model"
 export CUDA_VISIBLE_DEVICES=GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852
@@ -22,7 +23,12 @@ snapshot() {
     git status --porcelain
     [[ -z $(git status --porcelain) ]]
     printf '%s  %s\n' 76bd2d476450b35a43d294470b091e21d81624a4f3d70d2542c07bd8fbefad93 "$model" | sha256sum -c -
-    (cd "$artifacts" && sha256sum -c "$study/binaries.sha256")
+    (cd "$artifacts" && sha256sum -c "$binary_hashes")
+    if [[ -s "$artifacts/sources.tsv" ]]; then cat "$artifacts/sources.tsv"; fi
+    nvcc --version
+    for executable in "$artifacts"/{unfixed-on,fixed-on,fixed-off}-{grid,session}; do
+        cuobjdump -lelf "$executable" | rg 'sm_52'
+    done
     env | rg '^(M40LLM_|CUDA_)'
     snapshot
 } > "$out/preflight.txt"

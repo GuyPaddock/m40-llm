@@ -46,3 +46,11 @@ binary directory, new output directory and the pinned TinyLlama F16 file.
 The full-session check uses the first eight IDs of the verified A5 prompt.
 Each case gets a separate process so an anticipated negative-control
 failure cannot poison subsequent tests.
+
+The [first M40 run](first-run/README.md) passed the two short repaired
+grids and exposed two setup problems. The follow-up keeps synchronized
+cache seeding and validates model mapping after layer slots are allocated
+in both control and candidate. Its binaries use a fresh output directory
+and a separate hash list passed as the driver's fourth argument. The
+original binary manifest remains the reproduction recipe for the
+original run.
