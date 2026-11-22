@@ -8,6 +8,7 @@ use anyhow::{ensure, Context, Result};
 use m40_llm::{
     cuda::{CudaContext, CudaStream, DeviceBuffer},
     evaluation::identity::file_sha256,
+    infer::LoadedModel,
     kv_compression::ScopedRuntimeConfig,
 };
 use serde_json::{json, Value};
@@ -49,7 +50,7 @@ fn snapshot() -> Result<Value> {
     )
 }
 
-pub fn measure(path: &Path, label: &str, capacity: u32, output: &Path) -> Result<()> {
+pub fn measure(path: &Path, label: &str, capacity: u32, cycles: u8, output: &Path) -> Result<()> {
     ensure!(
         !cfg!(debug_assertions) && [1024, 3072, 8448].contains(&capacity),
         "wrong profile or capacity"
@@ -71,13 +72,11 @@ pub fn measure(path: &Path, label: &str, capacity: u32, output: &Path) -> Result
     };
     let mut report = Report::create(output)?;
     let mut model = load_weights(path)?;
-    let config = arm.create_config();
-    let _scope = ScopedRuntimeConfig::new(config.clone());
+    let _scope = ScopedRuntimeConfig::new(arm.create_config());
     ensure!(
         model.kv_cache.is_none(),
         "starting model unexpectedly owns a cache"
     );
-    let slots = model.model_config.block_count;
     let kv_width = (model.model_config.attention_head_count_kv
         * model.model_config.attention_key_length) as usize;
     // Both arms retain the same explicit device inputs before the cache baseline.
@@ -95,14 +94,29 @@ pub fn measure(path: &Path, label: &str, capacity: u32, output: &Path) -> Result
     let baseline = snapshot()?;
     report.append(json!({"kind":"residency_baseline","revision":command_text("git",&["rev-parse","HEAD"])?,
         "model_sha256":MODEL_SHA256,"executable_sha256":file_sha256(&std::env::current_exe()?)?,
-        "arm":arm,"capacity":capacity,"logical_sequences":1,"physical_layer_slots":slots,"environment":settings,
+        "arm":arm,"capacity":capacity,"logical_sequences":1,"physical_layer_slots":model.model_config.block_count,"cycles":cycles,"environment":settings,
         "device":format!("{:?}",model.cuda.current_device_props()?),"memory":baseline,
         "input_scope":"deterministic synthetic FP32 KV append to each actual model layer slot; fixed prepared model owners; no generation"}))?;
+    for cycle in 1..=cycles {
+        measure_cache_lifetime(&mut model, &input, &mut report, arm, capacity, cycle)?;
+    }
+    Ok(())
+}
+
+fn measure_cache_lifetime(
+    model: &mut LoadedModel,
+    input: &DeviceBuffer,
+    report: &mut Report,
+    arm: CacheArm,
+    capacity: u32,
+    cycle: u8,
+) -> Result<()> {
+    let slots = model.model_config.block_count;
     let start = Instant::now();
     if arm == CacheArm::Dense {
         model.allocate_kv_cache_for_layers(capacity)?;
     } else {
-        model.allocate_compressed_kv_cache_for_layers(capacity, &config)?;
+        model.allocate_compressed_kv_cache_for_layers(capacity, &arm.create_config())?;
     }
     let allocation_ms = start.elapsed().as_secs_f64() * 1000.;
     let cache = model.kv_cache.as_ref().context("cache missing")?;
@@ -115,7 +129,7 @@ pub fn measure(path: &Path, label: &str, capacity: u32, output: &Path) -> Result
         "summaries_counts_and_seq_map_bytes":cache.summary_index_bytes(),"seq_map_bytes_excluded_from_reported_total":map_excluded,
         "known_cuda_malloc_requests_bytes":cache.actual_bytes()+map_excluded});
     report.append(
-        json!({"kind":"cache_allocated","allocation_wall_ms":allocation_ms,"occupied":0,
+        json!({"kind":"cache_allocated","cycle":cycle,"allocation_wall_ms":allocation_ms,"occupied":0,
         "memory":snapshot()?,"payloads":categories}),
     )?;
     let mut filled = 0;
@@ -149,10 +163,10 @@ pub fn measure(path: &Path, label: &str, capacity: u32, output: &Path) -> Result
         }
         filled = end;
         report.append(
-            json!({"kind":"cache_populated","occupied_per_layer":end,"memory":snapshot()?}),
+            json!({"kind":"cache_populated","cycle":cycle,"occupied_per_layer":end,"memory":snapshot()?}),
         )?;
     }
     drop(model.kv_cache.take());
-    report.append(json!({"kind":"cache_released","memory":snapshot()?}))?;
+    report.append(json!({"kind":"cache_released","cycle":cycle,"memory":snapshot()?}))?;
     Ok(())
 }

@@ -38,6 +38,8 @@ enum Command {
         arm: String,
         #[arg(long)]
         capacity: u32,
+        #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=3))]
+        cycles: u8,
         #[arg(long)]
         output: PathBuf,
     },
@@ -76,15 +78,16 @@ fn main() -> Result<()> {
             model,
             arm,
             capacity,
+            cycles,
             output,
         } => {
             #[cfg(all(feature = "cuda", nvcc))]
             {
-                residency::measure(&model, &arm, capacity, &output)
+                residency::measure(&model, &arm, capacity, cycles, &output)
             }
             #[cfg(not(all(feature = "cuda", nvcc)))]
             {
-                let _ = (model, arm, capacity, output);
+                let _ = (model, arm, capacity, cycles, output);
                 anyhow::bail!("residency requires CUDA/NVCC")
             }
         }
