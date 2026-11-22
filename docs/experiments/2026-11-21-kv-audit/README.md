@@ -133,3 +133,22 @@ git show e23d162:docs/experiments/2026-10-31-quantized-kv-timing-summary.jq > "$
 jq -es -f "$out/grid.jq" COMPLETED_REPORT.jsonl > "$out/grid.json"
 jq -es -f "$audit/operator-pairs.jq" COMPLETED_REPORT.jsonl
 ```
+
+## Aligned logits beyond 64 historical blocks
+
+`history.py` checks the four boundary cases using the same independent
+FP32 reader and CPU probability calculations as the November quality audit.
+It demands all sixteen generations, all sixteen dense-trajectory replays,
+every expected comparison and file, the original model and prompts, and
+zero tracked device bytes after model teardown. It checks the actual sequence
+length in all 36 layer slots, recomputes old block counts and selection budgets,
+and scores each emitted answer against its frozen exact-text or typed JSON
+rubric. Byte equality is checked over the entire vocabulary at every sampled
+position. The 2K full-mixed/top-64 control must also give identical free text
+and generated IDs. The script emits per-case results only after the complete
+cohort passes these checks.
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 docs/experiments/2026-11-21-kv-audit/history.py \
+    ../raw/kv-history-boundary-01/report.jsonl ../raw/kv-history-inputs.json
+```
