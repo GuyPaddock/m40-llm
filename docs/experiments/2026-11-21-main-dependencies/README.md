@@ -184,11 +184,11 @@ The same preformatted Qwen text also gains an extra BOS on main.
   adds the four-column FP32 CUDA kernel, `build.rs` input tracking, stub,
   device owner wrapper and guard test. a438032 gates the six-row-count
   benchmark. Exact-verification rollback and near-tie cases (9d55c9a,
-  fc487e8, 081cc65) precede live dispatch. Require measured complete
-  target cost against the fastest correct control, including rejected
-  tokens, before an opt-in verifier or a copy-draft study. No requirement
-  to bring a draft generator, controller or multi-request scheduler into
-  the stable Q8 model-support changes.
+  fc487e8, 081cc65) precede live dispatch. Phase 4 evidence at 837e070
+  clears the complete target gate against the fastest exact control.
+  The opt-in verifier still needs the ordered foundation and guard
+  tests on a clean main-based port. Keep the stable Q8 model-support
+  changes independent of drafting and multi-request scheduling.
 - **Sparse Q4** host packing 3df1dd2 precedes selected-device owner
   9a68003. They exist on Phase 4 as explicit calls and controls for
   SpQt; no live causal selector qualified. A stable port would require
@@ -425,9 +425,16 @@ addition to main. The following dependencies are checked by
   rollback and the correction before ranking total target latency. The
   three-arm qualification runner at b0afd1b measures 127 actual four-row
   transactions per request plus three tails; 2dff3f8 binds the binary,
-  input and preflight. Live copy drafting requires an independently
-  successful complete-target result. A standalone kernel or a verifier
-  port alone cannot establish a copy-workload speed gain.
+  input and preflight. The result at 837e070 measured 58.316 ms serial,
+  56.417 ms multi-row split and 53.102 ms shared weights for complete
+  begin-through-commit latency. Against the faster control the
+  reduction was 5.876%, paired 95% interval 5.803–5.979%, across 20
+  confirmation rounds. Confirm all three guards and the 60 raw
+  rejection/correction transactions when porting. The separate live
+  copy comparison is frozen at 0890799 and uses the three-arm CLI
+  harness at 16b29d0. It measures the same causal drafter on both
+  schedules against ordinary decode, with actual copy acceptance and
+  complete resident request timing.
 
 The [target cost replay](../2026-11-22-verifier-rejections/README.md)
 counts 18,396 down launches in the serial-down verifier per 512-token

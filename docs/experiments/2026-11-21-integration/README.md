@@ -1,6 +1,6 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 41 decisions for which the
+The [candidate matrix](candidates.tsv) records 44 decisions for which the
 scope can already be established. Each row has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
@@ -21,6 +21,14 @@ Phase 4 M40 grid and failure paths. On main both repaired builds passed
 in both runtime revisions. The corrected fixtures are queued.
 [First main graph run](https://github.com/GuyPaddock/m40-llm/blob/dd0a9a64cbf591771587b8c2163fb703033467a1/docs/experiments/2026-11-21-main-graph-parity/first-run/README.md).
 
+TinyLlama returned identical 128 sampled IDs using the asynchronous F16
+decode stream in both arms. Five alternating requests measured a 0.261%
+throughput gain, with a paired interval of −0.041% to +0.366%. The
+original synchronous F16 path failed graph capture before timing.
+Qwen's 0.361% gain on native head128 also missed the 5% gate. Both
+cohorts support keeping replay opt-in.
+[TinyLlama graph results](https://github.com/GuyPaddock/m40-llm/blob/a43a9a5199d81eae82cdd5798c2a049775c52026/docs/experiments/2026-11-21-graph-http/results/tiny.md).
+
 On main, the Q8 eviction repair passed the guarded fixture and all ten
 attention cases with cuBLAS enabled and disabled. The unfixed eviction
 control passed, leaving direct reproduction of the race on main
@@ -31,6 +39,16 @@ order support a narrow Tier 1 port. The bulk Q8 builder is compile-covered.
 The verifier rollback and near-tie cases should
 accompany any future verifier port. They do not warrant bringing the
 verifier into main by themselves. [Archived CUDA evidence](../2026-11-21-evidence-audit/README.md).
+
+Shared prepared down weights lowered complete four-row target latency
+by 5.876% against the fastest exact control across 20 confirmation
+rounds. All 511 full-logit row digests and the 10,616,832 valid FP16
+KV words matched. The three-arm request used the same device
+allocation in each arm and independently exercised 60 rejection
+and correction cases. This admits a live copy-only comparison with
+the existing prompt-copy source. A main port still depends on Q8
+model support, prepared weights and the exact verifier stack.
+[Complete target result](https://github.com/GuyPaddock/m40-llm/blob/837e0708edda8ca4d74aabcf6436e18dfffad6bc/docs/experiments/2026-11-21-small-n/target-result/README.md).
 
 The graph fallback node adds 1.569–3.019 µs synchronized wall time
 per head128 attention replay at the two sampled lengths. The implied
@@ -62,6 +80,13 @@ The allocator formula puts the requested-byte crossover at capacity
 3,403 for the measured 36-layer, one-sequence geometry. The fixed recent
 ring and the replicated summary capacity account for the short-context
 penalty. [Allocation arithmetic and measured peaks](https://github.com/GuyPaddock/m40-llm/blob/623fd33aa425350124b4c07953d3a65c4c265d08/docs/experiments/2026-11-21-kv-residency/README.md).
+
+In one long-lived process per arm, mixed KV held a flat 1 MiB
+post-release offset after each of three full cache lifetimes. Dense
+returned to baseline each time. This narrows the memory result to a
+first-use cost at capacity 3,072. Sustained serving residency remains
+a separate measurement.
+[Repeated cache lifetimes](https://github.com/GuyPaddock/m40-llm/blob/27fc182d9e92d2fbe509550e7aab1cf5ee385850/docs/experiments/2026-11-22-kv-cache-reuse.md).
 Main already consumes this storage directly. All 144 matched operator
 groups reproduced the October benefit. On Phase 4, five matched
 TinyLlama F16 head64 HTTP pairs gained 8.775% throughput
