@@ -1,0 +1,49 @@
+{
+  "rows": [
+    {
+      "session_id": 2,
+      "prefix_wall_ms": 356.73049299999997,
+      "full_window_ms": 9.598369999999989,
+      "post_append_window_ms": 6.39803999999998,
+      "pct_prefix": 2.6906502775471983,
+      "pct_request": 0.09156696326886252
+    },
+    {
+      "session_id": 3,
+      "prefix_wall_ms": 355.602501,
+      "full_window_ms": 9.813339999999982,
+      "post_append_window_ms": 6.581829999999968,
+      "pct_prefix": 2.7596375088486744,
+      "pct_request": 0.09361774377575137
+    },
+    {
+      "session_id": 4,
+      "prefix_wall_ms": 355.118491,
+      "full_window_ms": 9.666369999999972,
+      "post_append_window_ms": 6.425900000000013,
+      "pct_prefix": 2.722012580302379,
+      "pct_request": 0.09221567273747866
+    },
+    {
+      "session_id": 5,
+      "prefix_wall_ms": 352.67764800000003,
+      "full_window_ms": 9.49878000000001,
+      "post_append_window_ms": 6.372649999999965,
+      "pct_prefix": 2.693332014054945,
+      "pct_request": 0.09061689009269365
+    },
+    {
+      "session_id": 6,
+      "prefix_wall_ms": 359.694141,
+      "full_window_ms": 9.64643000000001,
+      "post_append_window_ms": 6.355830000000026,
+      "pct_prefix": 2.6818424045444793,
+      "pct_request": 0.09202544822565241
+    }
+  ],
+  "p50_full_window_ms": 9.64643000000001,
+  "p50_post_append_ms": 6.39803999999998,
+  "p50_pct_prefix": 2.693332014054945,
+  "p50_pct_request": 0.09202544822565241,
+  "off_request_ms": 10482.350465
+}
