@@ -1,4 +1,4 @@
-use super::{records, run, tasks, Args, SplitChoice};
+use super::{records, run, sparse_q4_extended, tasks, Args, SplitChoice};
 use anyhow::{ensure, Context, Result};
 use clap::ValueEnum;
 use m40_llm::{
@@ -46,9 +46,11 @@ struct Layer {
 }
 
 pub(super) fn evaluate(args: &Args) -> Result<()> {
+    let is_extended = args.sparse_q4_extended_input.is_some();
+    let expected_context = if is_extended { 3072 } else { 1024 };
     ensure!(
-        matches!(args.split, SplitChoice::HeldOut) && args.context_tokens == 1024,
-        "sparse Q4 uses the frozen held-out split and context 1024"
+        matches!(args.split, SplitChoice::HeldOut) && args.context_tokens == expected_context,
+        "sparse Q4 requires held-out split and capacity {expected_context}"
     );
     let environment = run::environment()?;
     for (key, expected) in [
@@ -78,6 +80,11 @@ pub(super) fn evaluate(args: &Args) -> Result<()> {
         "sparse Q4 corpus differs"
     );
     let corpus = Corpus::parse(std::str::from_utf8(&corpus_bytes)?)?;
+    let extended = args
+        .sparse_q4_extended_input
+        .as_deref()
+        .map(|path| sparse_q4_extended::load_inputs(path, &args.model))
+        .transpose()?;
     let Cutoffs {
         model_sha256,
         corpus_sha256,
@@ -142,6 +149,28 @@ pub(super) fn evaluate(args: &Args) -> Result<()> {
     }))?;
     tasks::warmup(&reference, &tokenizer)?;
     tasks::warmup(&candidate, &tokenizer)?;
+    if let Some(inputs) = extended {
+        let summary = sparse_q4_extended::evaluate(
+            &inputs,
+            &mut reference,
+            &mut candidate,
+            &mut report,
+            &args.output.with_extension("logits"),
+        )?;
+        let layout = candidate.q4_research_stats()?;
+        let memory = run::memory(&candidate)?;
+        drop(candidate);
+        drop(reference);
+        ensure!(
+            CudaContext::total_device_bytes() == initial,
+            "sparse Q4 leaked a device allocation"
+        );
+        return report.append(json!({
+            "kind":"sparse_q4_extended_complete", "summary":summary,
+            "candidate_layout":layout, "candidate_memory":memory,
+            "device_bytes_after":CudaContext::total_device_bytes()
+        }));
+    }
     let split = corpus.split(Split::HeldOut);
     let mut stop_reason = None;
     let mut has_usable_dense_passages = true;

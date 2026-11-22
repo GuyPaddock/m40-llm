@@ -74,7 +74,7 @@ pub struct TaskResult {
     pub has_new_repetition: bool,
 }
 
-fn has_repetition(ids: &[u32]) -> bool {
+pub(super) fn has_repetition(ids: &[u32]) -> bool {
     ids.windows(16)
         .any(|window| window.iter().all(|token| *token == window[0]))
         || (2..=8).any(|period| {

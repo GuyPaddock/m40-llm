@@ -30,8 +30,8 @@ scorer. Require dense-passing evidence at both context lengths. Report
 families with insufficient coverage separately. The initial likelihood
 gate remains the recorded likelihood result.
 
-At the first continuation token, an eighth step where available,
-and the final sampled token, compare the full logits on the same
+At continuation offsets 0 and 8 where available, and at the last
+sampled offset, compare the full logits on the same
 native history. Retain FP32 vectors to recompute maximum and mean
 absolute error, KL from the native distribution, and top-10 overlap.
 These measurements remain diagnostic. A failed answer is decisive even
@@ -42,3 +42,30 @@ is a separate experiment eligible only after expanded quality passes.
 This is an untimed quality comparison with two model owners in one
 process. No measured latency from this run constitutes inference
 speed qualification.
+
+## Reproduction
+
+Source `scripts/dev-env.sh`. Build `model_quality` in release mode with
+`M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo build --release --locked
+--features cuda --example model_quality`. Run the example's
+`sparse_q4_extended::tests` before the device comparison. The original
+projection guards are in the first quality experiment.
+
+Once the build passes, run under the shared M40 lock from this worktree.
+
+```sh
+bash docs/experiments/2026-11-22-sparse-q4-live/run-quality.sh \
+    QWEN_Q4_GGUF NEW_RAW_DIRECTORY MODEL_QUALITY_BINARY FINISHED_INITIAL_RUN
+```
+
+The initial run directory supplies both thresholded dispositions and
+source hashes. The runner selects only the admitted arm. For each output
+report, use the following from this worktree. The B2 replay module on
+the consolidation branch recomputes metrics from the independent FP32
+readbacks.
+
+```sh
+PYTHONPATH=../consolidation/docs/experiments/2026-11-21-kv-audit \
+    python3 docs/experiments/2026-11-22-sparse-q4-live/replay-extended.py \
+    ARM.jsonl RAW_DIRECTORY/inputs.json
+```
