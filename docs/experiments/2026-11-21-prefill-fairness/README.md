@@ -53,3 +53,21 @@ submission-to-completion use distinct boundaries. A host-clock inversion
 greater than 1 ms invalidates correlation. Read `summary.json` and the raw
 GPU/process timelines together. A failure or timeout cannot establish absence
 of starvation.
+
+For an independent replay of one completed diagnostic pair, run the
+following from this worktree with `d` set to its raw directory. Replace
+both zeroes in the filenames with the desired pair index.
+
+```bash
+jq -es -f docs/experiments/2026-11-21-prefill-fairness/pair.jq \
+    "$d"/diagnostic-{single-short,single-medium,0-control,0-treatment}.json
+```
+
+The replay checks both requests against their isolated text, stop reason
+and complete sampled IDs. It identifies the two consecutive short-request
+samples bounding the longest gap that overlaps the arriving request's
+admission-to-first-sample interval. Both indices are zero-based. Only the
+intersection of those two intervals counts toward `overlapping_ms`.
+The second request's wait before admission is recorded separately. The
+five-pair decision also requires matching work in the instrumentation-off
+series.
