@@ -7,3 +7,12 @@ The release binary was built in the independent consolidation target directory w
 Replay with the controlled benchmark instructions, the flags in preflight.txt and the checksummed model and oracle. Start the isolated official server as described in docs/controlled_benchmark.md. Invoke compare_ollama --model MODEL --ollama-pid PID --ollama-log LOG --compare-q8-execution split --q8-families down,vocabulary --output NEW.jsonl. Recompute the recorded median and gain directly from client elapsed time with jq -es -f audit.jq report.jsonl. Prefill rate includes request admission/setup through the first sample. Decode rate counts the remaining 511 tokens. The raw report retains dispatch, traces, outputs, memory, run order and GPU boundaries. The confidence interval is copied from the original paired harness.
 
 The operator subsequently reported a Gentoo system upgrade in the background. Its per-trial CPU and I/O load was not recorded. This run establishes the stated paired observation on that host. The interval and low dispersion do not exclude a systematic host effect on both arms. Carry this limitation into any use of the result for integration.
+
+The operator subsequently paused Portage. Repeat the original Qwen cohort
+independently with the identical checksummed executable, oracle and flags.
+The [repeat runner](repeat.sh) retains the second trace and host scheduler
+state. A sleeping or stopped worker still appears in a process census.
+Compare throughput, time to first token, complete request time and the
+relative gain separately across cohorts. Keep startup/preparation figures
+conditional on OS cache state. Command from the consolidation worktree under
+the exclusive M40 lock: `bash docs/experiments/2026-11-21-native-split/repeat.sh NEW_OUTPUT_DIRECTORY`.
