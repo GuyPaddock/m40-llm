@@ -145,5 +145,9 @@ Use the warmed, tracing-off comparison for whole-request latency.
 
 The [dense TinyLlama comparison](tiny-dense/README.md) records the first
 completed cross-revision cohort with matching CLI and HTTP token IDs.
+The [default TinyLlama comparison](tiny-default/README.md) confirms a
+smaller gain than the 5% threshold after 20 fresh pairs with exact IDs.
+The [short Qwen comparison](qwen-short/README.md) records explicit
+dense and default recent-only KV on the same Phase 4 executable.
 The [local Q4 baseline](qwen-q4-short/README.md) records Phase 4 default
 and dense KV through the same boundaries on a separate supported checkpoint.

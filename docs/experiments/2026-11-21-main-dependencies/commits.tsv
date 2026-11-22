@@ -82,3 +82,4 @@ c8ddabec804e1b4f7eccbf7082d4c567de1fc76c	docs(perf): qualify direct TinyLlama KV
 be7bf4bbfa90eb468b2af53f5c8732e8d1a05c04	docs(q4): qualify charged sparse operators	Guy Elsmore-Paddock
 0736f062d2a4ac3f2b2bf39b48635689a4362528	feat(research): bind admitted Q4 down layouts	Guy Elsmore-Paddock
 5324ba57f55f45462fcd34c42f41b7b56e7f5451	test(research): freeze sparse Q4 quality arms	Guy Elsmore-Paddock
+d33663563d69a3f52baf55a5913dcc6d8489994e	docs(perf): retain TinyLlama default baseline	Guy Elsmore-Paddock

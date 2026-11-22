@@ -108,9 +108,13 @@ ce1cc26, main delivered 25.993 HTTP tokens/s and Phase 4 delivered
 20.944 with the same 128 greedy IDs. Each proposed mapping or execution
 port can be checked against main on this unchanged F16 path. Repeat the
 paired comparison on the same host and request. Record output equality,
-client wall time and peak sampled process memory. The measured difference
-spans whole revisions and supplies no attribution to an individual patch.
-[Cross-revision baseline](../2026-11-21-serving-baseline/tiny-dense/README.md).
+client wall time and peak sampled process memory. The default-cache
+comparison at d336635 also matched all IDs. Phase 4 gained 4.028%
+buffered throughput on the separate default-cache control, and fell
+below the 5% threshold. Retain both baselines when qualifying a
+combined port. Their differences span whole revisions.
+[Explicit dense baseline](../2026-11-21-serving-baseline/tiny-dense/README.md) ·
+[Default-cache baseline](../2026-11-21-serving-baseline/tiny-default/README.md).
 Use Phase 4 for Qwen Q8 performance until a main port runs the real model.
 The same preformatted Qwen text also gains an extra BOS on main.
 
