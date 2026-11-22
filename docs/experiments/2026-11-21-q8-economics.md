@@ -10,3 +10,48 @@ On 48c6333, short dense native and prepared split down/vocabulary now have a mat
 | Vocabulary/argmax | Prepared vocabulary versus packet head and partitioned reduction | Charge scratch, logits, extra launches and their whole-request effect. |
 
 Fixed admission: reconstruct per-family resource/latency accounting using measured runtime data and exact owner lifetimes. Prototype at most one removal of a demonstrated duplicate computation/dispatch cost when it offers enough removable work for the 5% whole-request gate, preserves exact output and adds no resident weight copy. A nonduplicated mandatory projection, a storage copy needed by another supported row shape, or a change that misses the frozen gate closes the proposal. Preserve previously positive subthreshold opt-ins with their actual costs. Do not sum GEMV gains. Evaluate C1 as a separate small-N verification hypothesis.
+
+## Historical per-layer replay
+
+The [replay](2026-11-21-q8-economics/history.sh) reads the original
+release M40 HTTP records and event traces from five October cohorts.
+For every cohort the two profiled/unprofiled token traces matched all
+512 sampled IDs. The five measured pairs per cohort generated the same
+512-token continuation from the same 65-ID Qwen Q8_0 prompt. This gives
+75 measured token samples across steps 0/255/511. Each contains 400
+spans, including 11 operations on each of 36 layers. The four token-level
+operations include vocabulary and greedy selection. The source revisions,
+binary and raw-data hashes, and any historical working-tree changes are
+in [the cohort index](2026-11-21-q8-economics/historical-stages/cohorts.jsonl).
+
+| October runtime configuration | QKV | Output projection | Gate/up/SwiGLU | Down | Vocabulary | Argmax | Profile off/on HTTP tok/s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Packed FFN, native attention projections | 2.496 | 1.741 | 10.044 | 4.751 | 1.563 | 0.258 | 41.441 / 39.869 |
+| Split FFN, native attention projections | 2.522 | 1.773 | 8.047 | 4.794 | 1.563 | 0.259 | 45.044 / 44.600 |
+| Split FFN, warp attention projections | 1.882 | 1.356 | 8.031 | 4.750 | 1.565 | 0.259 | 47.470 / 46.991 |
+| Split FFN, packed-warp attention projections | 1.388 | 1.009 | 8.045 | 4.771 | 1.563 | 0.259 | 49.402 / 48.866 |
+| Compound FFN, packed-warp attention projections | 1.392 | 1.016 | 7.421 | 4.761 | 1.564 | 0.259 | 50.878 / 50.379 |
+
+Stage entries are median CUDA-event milliseconds at generated step 255.
+For a per-layer operation, the total is taken across all 36 layers of
+one token before calculating the five-request median. Within the compound
+cohort, the median gate/up/SwiGLU span at each individual layer ranged
+from 0.2053 to 0.2069 ms. Every sampled middle token had one fused gate/up
+launch per layer. Its separate host synchronization median was 13.710 ms,
+overlapping GPU work within the 19.795 ms median instrumented token wall.
+
+The [layer and operation files](2026-11-21-q8-economics/historical-stages/)
+retain medians at all three positions, including CPU wrapper times,
+synchronization and copy durations. Changing the layer of one span,
+changing a token position, or removing one session's middle token
+caused the replay to reject the cohort. Reproduce from this worktree
+with `bash docs/experiments/2026-11-21-q8-economics/history.sh NEW_DIRECTORY`.
+The profile switch is the only paired difference *within* each row.
+Runs across revisions cannot isolate component speedups. The measured
+instrumentation cost and host waits preclude interpreting event spans as
+standalone kernel service or the savings from a proposed patch.
+
+These results locate the largest remaining projection costs in gate/up
+and down. A large mandatory projection alone does not establish redundant
+work. The B3 joint-only study separately measures actual ownership,
+additional launches, exact output and whole requests on the pinned model.
