@@ -1,0 +1,154 @@
+{
+  "admission": {
+    "clients": 4,
+    "max_completed_decode_width": 4,
+    "diagnostic_gate": true
+  },
+  "eligibility": {
+    "all_outputs_match": true,
+    "equivalent_work": true
+  },
+  "verified_timed_trials": 10,
+  "traces": [
+    {
+      "aggregate_tps": 4.9077025088763655,
+      "requests": [
+        {
+          "client_to_first_sample_ms": 42999.315007,
+          "completion_ms": 52163.999497,
+          "decode_ms": 9114.20575,
+          "generated_tokens": 64,
+          "itl_max_ms": 151.10496299999795,
+          "itl_median_ms": 145.05793899999844,
+          "itl_p95_ms": 149.91338199999882,
+          "prompt_tokens": 65,
+          "queue_and_transport_ms": 39173.828023999995,
+          "server_prefill_ms": 3825.486983,
+          "server_total_ms": 12939.710124,
+          "slot": 0,
+          "stop": "length",
+          "wall_ms": 52162.888094999995
+        },
+        {
+          "client_to_first_sample_ms": 3814.400083,
+          "completion_ms": 13066.6312,
+          "decode_ms": 9202.21755,
+          "generated_tokens": 64,
+          "itl_max_ms": 151.9967570000008,
+          "itl_median_ms": 146.21924299999955,
+          "itl_p95_ms": 150.3548780000001,
+          "prompt_tokens": 65,
+          "queue_and_transport_ms": 0.3314659999999998,
+          "server_prefill_ms": 3814.068617,
+          "server_total_ms": 13016.304284,
+          "slot": 1,
+          "stop": "length",
+          "wall_ms": 13065.522814
+        },
+        {
+          "client_to_first_sample_ms": 16874.358547,
+          "completion_ms": 26127.470228,
+          "decode_ms": 9201.028326,
+          "generated_tokens": 64,
+          "itl_max_ms": 151.29693200000474,
+          "itl_median_ms": 145.94708000000173,
+          "itl_p95_ms": 150.75821300000098,
+          "prompt_tokens": 65,
+          "queue_and_transport_ms": 13065.38131,
+          "server_prefill_ms": 3808.977237,
+          "server_total_ms": 13010.024629,
+          "slot": 2,
+          "stop": "length",
+          "wall_ms": 26126.371709
+        },
+        {
+          "client_to_first_sample_ms": 29954.998428999996,
+          "completion_ms": 39175.024478,
+          "decode_ms": 9171.289475,
+          "generated_tokens": 64,
+          "itl_max_ms": 150.94563200000266,
+          "itl_median_ms": 145.05299000000377,
+          "itl_p95_ms": 150.35381699999562,
+          "prompt_tokens": 65,
+          "queue_and_transport_ms": 26126.255343999997,
+          "server_prefill_ms": 3828.743085,
+          "server_total_ms": 13000.054023,
+          "slot": 3,
+          "stop": "length",
+          "wall_ms": 39173.893123
+        }
+      ],
+      "wall_ms": 52162.900978
+    },
+    {
+      "aggregate_tps": 7.289677139512381,
+      "requests": [
+        {
+          "client_to_first_sample_ms": 14342.829638,
+          "completion_ms": 35119.260074000005,
+          "decode_ms": 20726.218411,
+          "generated_tokens": 64,
+          "itl_max_ms": 477.8737630000105,
+          "itl_median_ms": 327.6163979999983,
+          "itl_p95_ms": 331.5291619999989,
+          "prompt_tokens": 65,
+          "queue_and_transport_ms": 428.225321,
+          "server_prefill_ms": 13914.604317,
+          "server_total_ms": 34640.835556,
+          "slot": 0,
+          "stop": "length",
+          "wall_ms": 35118.124264000005
+        },
+        {
+          "client_to_first_sample_ms": 14327.092633,
+          "completion_ms": 35014.579784,
+          "decode_ms": 20628.728588,
+          "generated_tokens": 64,
+          "itl_max_ms": 380.4795590000067,
+          "itl_median_ms": 327.6481620000013,
+          "itl_p95_ms": 331.60614599999826,
+          "prompt_tokens": 65,
+          "queue_and_transport_ms": 182.79604,
+          "server_prefill_ms": 14144.296593,
+          "server_total_ms": 34773.042505,
+          "slot": 1,
+          "stop": "length",
+          "wall_ms": 35013.473107
+        },
+        {
+          "client_to_first_sample_ms": 14334.951352999999,
+          "completion_ms": 35070.490251,
+          "decode_ms": 20678.150835,
+          "generated_tokens": 64,
+          "itl_max_ms": 429.8416509999952,
+          "itl_median_ms": 327.6106570000011,
+          "itl_p95_ms": 331.5376939999951,
+          "prompt_tokens": 65,
+          "queue_and_transport_ms": 298.62577,
+          "server_prefill_ms": 14036.325583,
+          "server_total_ms": 34714.504999,
+          "slot": 2,
+          "stop": "length",
+          "wall_ms": 35069.380186
+        },
+        {
+          "client_to_first_sample_ms": 14319.208208999999,
+          "completion_ms": 34957.294747,
+          "decode_ms": 20575.35482,
+          "generated_tokens": 64,
+          "itl_max_ms": 332.01761700000134,
+          "itl_median_ms": 327.52755700000125,
+          "itl_p95_ms": 331.44122100000095,
+          "prompt_tokens": 65,
+          "queue_and_transport_ms": 0.5315509999999999,
+          "server_prefill_ms": 14318.676657999998,
+          "server_total_ms": 34894.043765,
+          "slot": 3,
+          "stop": "length",
+          "wall_ms": 34956.178331
+        }
+      ],
+      "wall_ms": 35118.153397
+    }
+  ]
+}
