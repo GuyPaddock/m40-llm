@@ -71,3 +71,18 @@ intersection of those two intervals counts toward `overlapping_ms`.
 The second request's wait before admission is recorded separately. The
 five-pair decision also requires matching work in the instrumentation-off
 series.
+
+Verify each completed tracing-off response against its diagnostic counterpart.
+Set `label` to `single-short`, `single-medium`, `four` or a trial label
+such as `0-treatment` and run:
+
+```bash
+jq -es -f docs/experiments/2026-11-21-prefill-fairness/responses.jq \
+    "$d"/{diagnostic,primary}-"$label".json
+```
+
+The replay checks matching arrival offsets, successful HTTP responses,
+trace mode and exact output, stop and token counts. It derives aggregate
+tokens per second from the total sampled count and client makespan.
+Completion spread measures the time between the first and last completed
+request in one group.
