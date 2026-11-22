@@ -43,3 +43,23 @@ Retain every trial. An output or cache failure stops immediately. If
 the latency and throughput trade fails, keep the observed baseline stall
 and close this policy. The study covers the measured opt-in scheduler
 and workload. It supplies no default-serving or compressed-KV policy.
+
+## Replay
+
+Source `scripts/dev-env.sh` in this worktree. Build the release server
+with `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo build --release
+--locked --features cuda,server --bin m40-llm`. Build each library suite
+with `cargo test --release --locked --features cuda,server --lib --no-run
+--message-format=json`. Use NVCC both times, separate Cargo targets for
+cuBLAS on and off, and retain the outputs as `test-artifacts.jsonl` and
+`no-cublas-artifacts.jsonl`. Record the clean checkout's full commit in
+`source.txt` and the completion time in `complete.txt`.
+
+Under the shared M40 lock, run `bash
+docs/experiments/2026-11-21-prefill-fairness/check-chunking.sh BUILD_DIRECTORY`.
+Both selected tests must run and pass in both binaries before launching
+`bash docs/experiments/2026-11-21-prefill-fairness/run-chunking.sh
+NEW_OUTPUT_DIRECTORY BUILD_DIRECTORY`, also with the same lock held.
+The comparison changes only `M40LLM_RESEARCH_DENSE_PREFILL_CHUNKS` between
+arms on one executable. Fresh server processes warm with the short prompt
+before each measurement. The calibration fixes the delay for both arms.
