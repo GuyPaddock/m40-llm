@@ -1,0 +1,92 @@
+[
+  {
+    "slots_active_other_tokens": [
+      1,
+      1,
+      0
+    ],
+    "event_median_ms": 3.6855900287628174,
+    "event_mad_ms": 0.0004038810729980469,
+    "wall_median_ms": 3.68614375,
+    "paired_event_change_percent": -0.5192170210925773,
+    "bootstrap_95_percent": [
+      -0.8930263335603206,
+      -0.4921462436992541
+    ]
+  },
+  {
+    "slots_active_other_tokens": [
+      2,
+      1,
+      0
+    ],
+    "event_median_ms": 3.7046539783477783,
+    "event_mad_ms": 0.0001919269561767578,
+    "wall_median_ms": 3.7054998125000003,
+    "paired_event_change_percent": 0.0,
+    "bootstrap_95_percent": [
+      0.0,
+      0.0
+    ]
+  },
+  {
+    "slots_active_other_tokens": [
+      2,
+      1,
+      512
+    ],
+    "event_median_ms": 3.6745359897613525,
+    "event_mad_ms": 5.3882598876953125e-05,
+    "wall_median_ms": 3.6757656875,
+    "paired_event_change_percent": -0.8077384834840329,
+    "bootstrap_95_percent": [
+      -0.8329031389210595,
+      -0.7820625133895476
+    ]
+  },
+  {
+    "slots_active_other_tokens": [
+      2,
+      1,
+      2048
+    ],
+    "event_median_ms": 3.6688179969787598,
+    "event_mad_ms": 0.0004780292510986328,
+    "wall_median_ms": 3.6694285,
+    "paired_event_change_percent": -0.9862996457917661,
+    "bootstrap_95_percent": [
+      -0.9979314747928236,
+      -0.9464915262899165
+    ]
+  },
+  {
+    "slots_active_other_tokens": [
+      2,
+      1,
+      4096
+    ],
+    "event_median_ms": 3.6737918853759766,
+    "event_mad_ms": 0.0004940032958984375,
+    "wall_median_ms": 3.674388,
+    "paired_event_change_percent": -0.8215546190740608,
+    "bootstrap_95_percent": [
+      -0.8653969459553323,
+      -0.7543711963453381
+    ]
+  },
+  {
+    "slots_active_other_tokens": [
+      2,
+      2,
+      2048
+    ],
+    "event_median_ms": 3.917733907699585,
+    "event_mad_ms": 0.0005040168762207031,
+    "wall_median_ms": 3.9184331875,
+    "paired_event_change_percent": 5.763954656353665,
+    "bootstrap_95_percent": [
+      5.71225685061143,
+      5.784671503487004
+    ]
+  }
+]
