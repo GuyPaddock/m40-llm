@@ -24,7 +24,7 @@ case "$cohort" in
     expected=4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d
     jq '.cases[] | select(.name=="short") | .request' "$manifest" > "$out/request.json"
     ;;
-  tiny)
+  tiny|tiny-decode-stream)
     expected=76bd2d476450b35a43d294470b091e21d81624a4f3d70d2542c07bd8fbefad93
     jq -n --arg prompt $'<|system|>\nYou are a helpful assistant.</s>\n<|user|>\nExplain how a web browser loads a page, from typing the URL to displaying the result.</s>\n<|assistant|>\n' \
       '{prompt:$prompt,prompt_format:"raw",max_tokens:128,seed:0,top_k:1,stream:false,include_metrics:true}' > "$out/request.json"
@@ -42,6 +42,9 @@ export M40LLM_Q8_DECODE_STREAM=decode M40LLM_Q8_DECODE_COL_TILE=4 M40LLM_Q8_DECO
 export M40LLM_FUSED_Q8_MLP_SWIGLU=1 M40LLM_FUSED_Q8_QKV=1 M40LLM_Q8_MLP_GATE_UP_SPLIT_QBLOCK=4
 export M40LLM_Q8_LM_HEAD_ARGMAX=1 M40LLM_Q8_LM_HEAD_ARGMAX_SHARED_A=1 M40LLM_CUDA_GREEDY_ARGMAX=1
 export M40LLM_PREFILL_CHUNK_SIZE=128
+if [[ "$cohort" == tiny-decode-stream ]]; then
+    export M40LLM_F16_DECODE_KERNEL=1 M40LLM_F16_DECODE_STREAM=decode
+fi
 gpu() {
     nvidia-smi -i "$CUDA_VISIBLE_DEVICES" "$@"
 }
