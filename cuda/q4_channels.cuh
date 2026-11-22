@@ -41,17 +41,19 @@ __global__ void gate_up(
     }
 }
 
-template<bool packed>
+template<bool packed, bool device_count = false>
 __global__ void down_partial(
     const float* hidden, const unsigned* indices,
     const unsigned char* native, const __half* scales,
-    const unsigned char* codes, float* partial, int n, int h, int count) {
+    const unsigned char* codes, float* partial, int n, int h, int count,
+    const unsigned* active_count = nullptr) {
     const int output = blockIdx.x * blockDim.x + threadIdx.x;
     const int split = blockIdx.y;
     const int row = blockIdx.z;
     if (output >= n) return;
     float sum = 0.0f;
-    for (int selected = split; selected < count; selected += down_splits) {
+    const int limit = device_count ? static_cast<int>(*active_count) : count;
+    for (int selected = split; selected < limit; selected += down_splits) {
         const int channel = indices[static_cast<size_t>(row) * count + selected];
         float weight;
         if (packed) {

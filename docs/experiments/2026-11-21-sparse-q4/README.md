@@ -68,3 +68,24 @@ From the worktree, source `scripts/dev-env.sh`, then build with
 Run `target/release/examples/sparse_q4_inputs MODEL NEW_DIRECTORY` and
 compare its four named files per layer with [planes.sha256](planes.sha256).
 The original run directory is `../raw/sparse-q4-inputs-01`.
+
+### Operator replay
+
+Build the standalone native probe with `bash docs/experiments/2026-11-21-sparse-q4/build.sh`
+and the analyzer with `cargo build --locked --release --no-default-features --example sparse_q4_screen`.
+The probe compiles the repository's exact dense GEMV, stable selector and
+selected partials in one translation unit. Its charged variant reads the
+valid count on the device. Every arm runs with the same buffers resident.
+The fixture records allocation sizes, driver free bytes and release
+observations. The telemetry sampler records process residency. The
+standalone probe measures operator cost without loading the rest of the model.
+
+With exclusive M40 access, run
+`bash docs/experiments/2026-11-21-sparse-q4/run.sh NEW_OUTPUT_DIRECTORY`.
+The synthetic input uses a deterministic shuffle per layer and a signed
+nonzero value computed from its input index. The harness checks all 2048
+outputs in each arm and measures 20 enqueues per event pair. Every case
+has a separate warm pass. Raw wall time includes the ending synchronization;
+CPU submission and CUDA event spans have distinct fields. The analyzer uses
+the common paired-bootstrap implementation with operator calls/second. A
+10% latency reduction requires at least 11.111% higher service rate.
