@@ -193,6 +193,11 @@ int m40llm_kvcache_append_token_f32_rope_k_position_dev_layout_async(M40llmCudaC
 int m40llm_kvcache_reset(M40llmCudaContext* ctx, M40llmKVCache* kv) {
     (void)ctx; (void)kv; return -1;
 }
+int m40llm_kvcache_debug_read_length(M40llmCudaContext* ctx, M40llmKVCache* kv,
+    uint32_t seq_id, uint32_t* out_length) {
+    (void)ctx; (void)kv; (void)seq_id; (void)out_length; return -99;
+}
+
 int m40llm_kvcache_debug_read_token(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, uint32_t token, void* out_k_host, void* out_v_host) {
     (void)ctx; (void)kv; (void)seq_id; (void)token; (void)out_k_host; (void)out_v_host; return -1;
 }
