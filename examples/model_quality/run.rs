@@ -231,6 +231,9 @@ pub(super) fn validate_inputs(
 }
 
 pub fn evaluate(args: Args) -> Result<()> {
+    if args.sparse_q4_layout.is_some() {
+        return super::sparse_q4::evaluate(&args);
+    }
     if args.should_diagnose_prefill {
         return super::prefill_drift::diagnose(args);
     }

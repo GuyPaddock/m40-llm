@@ -33,7 +33,7 @@ pub struct Q4ResearchStats {
     layout: Q4ResearchLayout,
     layers: [usize; 3],
     thresholds: [f32; 3],
-    projection_calls: [u64; 3],
+    pub projection_calls: [u64; 3],
     repack_host_payload_bytes: usize,
     preparation_ms: f64,
 }

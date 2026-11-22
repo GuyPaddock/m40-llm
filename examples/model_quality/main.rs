@@ -40,6 +40,8 @@ mod run;
 #[cfg(all(feature = "cuda", nvcc))]
 mod runtime_quality;
 #[cfg(all(feature = "cuda", nvcc))]
+mod sparse_q4;
+#[cfg(all(feature = "cuda", nvcc))]
 mod step_timing;
 #[cfg(all(feature = "cuda", nvcc))]
 mod tasks;
@@ -106,6 +108,21 @@ struct Args {
     /// Capture the frozen sparse-Q4 checkpoint on exactly one named split.
     #[arg(long, requires = "capture_ffn_inputs")]
     sparse_q4_capture: bool,
+    /// Evaluate an admitted three-layer sparse-Q4 layout against the original model.
+    #[cfg(all(feature = "cuda", nvcc))]
+    #[arg(long, value_enum, requires = "sparse_q4_cutoffs",
+          conflicts_with_all = ["q8_runtime_candidate","should_diagnose_prefill",
+              "q8_prefix_drift","capture_ffn_inputs","compact_export_report",
+              "skip_layers","rank_layers","layer_ranking","capture_activations",
+              "activation_calibration","step_timing_trials"])]
+    sparse_q4_layout: Option<sparse_q4::Layout>,
+    #[cfg(all(feature = "cuda", nvcc))]
+    #[arg(long, requires = "sparse_q4_layout")]
+    sparse_q4_cutoffs: Option<PathBuf>,
+    /// Apply the frozen primary cutoff. Omit it for the full-layout control.
+    #[cfg(all(feature = "cuda", nvcc))]
+    #[arg(long, requires = "sparse_q4_layout")]
+    sparse_q4_thresholded: bool,
     /// Diagnose the recorded native/prepared down+vocabulary branch on identical
     /// prefixes. No fitting, free generation or performance promotion occurs.
     #[arg(long, conflicts_with_all=["compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target"])]

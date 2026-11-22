@@ -71,6 +71,20 @@ pub struct TaskResult {
     pub candidate_passed: bool,
     pub first_reference_token_id: Option<u32>,
     pub has_identical_generation: bool,
+    pub has_new_repetition: bool,
+}
+
+fn has_repetition(ids: &[u32]) -> bool {
+    ids.windows(16)
+        .any(|window| window.iter().all(|token| *token == window[0]))
+        || (2..=8).any(|period| {
+            ids.windows(period * 4).any(|window| {
+                window[..period].iter().any(|token| *token != window[0])
+                    && window
+                        .chunks_exact(period)
+                        .all(|part| part == &window[..period])
+            })
+        })
 }
 
 pub(super) fn generation_record(
@@ -159,6 +173,11 @@ pub fn evaluate_task_with_prefill(
     let has_identical_generation = first_generated_divergence.is_none()
         && reference_generated.output == candidate_generated.output
         && reference_generated.metrics.stop_reason == candidate_generated.metrics.stop_reason;
+    let has_new_repetition =
+        has_repetition(&candidate_generated.token_ids[candidate_generated.prompt_token_len..])
+            && !has_repetition(
+                &reference_generated.token_ids[reference_generated.prompt_token_len..],
+            );
     report.append(json!({"kind":"model_quality_task","split":split,"id":task.id,"family":task.family,
         "user_prompt":task.prompt,"rendered_prompt":prompt,"prompt_token_ids":expected_ids,
         "max_tokens":task.max_tokens,"scoring_rule":task.scoring,
@@ -167,7 +186,8 @@ pub fn evaluate_task_with_prefill(
         "reference_score":reference_score,"candidate_score":candidate_score,
         "quality_conclusion":QualityConclusion::compare(reference_score.passed, candidate_score.passed),
         "first_generated_divergence_step_zero_based":first_generated_divergence,
-        "has_identical_generation":has_identical_generation}))?;
+        "has_identical_generation":has_identical_generation,
+        "has_new_repetition":has_new_repetition}))?;
     eprintln!(
         "{split:?} {}: reference={}, candidate={}, prefill={:.1}/{:.1} ms decode={:.1}/{:.1} ms",
         task.id,
@@ -186,6 +206,7 @@ pub fn evaluate_task_with_prefill(
             .get(reference_generated.prompt_token_len)
             .copied(),
         has_identical_generation,
+        has_new_repetition,
     })
 }
 
