@@ -4,7 +4,21 @@ This is the task checkpoint, not agent instructions. Update it after meaningful
 progress; keep working rules in [AGENTS.md](../AGENTS.md). Verify this snapshot
 against the current code, worktree, Git history, and linked raw results.
 
-## Active Plan
+## November consolidation
+
+Phase 4 is pinned at 48c6333 and remote main at e1403e0. The [inventory](experiments/2026-11-21-inventory/README.md) and [measurement protocol](experiments/2026-11-21-protocol/README.md) cover all 13 October branches. Three HTTP inputs are frozen at 65, 2060 and 8197 tokens in b7f4eaf. The first short native/split comparison and its host-load limitation are in [the paired report](experiments/2026-11-21-native-split/README.md). The later HTTP analyzer independently recovered the same median gain and interval.
+
+| Study | November evidence or outstanding decision |
+|---|---|
+| Graph | On research/1121-graph-dispatch, bfae111 records four failing unrepaired paths and e2b4739 passes the exact dispatch and replay checks with cuBLAS on and off. Full-model HTTP and setup diagnostics use 66f21e3. Speed qualification is open. |
+| KV | On research/1121-quantized-kv, c484536 retains the full dense pass. Of 24 tasks per context, 19 short and 10 long pass. Approximation decisions await the complete quantized generations and matched-logit audit. Both historical KV capture artifacts are available. 97102a1 restores the matched consumer harness and 9489bb6 adds independent resident-memory observations. |
+| Prepared Q8 | Research/1121-q8-projections f6aafd1 binds fresh ownership, dataflow, quality and HTTP phases. The November split gain has a different baseline from the compound or portfolio comparisons. |
+| Small-N and rollback | Research/1121-verifier-correctness 081cc65 records actual two-build rollback/near-tie results. Research/1121-small-n-verification a438032 adds the separately gated six-arm small-row comparison. |
+| Other studies | Research/1121-active-row-kv 2228ea7 binds actual active lengths and idle ownership. Research/1121-gsq-quality 59aaf76 identifies comparable model files and the missing layer dispatch. On independently main-based research/1121-gguf-compatibility, 541cec1 fixes checked shape arithmetic and 1989d82 qualifies it. |
+
+The serial cohorts and their raw logs live under the adjacent research-1121/raw directory. Compiled probes and queued jobs are pending evidence until their completion records, workloads and outputs are audited. The final shortlist and rebuild sequence remain open.
+
+## October checkpoint
 
 The separate October 31 runtime research objective is complete. See the
 [final disposition and evidence review](experiments/2026-10-31-runtime-followup-result.md).
