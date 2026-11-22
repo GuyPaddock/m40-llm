@@ -54,7 +54,7 @@ For remaining timed cohorts launch `bash docs/experiments/2026-11-21-protocol/ho
 
 ### Frozen baseline requests
 
-The checked-in performance-contexts.json contains the exact request bodies, full token IDs and SHA-256 of each UTF-8 prompt. Two independent invocations of the CPU tokenizer produced identical manifests. Short has 65 IDs and matches the retained independent Ollama token oracle. Medium first crosses 2,048 at 2,060 IDs after 105 archive lines. Long first crosses 8,192 at 8,197 IDs after 428 lines. The 1,024/2,304/8,448 capacities include the respective 512/128/128 output allowance. Medium and long use the runtime tokenizer with an exact text round trip. They have no independent external-tokenizer qualification yet.
+The checked-in performance-contexts.json contains the exact request bodies, full token IDs and SHA-256 of each UTF-8 prompt. Two independent invocations of the CPU tokenizer produced identical manifests. Short has 65 IDs and matches the retained independent Ollama token oracle. Medium first crosses 2,048 at 2,060 IDs after 105 archive lines. Long first crosses 8,192 at 8,197 IDs after 428 lines. The 1,024/2,304/8,448 capacities include the respective 512/128/128 output allowance. The runtime tokenizer had an exact text round trip in all three cases. The independent llama.cpp run then matched every ID in order.
 
 Replay with cargo run --release --locked --example research_context_inputs -- --model MODEL --oracle-report docs/experiments/2026-11-21-native-split/report.jsonl --output NEW.json and compare against the checked-in manifest. Context capacity is separate from the prompt length. Preserve natural stop behavior and actual output counts for every measurement.
 
@@ -66,6 +66,8 @@ trailing newline, parse ChatML special tokens and omit automatic BOS.
 Require every token ID to match in order in all three prompts. The result
 directory retains the prompts, emitted IDs, binary and library hashes, and
 per-case decisions. This check exercises tokenization only.
+[Raw tokenizer inputs, outputs and tool hashes](context-tokenizer.tar.gz) ·
+[Archive checksum](context-tokenizer.sha256).
 
 For later cohorts the process-name counts also include the kernel scheduling class and nice value. The initial KV run recorded counts by name only. A host process-tree observation during that run found the top-level emerge and current compiler workers under ordinary scheduling at nice 0, in separate process groups. The benchmark did not adjust their scheduling. Inspect each cohort's actual samples before classifying its load conditions.
 
