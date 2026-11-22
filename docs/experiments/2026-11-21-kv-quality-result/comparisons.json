@@ -1,0 +1,317 @@
+[
+  {
+    "context": "long",
+    "arm": "quantized_all",
+    "cases": 24,
+    "preserved": [
+      "nov-crate-long",
+      "nov-relay-long",
+      "nov-museum-long",
+      "nov-parcel-long",
+      "nov-staff-long",
+      "nov-order-long",
+      "nov-fallback-long",
+      "nov-lost-long",
+      "nov-trail-long",
+      "nov-meeting-long"
+    ],
+    "lost": [],
+    "dense_failed": [
+      "nov-ledger-long",
+      "nov-platform-long",
+      "nov-drawer-long",
+      "nov-rewrite-long",
+      "nov-omit-long",
+      "nov-format-long",
+      "nov-slice-long",
+      "nov-loop-long",
+      "nov-sql-long",
+      "nov-stock-long",
+      "nov-chain-long",
+      "nov-cost-long",
+      "nov-time-long",
+      "nov-host-long"
+    ],
+    "identical_ids": 16,
+    "divergent": [
+      {
+        "case": "nov-format-long",
+        "first_generated_difference": 0
+      },
+      {
+        "case": "nov-stock-long",
+        "first_generated_difference": 0
+      },
+      {
+        "case": "nov-chain-long",
+        "first_generated_difference": 1
+      },
+      {
+        "case": "nov-cost-long",
+        "first_generated_difference": 6
+      },
+      {
+        "case": "nov-lost-long",
+        "first_generated_difference": 24
+      },
+      {
+        "case": "nov-host-long",
+        "first_generated_difference": 33
+      },
+      {
+        "case": "nov-trail-long",
+        "first_generated_difference": 9
+      },
+      {
+        "case": "nov-meeting-long",
+        "first_generated_difference": 142
+      }
+    ],
+    "old_block_range": [
+      33,
+      38
+    ],
+    "observations": 92,
+    "greedy_agreements": 89,
+    "kl_median": 0.000543378792272285,
+    "kl_p95": 0.04941310917681569,
+    "worst_kl": {
+      "case": "nov-chain-long",
+      "step": 1,
+      "kl": 0.11842150807223939
+    },
+    "per_vector_mean_abs_error_median": 0.2121181406294821,
+    "largest_abs_error": {
+      "case": "nov-ledger-long",
+      "step": 8,
+      "error": 2.542721748352051
+    },
+    "top10_overlap_min": 8,
+    "top10_overlap_median": 10
+  },
+  {
+    "context": "long",
+    "arm": "quantized_top8",
+    "cases": 24,
+    "preserved": [
+      "nov-crate-long",
+      "nov-museum-long",
+      "nov-parcel-long",
+      "nov-staff-long",
+      "nov-fallback-long",
+      "nov-lost-long",
+      "nov-meeting-long"
+    ],
+    "lost": [
+      "nov-relay-long",
+      "nov-order-long",
+      "nov-trail-long"
+    ],
+    "dense_failed": [
+      "nov-ledger-long",
+      "nov-platform-long",
+      "nov-drawer-long",
+      "nov-rewrite-long",
+      "nov-omit-long",
+      "nov-format-long",
+      "nov-slice-long",
+      "nov-loop-long",
+      "nov-sql-long",
+      "nov-stock-long",
+      "nov-chain-long",
+      "nov-cost-long",
+      "nov-time-long",
+      "nov-host-long"
+    ],
+    "identical_ids": 11,
+    "divergent": [
+      {
+        "case": "nov-ledger-long",
+        "first_generated_difference": 7
+      },
+      {
+        "case": "nov-relay-long",
+        "first_generated_difference": 13
+      },
+      {
+        "case": "nov-order-long",
+        "first_generated_difference": 3
+      },
+      {
+        "case": "nov-rewrite-long",
+        "first_generated_difference": 0
+      },
+      {
+        "case": "nov-slice-long",
+        "first_generated_difference": 6
+      },
+      {
+        "case": "nov-stock-long",
+        "first_generated_difference": 0
+      },
+      {
+        "case": "nov-chain-long",
+        "first_generated_difference": 1
+      },
+      {
+        "case": "nov-cost-long",
+        "first_generated_difference": 10
+      },
+      {
+        "case": "nov-time-long",
+        "first_generated_difference": 0
+      },
+      {
+        "case": "nov-lost-long",
+        "first_generated_difference": 0
+      },
+      {
+        "case": "nov-host-long",
+        "first_generated_difference": 29
+      },
+      {
+        "case": "nov-trail-long",
+        "first_generated_difference": 9
+      },
+      {
+        "case": "nov-meeting-long",
+        "first_generated_difference": 25
+      }
+    ],
+    "old_block_range": [
+      33,
+      38
+    ],
+    "observations": 92,
+    "greedy_agreements": 87,
+    "kl_median": 0.009980289776787166,
+    "kl_p95": 0.6994233997060729,
+    "worst_kl": {
+      "case": "nov-rewrite-long",
+      "step": 0,
+      "kl": 2.4953120251024195
+    },
+    "per_vector_mean_abs_error_median": 0.5707033492040035,
+    "largest_abs_error": {
+      "case": "nov-sql-long",
+      "step": 0,
+      "error": 11.289937019348145
+    },
+    "top10_overlap_min": 5,
+    "top10_overlap_median": 9
+  },
+  {
+    "context": "short",
+    "arm": "quantized_all",
+    "cases": 24,
+    "preserved": [
+      "nov-ledger-short",
+      "nov-platform-short",
+      "nov-drawer-short",
+      "nov-crate-short",
+      "nov-relay-short",
+      "nov-museum-short",
+      "nov-parcel-short",
+      "nov-staff-short",
+      "nov-order-short",
+      "nov-rewrite-short",
+      "nov-format-short",
+      "nov-fallback-short",
+      "nov-loop-short",
+      "nov-sql-short",
+      "nov-chain-short",
+      "nov-time-short",
+      "nov-lost-short",
+      "nov-trail-short",
+      "nov-meeting-short"
+    ],
+    "lost": [],
+    "dense_failed": [
+      "nov-omit-short",
+      "nov-slice-short",
+      "nov-stock-short",
+      "nov-cost-short",
+      "nov-host-short"
+    ],
+    "identical_ids": 24,
+    "divergent": [],
+    "old_block_range": [
+      0,
+      0
+    ],
+    "observations": 82,
+    "greedy_agreements": 82,
+    "kl_median": 1.0239533794799331e-10,
+    "kl_p95": 2.2737131615264882E-7,
+    "worst_kl": {
+      "case": "nov-stock-short",
+      "step": 0,
+      "kl": 0.0000036045012984807833
+    },
+    "per_vector_mean_abs_error_median": 0.00034873303996513596,
+    "largest_abs_error": {
+      "case": "nov-stock-short",
+      "step": 0,
+      "error": 0.010738372802734375
+    },
+    "top10_overlap_min": 9,
+    "top10_overlap_median": 10
+  },
+  {
+    "context": "short",
+    "arm": "quantized_top8",
+    "cases": 24,
+    "preserved": [
+      "nov-ledger-short",
+      "nov-platform-short",
+      "nov-drawer-short",
+      "nov-crate-short",
+      "nov-relay-short",
+      "nov-museum-short",
+      "nov-parcel-short",
+      "nov-staff-short",
+      "nov-order-short",
+      "nov-rewrite-short",
+      "nov-format-short",
+      "nov-fallback-short",
+      "nov-loop-short",
+      "nov-sql-short",
+      "nov-chain-short",
+      "nov-time-short",
+      "nov-lost-short",
+      "nov-trail-short",
+      "nov-meeting-short"
+    ],
+    "lost": [],
+    "dense_failed": [
+      "nov-omit-short",
+      "nov-slice-short",
+      "nov-stock-short",
+      "nov-cost-short",
+      "nov-host-short"
+    ],
+    "identical_ids": 24,
+    "divergent": [],
+    "old_block_range": [
+      0,
+      0
+    ],
+    "observations": 82,
+    "greedy_agreements": 82,
+    "kl_median": 1.0239533794799331e-10,
+    "kl_p95": 2.2737131615264882E-7,
+    "worst_kl": {
+      "case": "nov-stock-short",
+      "step": 0,
+      "kl": 0.0000036045012984807833
+    },
+    "per_vector_mean_abs_error_median": 0.00034873303996513596,
+    "largest_abs_error": {
+      "case": "nov-stock-short",
+      "step": 0,
+      "error": 0.010738372802734375
+    },
+    "top10_overlap_min": 9,
+    "top10_overlap_median": 10
+  }
+]
