@@ -1,0 +1,636 @@
+{
+  "full_vector_checks": 120,
+  "maximum_ref_error": 0.00000191211333,
+  "maximum_regrouping_delta": 0.255937364,
+  "memory": [
+    {
+      "kind": "residency",
+      "layer": 0,
+      "free_before": 23938007040,
+      "free_live": 23898816512,
+      "all_weight_bytes": 38043648,
+      "common_workspace_bytes": 402436
+    },
+    {
+      "kind": "released",
+      "layer": 0,
+      "free_after": 23935909888
+    },
+    {
+      "kind": "residency",
+      "layer": 17,
+      "free_before": 23935909888,
+      "free_live": 23896719360,
+      "all_weight_bytes": 38043648,
+      "common_workspace_bytes": 402436
+    },
+    {
+      "kind": "released",
+      "layer": 17,
+      "free_after": 23935909888
+    },
+    {
+      "kind": "residency",
+      "layer": 35,
+      "free_before": 23935909888,
+      "free_live": 23896719360,
+      "all_weight_bytes": 38043648,
+      "common_workspace_bytes": 402436
+    },
+    {
+      "kind": "released",
+      "layer": 35,
+      "free_after": 23935909888
+    }
+  ],
+  "case_groups": [
+    {
+      "layer": 0,
+      "active": 1376,
+      "us": {
+        "dense_native": {
+          "wall": 907.0744,
+          "event": 906.766418,
+          "submit": 2.14895
+        },
+        "dense_zigzag": {
+          "wall": 266.11775,
+          "event": 265.804779,
+          "submit": 5.11145
+        },
+        "native_charged": {
+          "wall": 452.2566,
+          "event": 451.886414,
+          "submit": 7.44175
+        },
+        "native_oracle": {
+          "wall": 431.32875,
+          "event": 430.996765,
+          "submit": 5.08205
+        },
+        "packed_charged": {
+          "wall": 99.5104,
+          "event": 99.196793,
+          "submit": 10.2226
+        },
+        "packed_oracle": {
+          "wall": 86.0106,
+          "event": 85.643204,
+          "submit": 5.21135
+        },
+        "zigzag_charged": {
+          "wall": 92.6078,
+          "event": 92.249603,
+          "submit": 7.36735
+        },
+        "zigzag_oracle": {
+          "wall": 84.57155,
+          "event": 84.0336,
+          "submit": 5.21675
+        }
+      },
+      "packed_reduction_vs_dense_native": 0.890295217239071,
+      "zigzag_reduction_vs_dense_native": 0.8979049568591067,
+      "zigzag_reduction_vs_dense_zigzag": 0.6520044228541688
+    },
+    {
+      "layer": 0,
+      "active": 2752,
+      "us": {
+        "dense_native": {
+          "wall": 905.543,
+          "event": 905.179199,
+          "submit": 2.42815
+        },
+        "dense_zigzag": {
+          "wall": 264.8345,
+          "event": 264.415985,
+          "submit": 5.1879
+        },
+        "native_charged": {
+          "wall": 843.4943,
+          "event": 843.092896,
+          "submit": 8.0345
+        },
+        "native_oracle": {
+          "wall": 838.32415,
+          "event": 837.193542,
+          "submit": 5.0815
+        },
+        "packed_charged": {
+          "wall": 172.7313,
+          "event": 171.763214,
+          "submit": 8.8164
+        },
+        "packed_oracle": {
+          "wall": 155.92945,
+          "event": 155.395203,
+          "submit": 7.4114
+        },
+        "zigzag_charged": {
+          "wall": 146.9652,
+          "event": 146.591995,
+          "submit": 7.76075
+        },
+        "zigzag_oracle": {
+          "wall": 149.3277,
+          "event": 148.990402,
+          "submit": 5.07365
+        }
+      },
+      "packed_reduction_vs_dense_native": 0.8092511344022316,
+      "zigzag_reduction_vs_dense_native": 0.8377048908776281,
+      "zigzag_reduction_vs_dense_zigzag": 0.44506776873858955
+    },
+    {
+      "layer": 0,
+      "active": 5504,
+      "us": {
+        "dense_native": {
+          "wall": 906.57985,
+          "event": 906.201538,
+          "submit": 2.47465
+        },
+        "dense_zigzag": {
+          "wall": 266.53315,
+          "event": 266.152008,
+          "submit": 5.77005
+        },
+        "native_charged": {
+          "wall": 1634.4008,
+          "event": 1634.052856,
+          "submit": 7.26945
+        },
+        "native_oracle": {
+          "wall": 1585.03225,
+          "event": 1584.564697,
+          "submit": 5.07555
+        },
+        "packed_charged": {
+          "wall": 313.1696,
+          "event": 312.612793,
+          "submit": 7.84095
+        },
+        "packed_oracle": {
+          "wall": 287.5825,
+          "event": 286.891174,
+          "submit": 5.5086
+        },
+        "zigzag_charged": {
+          "wall": 243.4975,
+          "event": 243.144012,
+          "submit": 8.6079
+        },
+        "zigzag_oracle": {
+          "wall": 258.41915,
+          "event": 258.080017,
+          "submit": 5.52535
+        }
+      },
+      "packed_reduction_vs_dense_native": 0.6545592757218242,
+      "zigzag_reduction_vs_dense_native": 0.7314108624849758,
+      "zigzag_reduction_vs_dense_zigzag": 0.08642696039873454
+    },
+    {
+      "layer": 0,
+      "active": 11008,
+      "us": {
+        "dense_native": {
+          "wall": 906.95605,
+          "event": 905.920044,
+          "submit": 2.40425
+        },
+        "dense_zigzag": {
+          "wall": 265.84025,
+          "event": 265.494385,
+          "submit": 5.53945
+        },
+        "native_charged": {
+          "wall": 3240.3797,
+          "event": 3239.9375,
+          "submit": 8.9779
+        },
+        "native_oracle": {
+          "wall": 3175.9802,
+          "event": 3175.619141,
+          "submit": 4.9619
+        },
+        "packed_charged": {
+          "wall": 597.76015,
+          "event": 597.227173,
+          "submit": 8.66475
+        },
+        "packed_oracle": {
+          "wall": 551.49865,
+          "event": 550.776001,
+          "submit": 6.48995
+        },
+        "zigzag_charged": {
+          "wall": 407.8536,
+          "event": 407.169586,
+          "submit": 7.19255
+        },
+        "zigzag_oracle": {
+          "wall": 436.7294,
+          "event": 436.342377,
+          "submit": 5.26855
+        }
+      },
+      "packed_reduction_vs_dense_native": 0.340916078568526,
+      "zigzag_reduction_vs_dense_native": 0.5503050009975676,
+      "zigzag_reduction_vs_dense_zigzag": -0.5342055990392724
+    },
+    {
+      "layer": 17,
+      "active": 1376,
+      "us": {
+        "dense_native": {
+          "wall": 905.85125,
+          "event": 905.571167,
+          "submit": 2.66305
+        },
+        "dense_zigzag": {
+          "wall": 266.3291,
+          "event": 265.852814,
+          "submit": 5.76445
+        },
+        "native_charged": {
+          "wall": 452.36825,
+          "event": 452.0224,
+          "submit": 9.04145
+        },
+        "native_oracle": {
+          "wall": 432.95095,
+          "event": 432.571228,
+          "submit": 6.84545
+        },
+        "packed_charged": {
+          "wall": 98.59055,
+          "event": 98.187202,
+          "submit": 7.5473
+        },
+        "packed_oracle": {
+          "wall": 86.331,
+          "event": 86.0336,
+          "submit": 8.068
+        },
+        "zigzag_charged": {
+          "wall": 92.4534,
+          "event": 92.145599,
+          "submit": 8.1751
+        },
+        "zigzag_oracle": {
+          "wall": 84.4316,
+          "event": 84.031998,
+          "submit": 5.10125
+        }
+      },
+      "packed_reduction_vs_dense_native": 0.8911625391034124,
+      "zigzag_reduction_vs_dense_native": 0.8979375476933988,
+      "zigzag_reduction_vs_dense_zigzag": 0.6528603145506818
+    },
+    {
+      "layer": 17,
+      "active": 2752,
+      "us": {
+        "dense_native": {
+          "wall": 905.5957,
+          "event": 905.270386,
+          "submit": 2.2748
+        },
+        "dense_zigzag": {
+          "wall": 265.60315,
+          "event": 265.308807,
+          "submit": 4.6162
+        },
+        "native_charged": {
+          "wall": 842.14875,
+          "event": 841.849609,
+          "submit": 6.986
+        },
+        "native_oracle": {
+          "wall": 833.69975,
+          "event": 833.393555,
+          "submit": 5.01445
+        },
+        "packed_charged": {
+          "wall": 172.51555,
+          "event": 172.192001,
+          "submit": 8.45715
+        },
+        "packed_oracle": {
+          "wall": 156.39795,
+          "event": 156.09761,
+          "submit": 4.34625
+        },
+        "zigzag_charged": {
+          "wall": 147.4257,
+          "event": 147.128006,
+          "submit": 7.529
+        },
+        "zigzag_oracle": {
+          "wall": 149.10395,
+          "event": 148.753601,
+          "submit": 4.69595
+        }
+      },
+      "packed_reduction_vs_dense_native": 0.8095004757641848,
+      "zigzag_reduction_vs_dense_native": 0.837205830372207,
+      "zigzag_reduction_vs_dense_zigzag": 0.4449399414125925
+    },
+    {
+      "layer": 17,
+      "active": 5504,
+      "us": {
+        "dense_native": {
+          "wall": 905.71845,
+          "event": 905.375977,
+          "submit": 2.24915
+        },
+        "dense_zigzag": {
+          "wall": 265.95395,
+          "event": 265.582397,
+          "submit": 4.6442
+        },
+        "native_charged": {
+          "wall": 1640.4495,
+          "event": 1640.131226,
+          "submit": 7.02855
+        },
+        "native_oracle": {
+          "wall": 1588.68625,
+          "event": 1588.391968,
+          "submit": 4.90355
+        },
+        "packed_charged": {
+          "wall": 312.283,
+          "event": 311.929626,
+          "submit": 7.3783
+        },
+        "packed_oracle": {
+          "wall": 288.08935,
+          "event": 287.708801,
+          "submit": 4.93915
+        },
+        "zigzag_charged": {
+          "wall": 242.8089,
+          "event": 241.991989,
+          "submit": 7.37885
+        },
+        "zigzag_oracle": {
+          "wall": 257.14625,
+          "event": 256.843201,
+          "submit": 5.23785
+        }
+      },
+      "packed_reduction_vs_dense_native": 0.6552096294383757,
+      "zigzag_reduction_vs_dense_native": 0.7319156963182101,
+      "zigzag_reduction_vs_dense_zigzag": 0.0870265322248458
+    },
+    {
+      "layer": 17,
+      "active": 11008,
+      "us": {
+        "dense_native": {
+          "wall": 907.70875,
+          "event": 907.371216,
+          "submit": 2.2401
+        },
+        "dense_zigzag": {
+          "wall": 266.1525,
+          "event": 265.753601,
+          "submit": 4.3693
+        },
+        "native_charged": {
+          "wall": 3269.65815,
+          "event": 3269.255859,
+          "submit": 7.4442
+        },
+        "native_oracle": {
+          "wall": 3178.212,
+          "event": 3177.729736,
+          "submit": 5.47005
+        },
+        "packed_charged": {
+          "wall": 597.4226,
+          "event": 597.076782,
+          "submit": 7.7648
+        },
+        "packed_oracle": {
+          "wall": 551.5654,
+          "event": 550.81604,
+          "submit": 4.7925
+        },
+        "zigzag_charged": {
+          "wall": 405.79775,
+          "event": 405.409607,
+          "submit": 6.6539
+        },
+        "zigzag_oracle": {
+          "wall": 434.27235,
+          "event": 433.936035,
+          "submit": 4.561
+        }
+      },
+      "packed_reduction_vs_dense_native": 0.34183448159996255,
+      "zigzag_reduction_vs_dense_native": 0.5529427803797198,
+      "zigzag_reduction_vs_dense_zigzag": -0.524681338706193
+    },
+    {
+      "layer": 35,
+      "active": 1376,
+      "us": {
+        "dense_native": {
+          "wall": 905.9034,
+          "event": 905.553589,
+          "submit": 2.36995
+        },
+        "dense_zigzag": {
+          "wall": 266.55945,
+          "event": 266.238403,
+          "submit": 5.35215
+        },
+        "native_charged": {
+          "wall": 445.3673,
+          "event": 444.29599,
+          "submit": 8.45715
+        },
+        "native_oracle": {
+          "wall": 431.879,
+          "event": 431.559998,
+          "submit": 5.79555
+        },
+        "packed_charged": {
+          "wall": 99.859,
+          "event": 99.431992,
+          "submit": 7.9698
+        },
+        "packed_oracle": {
+          "wall": 84.68305,
+          "event": 84.263992,
+          "submit": 4.42675
+        },
+        "zigzag_charged": {
+          "wall": 92.96515,
+          "event": 92.672005,
+          "submit": 7.90155
+        },
+        "zigzag_oracle": {
+          "wall": 84.6898,
+          "event": 84.388802,
+          "submit": 4.4862
+        }
+      },
+      "packed_reduction_vs_dense_native": 0.889768600051617,
+      "zigzag_reduction_vs_dense_native": 0.8973785174004204,
+      "zigzag_reduction_vs_dense_zigzag": 0.6512404643692056
+    },
+    {
+      "layer": 35,
+      "active": 2752,
+      "us": {
+        "dense_native": {
+          "wall": 906.3244,
+          "event": 906.012817,
+          "submit": 2.12505
+        },
+        "dense_zigzag": {
+          "wall": 267.17475,
+          "event": 266.873596,
+          "submit": 4.54505
+        },
+        "native_charged": {
+          "wall": 838.7526,
+          "event": 838.41925,
+          "submit": 7.4205
+        },
+        "native_oracle": {
+          "wall": 821.6896,
+          "event": 821.276733,
+          "submit": 4.95355
+        },
+        "packed_charged": {
+          "wall": 172.38425,
+          "event": 172.083206,
+          "submit": 7.4682
+        },
+        "packed_oracle": {
+          "wall": 155.978,
+          "event": 155.667206,
+          "submit": 4.8737
+        },
+        "zigzag_charged": {
+          "wall": 147.7891,
+          "event": 147.468811,
+          "submit": 7.27605
+        },
+        "zigzag_oracle": {
+          "wall": 147.62475,
+          "event": 147.316803,
+          "submit": 6.13915
+        }
+      },
+      "packed_reduction_vs_dense_native": 0.8097985114380679,
+      "zigzag_reduction_vs_dense_native": 0.8369357594256538,
+      "zigzag_reduction_vs_dense_zigzag": 0.44684480850080344
+    },
+    {
+      "layer": 35,
+      "active": 5504,
+      "us": {
+        "dense_native": {
+          "wall": 907.3425,
+          "event": 907.001587,
+          "submit": 2.30365
+        },
+        "dense_zigzag": {
+          "wall": 266.6256,
+          "event": 266.222412,
+          "submit": 5.58475
+        },
+        "native_charged": {
+          "wall": 1651.57905,
+          "event": 1650.35376,
+          "submit": 7.22405
+        },
+        "native_oracle": {
+          "wall": 1572.6364,
+          "event": 1572.337646,
+          "submit": 5.85805
+        },
+        "packed_charged": {
+          "wall": 311.7475,
+          "event": 310.840027,
+          "submit": 8.78995
+        },
+        "packed_oracle": {
+          "wall": 286.8311,
+          "event": 286.497589,
+          "submit": 4.3579
+        },
+        "zigzag_charged": {
+          "wall": 244.65575,
+          "event": 244.302399,
+          "submit": 7.4366
+        },
+        "zigzag_oracle": {
+          "wall": 258.58085,
+          "event": 258.004822,
+          "submit": 4.6217
+        }
+      },
+      "packed_reduction_vs_dense_native": 0.6564169539066009,
+      "zigzag_reduction_vs_dense_native": 0.7303600900431755,
+      "zigzag_reduction_vs_dense_zigzag": 0.08239962704256454
+    },
+    {
+      "layer": 35,
+      "active": 11008,
+      "us": {
+        "dense_native": {
+          "wall": 905.9259,
+          "event": 905.558411,
+          "submit": 2.4079
+        },
+        "dense_zigzag": {
+          "wall": 266.87155,
+          "event": 266.379211,
+          "submit": 4.6037
+        },
+        "native_charged": {
+          "wall": 3238.7232,
+          "event": 3238.451416,
+          "submit": 8.5393
+        },
+        "native_oracle": {
+          "wall": 3171.8564,
+          "event": 3171.544189,
+          "submit": 5.00575
+        },
+        "packed_charged": {
+          "wall": 596.97655,
+          "event": 596.680054,
+          "submit": 8.0131
+        },
+        "packed_oracle": {
+          "wall": 550.6685,
+          "event": 550.267212,
+          "submit": 4.64645
+        },
+        "zigzag_charged": {
+          "wall": 406.6658,
+          "event": 406.335999,
+          "submit": 8.3081
+        },
+        "zigzag_oracle": {
+          "wall": 432.04015,
+          "event": 430.884827,
+          "submit": 4.53645
+        }
+      },
+      "packed_reduction_vs_dense_native": 0.34103158989051974,
+      "zigzag_reduction_vs_dense_native": 0.5511047868263839,
+      "zigzag_reduction_vs_dense_zigzag": -0.523825975455233
+    }
+  ]
+}
