@@ -49,3 +49,12 @@ identifies each complete archive, including command lines and all logs.
 The [packaging check](pack-isolated.sh) verifies the compile paths, run
 paths, exits, source revision and uncompressed log bytes. Separate
 device tests remain necessary for any CUDA correctness or timing claim.
+
+## Real-activation Q4 study
+
+At 5dde384 on research/1121-sparse-q4-live, formatting, 224 non-CUDA
+tests and CUDA/server all-target Clippy passed with the GPU hidden.
+The [source-isolated index](isolated/index.tsv) includes the archive.
+The independent capture, threshold and paired-timing tests ran separately.
+This compile and CPU regression evidence precedes the capture and charged
+operator measurements on the M40.
