@@ -27,6 +27,12 @@ matched the dense answer, while top-8 changed the Boolean from true to
 false. This repeats one task at a longer context and leaves the original
 ten-case denominator intact. [Relay generations](../2026-11-21-kv-audit/history-relay-generations.json).
 
+The completed boundary cohort retained all four dense-passing answers
+with top-64 and three with top-8. It covered three distinct tasks, one
+repeated at two lengths. The 3,200-token code case passed in every arm.
+Across 60 matched comparisons, the maximum KL against full mixed history
+was 0.00010917 for top-64 and 0.32391938 for top-8. [Complete boundary cohort](https://github.com/GuyPaddock/m40-llm/blob/8bf7a3d26d6d8ed301ef3b3953ff926dfeab80bc/docs/experiments/2026-11-21-kv-history/result/README.md).
+
 The profile already defaults to top-8 on
 supported paths. Changing that setting would be a separate compatibility
 decision. At capacity 8,448, e100c54 measured a 1.01% peak saving for mixed KV.
