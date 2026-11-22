@@ -1,6 +1,6 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 46 decisions for which the
+The [candidate matrix](candidates.tsv) records 47 decisions for which the
 scope can already be established. Each row has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
@@ -181,6 +181,14 @@ qualified checkpoint. Keep the supplied-index Q4
 executor as a control for sparse-layout work. Retain GSQ as a checkpoint
 preparation question, and preserve the terminal-prefill dependency trace
 for workloads with a larger measured opportunity. [Closure register](../2026-11-21-closed-directions/README.md).
+
+The separate real-activation Q4 study passed the charged operator gate
+in both layouts. The packed 50% cutoff saved 41.63–42.95% against full
+packed. The zigzag 25% cutoff saved 42.89–47.19% against full zigzag.
+Both include device selection and compaction, with three measured
+layers on the same checkpoint. The operator errors admit one
+real-model quality study with full and thresholded layouts kept as
+separate arms. [Held-out operator result](https://github.com/GuyPaddock/m40-llm/blob/be7bf4bbfa90eb468b2af53f5c8732e8d1a05c04/docs/experiments/2026-11-22-sparse-q4-live/operator-result/README.md).
 
 The [dependency-ordered rebuild](../2026-11-21-main-dependencies/README.md)
 makes native Q8 checkpoint admission distinct from optional prepared

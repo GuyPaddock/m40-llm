@@ -199,7 +199,11 @@ The same preformatted Qwen text also gains an extra BOS on main.
   9a68003. They exist on Phase 4 as explicit calls and controls for
   SpQt; no live causal selector qualified. A stable port would require
   Q4 GGUF admission and a measured benefit after indexing, compaction
-  and resident layout costs. Preserve the research implementations.
+  and resident layout costs. The charged SwiGLU operator screen at
+  be7bf4b admits the three-layer real-model quality check at 5324ba5.
+  The driver at 0736f06 reuses the measured arithmetic and existing
+  research exclusions. Keep it outside the stable sequence until
+  the quality and complete-request gates qualify.
 - A5 benchmark clients, optional timing clocks, D3 fairness diagnostics
   and oracle adapters are evidence tools. Main-serving changes require
   their own review and measured scheduling case. Preserve main's existing

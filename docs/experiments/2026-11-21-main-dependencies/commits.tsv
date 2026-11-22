@@ -79,3 +79,6 @@ c8ddabec804e1b4f7eccbf7082d4c567de1fc76c	docs(perf): qualify direct TinyLlama KV
 08907997d87cb47e87abbbf0eb2debe086a634a4	docs(research): freeze live copy verifier test	Guy Elsmore-Paddock
 16b29d0cc3e84d041af378f4634e8303475152b8	test(cuda): compare live copy verifier schedules	Guy Elsmore-Paddock
 7ff9d33f48c831c4218b5027d6a1cbf01d6c0ad3	docs(perf): qualify the paired Q8 portfolio	Guy Elsmore-Paddock
+be7bf4bbfa90eb468b2af53f5c8732e8d1a05c04	docs(q4): qualify charged sparse operators	Guy Elsmore-Paddock
+0736f062d2a4ac3f2b2bf39b48635689a4362528	feat(research): bind admitted Q4 down layouts	Guy Elsmore-Paddock
+5324ba57f55f45462fcd34c42f41b7b56e7f5451	test(research): freeze sparse Q4 quality arms	Guy Elsmore-Paddock
