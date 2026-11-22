@@ -27,3 +27,18 @@ above variation while same-node controls remain stable. An inconclusive
 result closes this bounded screen. A further prototype needs at least 5%
 credible complete-token headroom and a distinct whole-model comparison;
 the operator result alone does not qualify pruning of a required fallback.
+
+The benchmark at 783d0e5 uses the production CUDA graph, decode-stream
+event and KV-cache APIs. Record [the executable](binary.sha256) using
+`M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo build --release --locked --features cuda --example graph_node_cost`.
+Run [the serial driver](run.sh) from this worktree. The dimensioned input
+generator and live lengths are in examples/graph_node_cost/measure.rs;
+no GGUF model is loaded in this operator test.
+
+The [analysis](analyze.py) verifies each actual graph's queried node
+count. For each round it subtracts the ordinary capacity difference from
+the graph capacity difference. It reports event, CPU and wall means per
+call, cohort medians, both five-round subsets and 10,000 paired
+resamples of ten rounds. [The accounting check](check-pairs.sh) separated
+a common 2 µs capacity effect from an added 3 µs graph effect, recovered
+zero on the generic placebo and rejected an incorrect node count.
