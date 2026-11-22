@@ -1,0 +1,7 @@
+# Expanded KV evaluation inputs
+
+Freeze the 24 original November tasks in data/research_quality/2026-11-21-kv-tasks.json before evaluation. Each uses the existing Task and ScoringRule deserializers. Four tasks per family cover instructions, retrieval, multi-fact recall, code, reasoning and long-form writing. The six original October held-out cases remain a separate cohort. The vocabulary checks on long writing are surface proxies. Retain complete generations for semantic errors and degeneration review.
+
+For every task use the October branch 9da2390 fixture.rs ChatML renderer for short. For long, use render_long_task and the numbered stone/wool/copper archive in create_cases, with the task first and answer instruction last. Append lines until the first length of at least 2048 IDs, require under 2112, recent window 1024, block size 32, capacity 3072. This places the complete task in historical cache; retain real IDs and task-end position. Run the 8192 cohort of the performance protocol separately. Keep the stated generation budgets and natural stops.
+
+All 24 known answers passed the production scorer, and each rubric rejected unrelated text. Run the non-CUDA research_quality test target to repeat. Structured code completion has a frozen restricted answer format and is not a general program-equivalence benchmark. Preserve output from dense-failed rows for analysis and exclude them from preservation claims. Freeze tokenized manifests before inference and score dense arms before opening candidate scores.

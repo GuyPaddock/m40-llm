@@ -134,3 +134,33 @@ fn test_concept_rubric_checks_coverage_and_structure() -> Result<()> {
     assert_eq!(first, rule.score(good)?);
     Ok(())
 }
+
+/// Exercise each November rubric with an independently supplied passing answer
+/// and a wrong answer before any candidate generations enter the evidence.
+#[test]
+fn test_november_kv_answers_cover_all_families() -> Result<()> {
+    use m40_llm::evaluation::corpus::Task;
+
+    let tasks: Vec<Task> = serde_json::from_str(include_str!(
+        "../data/research_quality/2026-11-21-kv-tasks.json"
+    ))?;
+    let answers = [
+        "BASALT", "5", "Cedar", "Kestrel",
+        r#"{"passed":true,"port":23}"#,
+        r#"{"opening_day_B":"Saturday","closing_day_A":"Friday"}"#,
+        r#"{"elm_city":"Kent","ash_kg":5}"#,
+        r#"{"bay":3,"lead":"Noel"}"#,
+        "Fern, Hazel, Iris", "Indigo", "lime/plum", "2031-03-09",
+        "lan", "4", "[x * x for x in xs]", "HAVING", "9", "green", "9", "08:45",
+        "Close the notebook where you found it to protect the owner's privacy. Carry it to reception and tell the person at the desk the time and place you saw it. They can keep it safe while the owner retraces the visit.",
+        "Welcome to the neighborhood potluck. Please set your dish on the shared table and write labels for anything other guests may need to know before they eat. After dinner we would appreciate a hand with cleanup so the hall is ready for its next visitors.",
+        "Read the map before you leave the trail entrance and look for a marker at each fork. If the route ahead becomes hard to follow, return to the last signed junction and check the direction again before continuing on your walk.",
+        "Start with an agenda that gives every volunteer a chance to raise one concern. Ask someone to take notes on the decisions. Before people leave, choose an owner and a deadline for each job so the group knows when to check in again.",
+    ];
+    assert_eq!(tasks.len(), answers.len());
+    for (task, answer) in tasks.iter().zip(answers) {
+        assert!(task.scoring.score(answer)?.passed, "{}", task.id);
+        assert!(!task.scoring.score("unrelated")?.passed, "{}", task.id);
+    }
+    Ok(())
+}
