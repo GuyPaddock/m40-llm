@@ -1,0 +1,30 @@
+{
+  "correctness_cases": 21,
+  "workloads": [
+    {
+      "id": "held-copy-short",
+      "disposition": "PASS",
+      "prompt_tokens": 132,
+      "generated_tokens": 52,
+      "rounds": [
+        [
+          "screen",
+          5
+        ]
+      ]
+    },
+    {
+      "id": "held-copy-long",
+      "disposition": "PASS",
+      "prompt_tokens": 393,
+      "generated_tokens": 68,
+      "rounds": [
+        [
+          "screen",
+          5
+        ]
+      ]
+    }
+  ],
+  "timings_and_key_checks_replayed": true
+}
