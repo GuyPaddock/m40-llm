@@ -197,6 +197,14 @@ The batched diagnostic brought the last client's first sample from
 still uses recent-only KV for every request.
 [Default four-client result](https://github.com/GuyPaddock/m40-llm/blob/8d2c839d9fc0922d06eaae3ed3bbf8b76508e9fa/docs/experiments/2026-11-21-serving-concurrency/default-four/README.md).
 
+The four-client dense cohort gained 94.733% aggregate throughput
+with the same generated IDs. The latest first sample fell from
+59.195 to 14.265 s. Per-request P95 gaps increased from about 135
+to 327 ms. The sampled process peak rose 161 MiB. Its complete
+comparison supports the existing opt-in short-prompt configuration
+and supplies a useful clean-base regression workload.
+[Dense four-client result](https://github.com/GuyPaddock/m40-llm/blob/3d10ccaa44be00fa7fd3d66ea7b8b836836ad45e/docs/experiments/2026-11-21-serving-concurrency/dense-four/README.md).
+
 **Excluded work.** The original channel selector, ShiftAdd, additional
 multi-row gate/up fusion, lossless KV compression and DualPace all missed
 their October gates. The later causal-selector and general adaptive

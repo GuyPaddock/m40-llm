@@ -17,6 +17,12 @@ generation mutex, with 128 matching sampled IDs. The peak rose from
 3,312 to 3,501 MiB. Diagnostic P95 inter-token gaps rose from about 150
 to 228 ms. [Two-client report](https://github.com/GuyPaddock/m40-llm/blob/c708a507a3d28a8bdbb1f634fb4ed45d055239f6/docs/experiments/2026-11-21-serving-concurrency/default-two/README.md).
 
+With four simultaneous short requests and dense KV, batching improved
+aggregate HTTP throughput 94.733% [94.574%, 95.077%] and matched 256
+generated IDs. The sampled process peak rose from 3,275 to 3,436 MiB.
+Diagnostic P95 token gaps increased from about 135 to 327 ms.
+[Four-client dense report](https://github.com/GuyPaddock/m40-llm/blob/3d10ccaa44be00fa7fd3d66ea7b8b836836ad45e/docs/experiments/2026-11-21-serving-concurrency/dense-four/README.md).
+
 After Portage paused, five fresh alternating Qwen Q8_0 HTTP pairs
 reproduced the benefit of preparing only down and vocabulary weights.
 Throughput rose from 31.922 to 35.681 tok/s on the dense 65-input,
