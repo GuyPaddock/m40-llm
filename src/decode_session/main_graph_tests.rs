@@ -76,12 +76,12 @@ fn tinyllama_graph_preserves_logits_and_valid_kv() -> Result<()> {
     let mut model = LoadedModel::from_gguf(gguf::load_gguf(&path)?, std::fs::read(&path)?, -1)?;
     let props = model.cuda.current_device_props()?;
     ensure!((props.major, props.minor) == (5, 2), "expected sm_52");
-    model.validate_full_layer_decode()?;
     ensure!(
         model.model_config.block_count == 22 && model.model_config.embedding_length == 2048,
         "unexpected TinyLlama shape"
     );
     model.allocate_kv_cache_for_layer_sequences(16, 2)?;
+    model.validate_full_layer_decode()?;
     let prompt = [1, 529, 29989, 5205, 29989, 29958, 887, 526];
     // Populate any lazily materialized model weights before measuring session cleanup.
     {

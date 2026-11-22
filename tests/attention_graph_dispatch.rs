@@ -89,10 +89,10 @@ fn compare_dispatch(capacity: u32, lengths: &[u32]) -> Result<()> {
         for (index, slot) in [0, 2].into_iter().enumerate() {
             for token in 0..capacity {
                 let offset = (index * capacity as usize + token as usize) * token_width;
-                // Inputs remain owned until all appends finish on decode.
-                // The ordinary append preserves these already prepared keys.
+                // Main's next append reads the previous length on the host.
+                // Finish the decode-stream update before using that length.
                 unsafe {
-                    kv.append_token_f32_async(
+                    kv.append_token_f32(
                         &ctx,
                         slot,
                         input_k.pointer(offset),
@@ -100,6 +100,7 @@ fn compare_dispatch(capacity: u32, lengths: &[u32]) -> Result<()> {
                     )?;
                 }
             }
+            assert_eq!(kv.debug_sequence_length(&ctx, slot)?, capacity);
         }
         ctx.synchronize_stream(CudaStream::Decode)?;
         let query = FloatBuffer::new(&ctx, &vec![0.0; query_width])?;
