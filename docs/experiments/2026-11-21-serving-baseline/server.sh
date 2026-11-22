@@ -66,6 +66,7 @@ start_study() {
         cuobjdump -lelf "$phase4_bin"
         cuobjdump -lelf "$main_bin"
         nvcc --version
+        printf 'process_clock_ticks_per_second=%s\n' "$(getconf CLK_TCK)"
         gpu_snapshot
     } > "$out/preflight.txt"
     trap stop_study EXIT
@@ -107,7 +108,9 @@ call_clients() {
     shift 2
     check_gpu_owners
     gpu_snapshot > "$out/$label.before"
+    cat "/proc/$server_pid/stat" > "$out/$label.cpu-before"
     "$client" --server "$url" --requests "$@" --offsets-ms "$offsets" --output "$out/$label.json"
+    cat "/proc/$server_pid/stat" > "$out/$label.cpu-after"
     gpu_snapshot > "$out/$label.after"
     check_gpu_owners
 }

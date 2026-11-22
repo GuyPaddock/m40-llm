@@ -56,6 +56,29 @@ request intervals and CLI process measurements have separate boundaries.
 Five alternating pairs each use a fresh process and a full warmup per arm to
 avoid jointly resident models changing backend or allocation decisions.
 
+Run `bash replay.sh RAW_DIRECTORY > cohort.json` from this directory after
+the teardown snapshot exists. The replay checks each buffered response
+against its arm's trace, prompt and stop IDs, recorded wall time and trial
+order. It reports the first five pairs, any ten-pair extension, and fresh
+confirmation separately. Each trial retains its server PID's sampled
+peak VRAM, launch-to-health duration, and user plus system CPU seconds
+bracketing the HTTP client. Those CPU seconds include all server threads.
+Launch-to-health includes the monitoring snapshot and health polling.
+The 250 ms process sampler can miss a shorter allocation peak. The
+dedicated cache-residency experiment measures cache growth separately.
+
+Generation TTFT starts at admission. Prompt throughput includes setup
+through the first sampled token. Decode throughput divides the remaining
+sample count, including a sampled stop, by the first-to-last sample span.
+Whole-request throughput uses every sampled token and the client's wall
+clock. The token-timed companion supplies one distribution per arm with
+nearest-rank P50/P95 across its individual gaps. Its wall time and the
+logged CLI's total time, CPU and peak RSS remain separate from ordinary
+HTTP trials. The streaming client retains the arrival of the first
+nonterminal NDJSON record, which can contain empty text. A legacy server
+without sample clocks can still supply client wall time and record
+arrival. Its unavailable generation metrics appear as null.
+
 ## Local Qwen Q4_0 secondary baseline
 
 The Phase 4 CPU loader mapped all 36 standard layers at width 2048 and FFN
