@@ -4041,9 +4041,9 @@ impl KVCache {
 
     /// # Safety
     /// Enqueues GQA last-token attention on the decode stream using a
-    /// device-resident `seq_len` parameter. The initial implementation uses the
-    /// generic attention kernel so graph replay can vary sequence length without
-    /// host-updated kernel parameters.
+    /// device-resident `seq_len` parameter. Graph replay uses the ordinary
+    /// reduction for the active head shape and length, including the fallback
+    /// above 8192 tokens.
     pub unsafe fn attention_last_token_f32_gqa_seq_len_dev_async(
         &self,
         ctx: &CudaContext,
