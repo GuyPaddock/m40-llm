@@ -37,6 +37,18 @@ showed PID 48103 stopped, sleeping descendants and no increase in whole CPU
 seconds between the two observations. Check host activity during every
 subsequent timed cohort.
 
+The [main dependency audit](experiments/2026-11-21-main-dependencies/README.md)
+traces graph, mixed KV, prepared Q8 and the target verifier to the pinned
+base. The actual loader at dd81f05 rejects layer-0 and tied-head Q8 in
+Qwen. TinyLlama F16 supplies a matched 46-ID cross-branch workload.
+Research/1121-consolidation a1b2470 runs the CLI, buffered HTTP and stream
+comparisons. Research/1121-prefill-fairness f351a28 measures real overlap
+between prefill and ongoing decode. On research/1121-kv-scale-port,
+a898ac2 builds the original Q8 regression directly on main, 75ed22f
+ports both barriers, and d56ca89 binds the serial positive and negative
+tests. Fixed and unfixed sm_52 release binaries exist. Their main-based
+hardware qualification and the serving results are pending.
+
 The serial cohorts and their raw logs live under the adjacent research-1121/raw directory. Compiled probes and queued jobs are pending evidence until their completion records, workloads and outputs are audited. The final shortlist and rebuild sequence remain open.
 
 ## October checkpoint
