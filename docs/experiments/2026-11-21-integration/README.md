@@ -39,6 +39,10 @@ Retain free generation as a separate gate. [Complete boundary cohort](https://gi
 The profile already defaults to top-8 on
 supported paths. Changing that setting would be a separate compatibility
 decision. At capacity 8,448, e100c54 measured a 1.01% peak saving for mixed KV.
+The allocator formula puts the requested-byte crossover at capacity
+3,403 for the measured 36-layer, one-sequence geometry. The fixed recent
+ring and the replicated summary capacity account for the short-context
+penalty. [Allocation arithmetic and measured peaks](https://github.com/GuyPaddock/m40-llm/blob/623fd33aa425350124b4c07953d3a65c4c265d08/docs/experiments/2026-11-21-kv-residency/README.md).
 Main already consumes this storage directly. In November, all 144 matched operator comparisons reproduced the October
 benefit. The live HTTP comparison and the lossy historical-block policy
 have separate qualification gates.
