@@ -1,6 +1,6 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 44 decisions for which the
+The [candidate matrix](candidates.tsv) records 45 decisions for which the
 scope can already be established. Each row has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
@@ -97,6 +97,13 @@ TinyLlama F16 head64 HTTP pairs gained 8.775% throughput
 that workload. The staged runtime is unavailable on Qwen head128.
 The lossy block-selection policy has its own qualification gate.
 [Matched historical-KV result](../2026-11-21-serving-baseline/tiny-kv-consumer/result/README.md).
+
+With the short Qwen request inside the recent window, explicit dense
+KV finished 7.744% more buffered output tokens per second and used
+37 MiB less sampled process memory. The first internal sample came
+later with dense. Keep this as a complete-request reference for the
+same 65 prompt and 512 generated IDs. Historical contexts have their
+own baseline. [Short Qwen controls](../2026-11-21-serving-baseline/qwen-short/README.md).
 
 **When compound FFN is enabled, keep joint-only ownership.** The paired
 HTTP control retained identical gate/up weights in two layouts. Eliminating

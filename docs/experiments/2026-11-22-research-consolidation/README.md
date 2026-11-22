@@ -48,6 +48,11 @@ record for negative and prerequisite-limited studies.
   [Boundary vectors](https://github.com/GuyPaddock/m40-llm/blob/efaf5e8d84b74c84dad9ff0de3693fb8bd031cec/docs/experiments/2026-11-21-kv-history/result/README.md) ·
   [Direct HTTP comparison](../2026-11-21-serving-baseline/tiny-kv-consumer/result/README.md) ·
   [Reuse](https://github.com/GuyPaddock/m40-llm/blob/27fc182d9e92d2fbe509550e7aab1cf5ee385850/docs/experiments/2026-11-22-kv-cache-reuse.md).
+- **Short Qwen baseline.** Explicit dense KV gained 7.744% against
+  default KV for 65 prompt tokens and 512 outputs, with identical
+  IDs and 37 MiB lower sampled peak. Its median internal first sample
+  took 8.521 s versus 3.830 s default. Both requests fit inside the
+  compressed cache's recent window. [Matched default and dense baseline](../2026-11-21-serving-baseline/qwen-short/README.md).
 - **Prepared Q8.** Preparing only down and vocabulary layouts had the
   strongest measured short HTTP result against native Q8. Preparing all
   families lost 64.21% on that historical request. When compound FFN is
