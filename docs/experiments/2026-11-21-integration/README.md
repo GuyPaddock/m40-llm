@@ -31,7 +31,10 @@ The completed boundary cohort retained all four dense-passing answers
 with top-64 and three with top-8. It covered three distinct tasks, one
 repeated at two lengths. The 3,200-token code case passed in every arm.
 Across 60 matched comparisons, the maximum KL against full mixed history
-was 0.00010917 for top-64 and 0.32391938 for top-8. [Complete boundary cohort](https://github.com/GuyPaddock/m40-llm/blob/8bf7a3d26d6d8ed301ef3b3953ff926dfeab80bc/docs/experiments/2026-11-21-kv-history/result/README.md).
+was 0.00010917 for top-64 and 0.32391938 for top-8. Dense versus full
+mixed history reached 0.009902. Every arm agreed on the greedy ID at
+all 12 sampled positions, yet top-8 lost the relay answer between samples.
+Retain free generation as a separate gate. [Complete boundary cohort](https://github.com/GuyPaddock/m40-llm/blob/39635f66ba000e5e969738d511af7ffde8fb0a9c/docs/experiments/2026-11-21-kv-history/result/README.md).
 
 The profile already defaults to top-8 on
 supported paths. Changing that setting would be a separate compatibility
