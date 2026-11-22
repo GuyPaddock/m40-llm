@@ -1,0 +1,4 @@
+1c134cf5718c1c7e4d7323d1e095f9dc155c2d34
+9e7e1b9d6470072f95b0b65713d4ddbc4945dbcdeec9c41cd6f374c3ae81da33  target/release/examples/main_model_admission
+a3d3b51c9ce58eb893a74d0efece48f49a112e0a290ce457ddbcdf00530288c1  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/research-1121/raw/performance-contexts.json
+5a44d3a91edaba513bfaf5464adc658bfd4c1ab2c3959897a6913d9368afd8d6  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/research-1121/consolidation/docs/experiments/2026-11-21-protocol/local-models.sha256
