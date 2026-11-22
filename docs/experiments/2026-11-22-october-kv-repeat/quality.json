@@ -1,0 +1,90 @@
+[
+  {
+    "context": "long",
+    "arm": "quantized_all",
+    "cases": 6,
+    "dense_passes": 3,
+    "preserved_dense_passes": 3,
+    "dense_failures": 3,
+    "identical_generated_ids": 5,
+    "observed_old_blocks": [
+      33,
+      37
+    ],
+    "prefix_observations": 27,
+    "kl": {
+      "median": 0.0002672769868972681,
+      "p95": 0.017489461283537434,
+      "maximum": 0.03863950569463823
+    },
+    "max_abs_logit_error": 1.9711257219314575,
+    "different_traces": [
+      "held-long-garden-long"
+    ]
+  },
+  {
+    "context": "long",
+    "arm": "quantized_top8",
+    "cases": 6,
+    "dense_passes": 3,
+    "preserved_dense_passes": 3,
+    "dense_failures": 3,
+    "identical_generated_ids": 5,
+    "observed_old_blocks": [
+      33,
+      37
+    ],
+    "prefix_observations": 27,
+    "kl": {
+      "median": 0.002294343938779939,
+      "p95": 0.14679252718710697,
+      "maximum": 0.1887538703009883
+    },
+    "max_abs_logit_error": 9.98412275314331,
+    "different_traces": [
+      "held-long-garden-long"
+    ]
+  },
+  {
+    "context": "short",
+    "arm": "quantized_all",
+    "cases": 6,
+    "dense_passes": 4,
+    "preserved_dense_passes": 4,
+    "dense_failures": 2,
+    "identical_generated_ids": 6,
+    "observed_old_blocks": [
+      0,
+      0
+    ],
+    "prefix_observations": 25,
+    "kl": {
+      "median": 1.2821902723249176E-10,
+      "p95": 7.096569006121693E-8,
+      "maximum": 4.6099027681365365E-7
+    },
+    "max_abs_logit_error": 0.006288290023803711,
+    "different_traces": []
+  },
+  {
+    "context": "short",
+    "arm": "quantized_top8",
+    "cases": 6,
+    "dense_passes": 4,
+    "preserved_dense_passes": 4,
+    "dense_failures": 2,
+    "identical_generated_ids": 6,
+    "observed_old_blocks": [
+      0,
+      0
+    ],
+    "prefix_observations": 25,
+    "kl": {
+      "median": 1.2821902723249176E-10,
+      "p95": 7.096569006121693E-8,
+      "maximum": 4.6099027681365365E-7
+    },
+    "max_abs_logit_error": 0.006288290023803711,
+    "different_traces": []
+  }
+]

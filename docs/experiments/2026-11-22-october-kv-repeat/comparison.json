@@ -1,0 +1,36 @@
+{
+  "historical_revision": "421df83e085212b78ca0d2e57b91a20ebb879e1e",
+  "repeat_revision": "e100c549e9f40654df3f8fb587f939ac69712ae7",
+  "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+  "inputs_sha256": "e2e7ce56f0223bf929705dd49c33610ac01a0992837bb9c376bcea6dfc62b5de",
+  "generated_tokens": 1149,
+  "checks": [
+    {
+      "kind": "kv_quality_case_complete",
+      "count": 12
+    },
+    {
+      "kind": "kv_quality_comparison",
+      "count": 24
+    },
+    {
+      "kind": "kv_quality_complete",
+      "count": 1
+    },
+    {
+      "kind": "kv_quality_generation",
+      "count": 36
+    },
+    {
+      "kind": "kv_quality_manifest",
+      "count": 1
+    },
+    {
+      "kind": "kv_quality_prefix_reference",
+      "count": 12
+    }
+  ],
+  "matched_prefix_observations": 104,
+  "different_records": [],
+  "all_deterministic_fields_equal": true
+}
