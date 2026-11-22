@@ -84,6 +84,18 @@ git diff e1403e0 75ed22f -- cuda/kernels.cu tests/q8_kv_scale_reuse.rs \
    cuBLAS on/off. bfae111 establishes Phase 4 correctness. Speed has
    separate capture, replay, and full-request gates.
 
+   The repaired attention launcher is independent of the F16 projection
+   backend. On e1403e0, the graph forward path joins the prefill stream
+   before QKV. `src/infer/gemm.rs::matmul_f32xf16_gguf_f32_async` uses the
+   async FP32 materialized path only when cuBLAS and that layout are
+   available. Its native F16 fallback calls
+   `cuda/kernels.cu::m40llm_gemm_f32xf16_gguf_f32`, which synchronizes
+   the prefill stream joined by capture. The main retry therefore
+   distinguishes actual replay from ordinary fallback in both build modes.
+   Phase 4's async native F16 controls use a separate implementation at
+   adbccd6. Include it in a port only if an observed unsupported graph
+   combination justifies that additional dependency.
+
 ## Qwen Q8 admission precedes all prepared-weight proposals
 
 A real main loader rejects both layer-0 Q8 wq and the tied Q8 output head.

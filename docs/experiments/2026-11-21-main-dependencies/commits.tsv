@@ -73,3 +73,4 @@ e25b2ed41a022870fcebad776e352310f6f221d4	docs(bench): retain post-pause Q8 repea
 ce1cc2661391e3761238170ad1651714930d7367	docs(bench): retain dense TinyLlama baseline	Guy Elsmore-Paddock
 cfb9df0b84a51909763f66cd96814d9fb02810cb	test(bench): measure buffered serving concurrency	Guy Elsmore-Paddock
 a383c40d381b5374211069c9ab5de1e64517d0df	docs(cuda): record main KV scale checks	Guy Elsmore-Paddock
+adbccd662cc507febd3e3763a3e1222ec923d440	feat(cuda): add f16 decode projection kernel	Guy Elsmore-Paddock
