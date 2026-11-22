@@ -85,11 +85,11 @@ monitors+=("$!")
 nvidia-smi -i "$CUDA_VISIBLE_DEVICES" --query-compute-apps=timestamp,pid,used_gpu_memory --format=csv --loop-ms=500 > "$out/processes.csv" &
 monitors+=("$!")
 start_server() {
-    local graph=$1 diag=$2 label=$3 port=${ports[$1]}
+    local graph=$1 diag=$2 label=$3 log_ids=${4:-0} port=${ports[$1]}
     if curl -fsS --max-time 1 "http://127.0.0.1:$port/health" >/dev/null 2>&1; then
         echo "Port $port already in use" >&2; return 1
     fi
-    M40LLM_DECODE_GRAPH=$graph M40LLM_RESEARCH_GRAPH_SETUP=$diag M40LLM_DECODE_GRAPH_DIAG_SYNC=$diag \
+    M40LLM_DECODE_LOG=$log_ids M40LLM_DECODE_GRAPH=$graph M40LLM_RESEARCH_GRAPH_SETUP=$diag M40LLM_DECODE_GRAPH_DIAG_SYNC=$diag \
       "$bin" run "$model" --addr "127.0.0.1:$port" --require-sm52 --kv-compress-mode off --max-context-tokens 1024 > "$out/$label.log" 2>&1 &
     servers[$graph]=$!
     for ((attempt=0; attempt<240; attempt++)); do
@@ -98,6 +98,12 @@ start_server() {
         sleep 1
     done
     return 1
+}
+stop_server() {
+    local graph=$1
+    kill "${servers[$graph]}"
+    wait "${servers[$graph]}" || true
+    servers[$graph]=""
 }
 request() {
     local graph=$1 label=$2 body=$3 port=${ports[$1]}
@@ -111,6 +117,18 @@ request() {
       "$out/$label.json" >> "$out/timings.jsonl"
     snapshot > "$out/$label.after"
 }
+signature='[.output,.metrics.prompt_tokens,.metrics.generated_tokens,.metrics.stop_reason]'
+for graph in 0 1; do
+    start_server "$graph" 0 "trace-$graph" 1
+    request "$graph" "trace-response-$graph" "$out/request.json"
+    rg 'sampled token id=[0-9]+' "$out/trace-$graph.log" | sed -E 's/.*sampled token id=([0-9]+).*/\1/' | jq -s '.' > "$out/ids-$graph.json"
+    jq -e --slurpfile response "$out/trace-response-$graph.json" 'length>0 and length==$response[0].metrics.generated_tokens' "$out/ids-$graph.json" >/dev/null
+    rg '^(VmRSS|VmHWM|Threads):' "/proc/${servers[$graph]}/status" > "$out/trace-$graph.host-memory"
+    stop_server "$graph"
+done
+cmp "$out/ids-0.json" "$out/ids-1.json"
+rg -q 'captured full-token decode CUDA graph' "$out/trace-1.log"
+if rg -q 'disabling full-token decode CUDA graph' "$out/trace-1.log"; then exit 1; fi
 start_server 0 0 ordinary
 request 0 warm-0 "$out/request.json"
 if [[ "$cohort" == qwen ]]; then
@@ -142,14 +160,11 @@ if [[ "$decision" == confirm ]]; then
 fi
 if rg -i 'disabling full-token decode CUDA graph' "$out/graph.log"; then exit 1; fi
 shopt -s nullglob
-signature='[.output,.metrics.prompt_tokens,.metrics.generated_tokens,.metrics.stop_reason]'
-for file in "$out"/{warm,pair,confirm}-*.json; do
+for file in "$out"/{trace-response,warm,pair,confirm}-*.json; do
     diff -q <(jq -c "$signature" "$file") <(jq -c "$signature" "$out/warm-0.json")
 done
 for graph in 0 1; do
-    kill "${servers[$graph]}"
-    wait "${servers[$graph]}" || true
-    servers[$graph]=""
+    stop_server "$graph"
 done
 start_server 1 1 diagnostic
 jq '.max_tokens=32' "$out/request.json" > "$out/diagnostic-request.json"

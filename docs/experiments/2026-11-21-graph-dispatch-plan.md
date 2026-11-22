@@ -11,3 +11,11 @@ Run release hardware tests serially on the M40 with cuBLAS enabled and disabled.
 Use A2 at baac624 on the consolidation branch for model and measurement provenance. Freeze ordinary/graph candidates to the same supported model, kernel, precision, projection backend, dense KV, request, generation limit, concurrency one and diagnostics disabled. Audit that graph replay actually ran. Run Qwen Q8_0 and an eligible local F16 model if supported. Screen restricted configurations explicitly. For head128 parallel rejection, use the common ordinary/graph-compatible fallback on both sides, then report opportunity cost against best ordinary serving separately. Do not force unsupported modes.
 
 Collect first-capture, instantiation and replay timings separately, warm alternating pairs, complete HTTP time and per-token boundaries. Record device and host resource costs, including peak VRAM and graph lifecycle. Derive break-even tokens from setup divided by positive per-token savings; when replay loses, report no positive break-even. A trace showing redundant nodes can admit at most one bounded change with a fresh control. Apply A2 reproducibility and five/ten/twenty rules. A correctness fix has its own verdict. For speed require at least 5% complete request gain above variation and positive paired lower bound. Retain negative and inconclusive measurements. Keep graph dispatch opt-in.
+
+Before timed pairs, run the complete HTTP workload once per arm with token
+logging enabled and only that server resident. Require identical sampled
+IDs including stop tokens, reported counts, a graph capture in the graph
+arm, and no internal graph disable. Retain each process's resident and
+high-water host memory and the corresponding GPU samples. Verify timed
+responses against those companions. The alternating performance pairs
+have two resident servers, one request in flight, and token logging off.
