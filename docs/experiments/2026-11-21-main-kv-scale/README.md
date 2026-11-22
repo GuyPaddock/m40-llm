@@ -24,3 +24,22 @@ the same shared-memory ordering and should also run the existing
 dense-to-compressed attention parity grid. Keep that coverage distinct
 from the incremental fixture. Stop on mismatched ownership, arithmetic or
 guards. No runtime switch is required.
+
+## Source and build audit
+
+The original test and its guard helper both compile unmodified against
+main at a898ac2. The fixed runtime at 75ed22f changes two CUDA statements
+and their comments. The bulk builder requires a dense cache with a Q8
+sidecar; on main only the compressed constructor allocates that sidecar.
+The existing parity grid includes a bulk dense-to-compressed check with
+dense old backing. It cannot qualify the separate bulk Q8 builder.
+
+Compile the unrepaired test at a898ac2 with
+`M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo test --locked --release --features cuda --test q8_kv_scale_reuse --no-run --message-format=json`.
+Copy its Cargo compiler-artifact executable as unfixed-on. At 75ed22f use
+the same command with `--test attention_parity_cuda_grid` added, once with
+cuBLAS enabled and once disabled. Save both executables for each mode.
+See [binary hashes](binaries.sha256) and [ELF/build provenance](build-targets.txt).
+Run [the serial driver](run.sh) under the exclusive lock with the directory
+of those five binaries and a fresh output directory. Inspect every log
+for skips and record the exact failed assertion for the negative control.
