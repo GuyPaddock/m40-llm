@@ -4,7 +4,12 @@ use super::{
     source::{DraftSource, SourceKind},
 };
 use anyhow::{ensure, Context, Result};
-use m40_llm::{cuda::CudaContext, infer::LoadedModel, profile, verification::VerificationSession};
+use m40_llm::{
+    cuda::CudaContext,
+    infer::LoadedModel,
+    profile,
+    verification::{VerificationDownProjection, VerificationSession},
+};
 use serde_json::{json, Value};
 use std::{
     fs::{File, OpenOptions},
@@ -14,6 +19,8 @@ use std::{
 #[path = "../compare_ollama/protocol.rs"]
 #[allow(dead_code)]
 mod protocol;
+mod schedules;
+pub use schedules::run as compare_schedules;
 
 struct ResultRow {
     data: Value,
@@ -70,17 +77,18 @@ fn execute(
     prompt: &[u32],
     budget: usize,
     stops: &[u32],
-    is_direct: bool,
+    down_projection: Option<VerificationDownProjection>,
     should_capture: bool,
     oracle: Option<&[Vec<f32>]>,
 ) -> Result<ResultRow> {
     let began = Instant::now();
     let setup = Instant::now();
+    let is_direct = down_projection.is_some();
     let mut source = is_direct.then(|| DraftSource::new(SourceKind::PromptCopy, prompt, stops));
-    let mut s = if is_direct {
-        VerificationSession::new_direct_four_rows(model, stops)?
-    } else {
-        VerificationSession::new(model, stops)?
+    let source_setup = setup.elapsed();
+    let mut s = match down_projection {
+        Some(schedule) => VerificationSession::with_down_projection(model, stops, schedule)?,
+        None => VerificationSession::new(model, stops)?,
     };
     let setup_ms = setup.elapsed().as_secs_f64() * 1000.;
     let prefill = Instant::now();
@@ -96,22 +104,37 @@ fn execute(
     let mut cleared_words = 0;
     let mut attempts = 0;
     let mut rejections = 0;
+    let mut lookups = 0;
+    let mut accepted_lengths = [0usize; 4];
+    let mut draft_time = std::time::Duration::ZERO;
+    let mut verification_time = std::time::Duration::ZERO;
+    let mut commit_time = std::time::Duration::ZERO;
+    let mut correction_time = std::time::Duration::ZERO;
+    let mut ordinary_time = std::time::Duration::ZERO;
     while ids.len() < budget && !stops.contains(ids.last().unwrap()) {
         let seed = *ids.last().unwrap();
-        let proposal = if budget - ids.len() >= 4 {
-            source.as_mut().and_then(|src| src.propose(seed))
-        } else {
-            None
-        };
+        let proposal = source
+            .as_mut()
+            .filter(|_| budget - ids.len() >= 4)
+            .and_then(|src| {
+                let lookup = Instant::now();
+                lookups += 1;
+                let proposal = src.propose(seed);
+                draft_time += lookup.elapsed();
+                proposal
+            });
         if let Some(p) = proposal {
             attempts += 1;
             let start = s.committed_len();
+            let verification = Instant::now();
             let a = s.begin(
                 &[seed, p.guesses[0], p.guesses[1], p.guesses[2]],
                 should_capture,
             )?;
+            verification_time += verification.elapsed();
             let accepted = a.accepted_len();
-            ensure!(accepted >= 1, "known target seed rejected");
+            ensure!((1..=4).contains(&accepted), "invalid accepted length");
+            accepted_lengths[accepted - 1] += 1;
             if let Some(reference) = oracle {
                 for (offset, actual) in a
                     .captured_logits()
@@ -129,7 +152,9 @@ fn execute(
                     compared += 1;
                 }
             }
+            let commit = Instant::now();
             let result = a.commit()?;
+            commit_time += commit.elapsed();
             if accepted < 4 {
                 rejections += 1;
                 if should_capture {
@@ -145,30 +170,38 @@ fn execute(
                     }
                 }
             }
+            let source_commit = Instant::now();
             source.as_mut().unwrap().commit(&result.accepted_tokens);
+            draft_time += source_commit.elapsed();
             row += accepted;
             ids.extend_from_slice(&result.accepted_tokens[1..]);
             ids.push(result.next_token);
             if accepted < 4 && ids.len() < budget && !stops.contains(&result.next_token) {
+                let correction = Instant::now();
                 let (next, values) = if should_capture {
                     s.serial_step_with_logits(result.next_token)?
                 } else {
                     (s.serial_step(result.next_token)?, Vec::new())
                 };
+                correction_time += correction.elapsed();
                 if let Some(reference) = oracle {
                     compare_logits(&values, &reference[row], &mut max_diff, &mut has_exact)?;
                     compared += 1;
                 }
+                let source_commit = Instant::now();
                 source.as_mut().unwrap().commit(&[result.next_token]);
+                draft_time += source_commit.elapsed();
                 row += 1;
                 ids.push(next);
             }
         } else {
+            let ordinary = Instant::now();
             let (next, values) = if should_capture {
                 s.serial_step_with_logits(seed)?
             } else {
                 (s.serial_step(seed)?, Vec::new())
             };
+            ordinary_time += ordinary.elapsed();
             if let Some(reference) = oracle {
                 compare_logits(&values, &reference[row], &mut max_diff, &mut has_exact)?;
                 compared += 1;
@@ -177,7 +210,9 @@ fn execute(
                 vectors.push(values);
             }
             if let Some(src) = source.as_mut() {
+                let source_commit = Instant::now();
                 src.commit(&[seed]);
+                draft_time += source_commit.elapsed();
             }
             row += 1;
             ids.push(next);
@@ -198,6 +233,9 @@ fn execute(
     } else {
         Vec::new()
     };
+    let source_payload_bytes = source
+        .as_ref()
+        .map_or(0, DraftSource::logical_payload_bytes);
     let teardown = Instant::now();
     drop(s);
     drop(source);
@@ -209,9 +247,15 @@ fn execute(
         "length"
     };
     Ok(ResultRow {
-        data: json!({"is_direct":is_direct,"generated_token_ids":ids,"stop_reason":reason,
+        data: json!({"is_direct":is_direct,"down_projection":down_projection,
+        "generated_token_ids":ids,"stop_reason":reason,
         "setup_ms":setup_ms,"prefill_ms":prefill_ms,"decode_ms":decode_ms,"teardown_ms":teardown_ms,
         "total_ms":total_ms,"resident_tps":1000.*ids.len() as f64/total_ms,
+        "source_setup_ms":source_setup.as_secs_f64()*1000.,
+        "source_cpu_ms":draft_time.as_secs_f64()*1000.,"source_payload_bytes":source_payload_bytes,
+        "lookup_count":lookups,"lookup_misses":lookups-attempts,"accepted_lengths_1_to_4":accepted_lengths,
+        "target_verify_ms":verification_time.as_secs_f64()*1000.,"target_commit_ms":commit_time.as_secs_f64()*1000.,
+        "correction_ms":correction_time.as_secs_f64()*1000.,"ordinary_decode_ms":ordinary_time.as_secs_f64()*1000.,
         "attempts":attempts,"rejections":rejections,"compared_full_logit_rows":compared,
         "max_abs_logit_diff":max_diff,"has_bitwise_logits":has_exact,"cleared_suffix_words":cleared_words,
         "has_full_logit_tolerance_passed":oracle.is_some(),
@@ -261,7 +305,14 @@ fn gpu() -> Result<Value> {
             ],
         "GPU clocks changed"
     );
-    Ok(json!({"device":device,"processes":processes}))
+    let telemetry = records::command(
+        "nvidia-smi",
+        &[
+            "--query-gpu=driver_version,temperature.gpu,memory.used,utilization.gpu",
+            "--format=csv,noheader",
+        ],
+    )?;
+    Ok(json!({"device":device,"processes":processes,"telemetry":telemetry}))
 }
 fn collect(
     model: &mut LoadedModel,
@@ -285,7 +336,7 @@ fn collect(
                 &trace.prompt_token_ids,
                 trace.max_tokens,
                 &trace.stop_ids,
-                direct,
+                direct.then_some(VerificationDownProjection::Serial),
                 false,
                 None,
             )?;
@@ -398,7 +449,7 @@ pub fn run(
                 &trace.prompt_token_ids,
                 trace.max_tokens,
                 &trace.stop_ids,
-                false,
+                None,
                 true,
                 None,
             )?;
@@ -408,7 +459,7 @@ pub fn run(
                 &trace.prompt_token_ids,
                 trace.max_tokens,
                 &trace.stop_ids,
-                true,
+                Some(VerificationDownProjection::Serial),
                 true,
                 Some(&serial.logits),
             )?;
@@ -436,7 +487,7 @@ pub fn run(
                     &trace.prompt_token_ids,
                     trace.max_tokens,
                     &trace.stop_ids,
-                    direct,
+                    direct.then_some(VerificationDownProjection::Serial),
                     false,
                     None,
                 )?;

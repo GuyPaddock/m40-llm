@@ -34,6 +34,8 @@ enum Command {
         output: PathBuf,
         #[arg(long)]
         correctness_report: Option<PathBuf>,
+        #[arg(long)]
+        compare_target_schedules: bool,
     },
     Capture {
         #[arg(long)]
@@ -56,12 +58,23 @@ fn main() -> Result<()> {
             heldout,
             output,
             correctness_report,
+            compare_target_schedules,
         } => {
             #[cfg(all(feature = "cuda", nvcc))]
-            return live::run(&model, &heldout, &output, correctness_report.as_deref());
+            return if compare_target_schedules {
+                live::compare_schedules(&model, &heldout, &output, correctness_report.as_deref())
+            } else {
+                live::run(&model, &heldout, &output, correctness_report.as_deref())
+            };
             #[cfg(not(all(feature = "cuda", nvcc)))]
             {
-                let _ = (model, heldout, output, correctness_report);
+                let _ = (
+                    model,
+                    heldout,
+                    output,
+                    correctness_report,
+                    compare_target_schedules,
+                );
                 anyhow::bail!("live research requires release CUDA/NVCC");
             }
         }
