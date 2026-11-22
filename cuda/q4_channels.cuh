@@ -3,6 +3,8 @@
 // Fixed research geometry. All arithmetic accumulates in FP32 on sm_52.
 namespace m40llm_q4_channels {
 constexpr int down_splits = 32;
+constexpr int zigzag_inputs = 11008;
+constexpr int zigzag_outputs = 2048;
 
 __device__ __forceinline__ float read_native(
     const unsigned char* weights, int output, int input, int width) {
@@ -66,6 +68,26 @@ __global__ void down_partial(
         sum += hidden[static_cast<size_t>(row) * count + selected] * weight;
     }
     partial[(static_cast<size_t>(row) * down_splits + split) * n + output] = sum;
+}
+
+// Layout [output tile][input][FP16 scale, 16 Q4 bytes], 32 outputs per tile.
+template<bool dense, bool charged>
+__global__ void zigzag_partial(
+    const float* input, const unsigned* indices, const unsigned* active_count,
+    int oracle_count, const unsigned char* weights, float* partial) {
+    const int output = blockIdx.x * blockDim.x + threadIdx.x;
+    const int split = blockIdx.y;
+    const int limit = dense ? zigzag_inputs : (charged ? int(*active_count) : oracle_count);
+    float sum = 0.0f;
+    for (int i = split; i < limit; i += down_splits) {
+        const int channel = dense ? i : int(indices[i]);
+        const size_t base = (size_t(output / 32) * zigzag_inputs + channel) * 18;
+        const int lane = output % 32;
+        const int code = ((weights[base + 2 + lane % 16] >> (4 * (lane / 16))) & 15) - 8;
+        const float scale = __half2float(*reinterpret_cast<const __half*>(weights + base));
+        sum += input[i] * (scale * float(code));
+    }
+    partial[split * zigzag_outputs + output] = sum;
 }
 
 __global__ void down_reduce(const float* partial, float* output, int n) {

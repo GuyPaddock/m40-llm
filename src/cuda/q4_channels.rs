@@ -1,5 +1,10 @@
 use super::{ffi, record_async_kernel, CudaContext, CudaStream, DeviceBuffer};
-use crate::infer::q4_channels::Q4ChannelWeights;
+use crate::infer::{
+    activation_sparsity::ActivationThreshold,
+    q4_channels::{
+        Q4ChannelWeights, Q4ResearchLayout, Q4_REPACKED_INPUT_DIM, Q4_REPACKED_OUTPUT_DIM,
+    },
+};
 use anyhow::{ensure, Context, Result};
 use std::ffi::c_void;
 
@@ -50,6 +55,126 @@ fn validate_disjoint_spans(a: (usize, usize), b: (usize, usize)) -> Result<()> {
         "Q4 activation overlaps another span"
     );
     Ok(())
+}
+
+pub(crate) struct DeviceQ4RepackedDown {
+    weights: DeviceBuffer,
+    codes: Option<DeviceBuffer>,
+}
+
+impl DeviceQ4RepackedDown {
+    pub(crate) fn upload(
+        ctx: &CudaContext,
+        host: &Q4ChannelWeights,
+        layout: Q4ResearchLayout,
+    ) -> Result<Self> {
+        ensure!(
+            host.input_dim() == Q4_REPACKED_INPUT_DIM
+                && host.output_dim() == Q4_REPACKED_OUTPUT_DIM,
+            "unsupported repacked Q4 shape"
+        );
+        let [scales, codes] = host.planes();
+        match layout {
+            Q4ResearchLayout::Packed => Ok(Self {
+                weights: upload_bytes(ctx, scales)?,
+                codes: Some(upload_bytes(ctx, codes)?),
+            }),
+            Q4ResearchLayout::Zigzag => {
+                let (bytes, _, _) = host.repack_zigzag()?;
+                Ok(Self {
+                    weights: upload_bytes(ctx, &bytes)?,
+                    codes: None,
+                })
+            }
+        }
+    }
+
+    pub(crate) fn bytes(&self) -> usize {
+        self.weights.bytes() + self.codes.as_ref().map_or(0, DeviceBuffer::bytes)
+    }
+}
+
+/// Shared by the three frozen projections on the decode stream in one model.
+pub(crate) struct Q4RepackedWorkspace {
+    ctx: CudaContext,
+    indices: DeviceBuffer,
+    compact: DeviceBuffer,
+    count: DeviceBuffer,
+    partial: DeviceBuffer,
+    is_thresholded: bool,
+}
+
+impl Q4RepackedWorkspace {
+    pub(crate) fn new(ctx: &CudaContext, is_thresholded: bool) -> Result<Self> {
+        let indices = if is_thresholded {
+            DeviceBuffer::new_tagged(ctx, Q4_REPACKED_INPUT_DIM * 4, "q4_repacked:indices")?
+        } else {
+            let identity = (0..Q4_REPACKED_INPUT_DIM as u32)
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>();
+            upload_bytes(ctx, &identity)?
+        };
+        let compact =
+            DeviceBuffer::new_tagged(ctx, Q4_REPACKED_INPUT_DIM * 4, "q4_repacked:compact")?;
+        let count = DeviceBuffer::new_tagged(ctx, 4, "q4_repacked:count")?;
+        let partial =
+            DeviceBuffer::new_tagged(ctx, Q4_REPACKED_OUTPUT_DIM * 32 * 4, "q4_repacked:partial")?;
+        Ok(Self {
+            ctx: ctx.clone(),
+            indices,
+            compact,
+            count,
+            partial,
+            is_thresholded,
+        })
+    }
+
+    pub(crate) fn bytes(&self) -> usize {
+        self.indices.bytes() + self.compact.bytes() + self.count.bytes() + self.partial.bytes()
+    }
+
+    /// The caller supplies disjoint, stream-ordered FP32 spans of the frozen
+    /// Q4 widths on the same context and retains owners until decode completes.
+    pub(crate) unsafe fn enqueue(
+        &self,
+        weight: &DeviceQ4RepackedDown,
+        input: *const c_void,
+        output: *mut c_void,
+        threshold: ActivationThreshold,
+    ) -> Result<()> {
+        let cutoff = threshold.magnitude();
+        ensure!(
+            (cutoff > 0.0) == self.is_thresholded,
+            "repacked Q4 selection mode differs"
+        );
+        let input_span = validate_span(input, Q4_REPACKED_INPUT_DIM * 4)?;
+        let output_span = validate_span(output.cast_const(), Q4_REPACKED_OUTPUT_DIM * 4)?;
+        validate_disjoint_spans(input_span, output_span)?;
+        let _lock = self.ctx.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_q4_repacked_down_async(
+            self.ctx.inner.raw.as_ptr(),
+            input,
+            weight.weights.as_ptr(),
+            weight
+                .codes
+                .as_ref()
+                .map_or(std::ptr::null(), DeviceBuffer::as_ptr),
+            self.indices.as_mut_ptr(),
+            self.compact.as_mut_ptr(),
+            self.count.as_mut_ptr(),
+            self.partial.as_mut_ptr(),
+            output,
+            i32::from(weight.codes.is_none()),
+            cutoff,
+        );
+        ensure!(rc == 0, "repacked Q4 down failed: {rc}");
+        if self.is_thresholded {
+            record_async_kernel("q4_repacked_select");
+        }
+        record_async_kernel("q4_repacked_down_partial");
+        record_async_kernel("q4_repacked_down_reduce");
+        Ok(())
+    }
 }
 
 impl DeviceQ4SelectedFfn {
@@ -192,6 +317,96 @@ impl DeviceQ4SelectedFfn {
         record_async_kernel("q4_selected_gate_up");
         record_async_kernel("q4_selected_down_partial");
         record_async_kernel("q4_selected_down_reduce");
+        Ok(())
+    }
+}
+
+#[cfg(all(test, nvcc))]
+mod repacked_tests {
+    use super::*;
+
+    /// Dense and thresholded schedules agree with exactly representable sums,
+    /// including threshold ties, an empty selection, and output guards.
+    #[test]
+    #[ignore = "requires the Tesla M40; run serially with --include-ignored"]
+    fn test_repacked_q4_down_preserves_guards_and_clears_empty_rows() -> Result<()> {
+        let initial = CudaContext::total_device_bytes();
+        let ctx = CudaContext::new(-1)?;
+        let props = ctx.current_device_props()?;
+        ensure!((props.major, props.minor) == (5, 2), "requires sm_52");
+        let mut block = [0x99; 18];
+        block[..2].copy_from_slice(&half::f16::ONE.to_bits().to_le_bytes());
+        let weights = block.repeat(Q4_REPACKED_INPUT_DIM / 32 * Q4_REPACKED_OUTPUT_DIM);
+        let packed =
+            Q4ChannelWeights::pack(&weights, Q4_REPACKED_INPUT_DIM, Q4_REPACKED_OUTPUT_DIM)?;
+        let mut input = vec![0.0f32; Q4_REPACKED_INPUT_DIM];
+        input[0] = 2.0;
+        input[1] = 0.5;
+        input[34] = -1.0;
+        let zeros = vec![0.0f32; Q4_REPACKED_INPUT_DIM];
+        let guard = 451.0f32;
+        let mut output = vec![guard; Q4_REPACKED_OUTPUT_DIM + 2];
+        let input_device =
+            DeviceBuffer::new_tagged(&ctx, input.len() * 4, "q4_repacked:test_input")?;
+        let output_device =
+            DeviceBuffer::new_tagged(&ctx, output.len() * 4, "q4_repacked:test_output")?;
+        for layout in [Q4ResearchLayout::Packed, Q4ResearchLayout::Zigzag] {
+            let matrix = DeviceQ4RepackedDown::upload(&ctx, &packed, layout)?;
+            for (cutoff, expected) in [(0.0, 1.5), (1.0, 2.0)] {
+                let threshold = ActivationThreshold::new(cutoff)?;
+                let workspace = Q4RepackedWorkspace::new(&ctx, cutoff > 0.0)?;
+                output.fill(guard);
+                unsafe {
+                    ctx.memcpy_h2d(
+                        output_device.as_mut_ptr(),
+                        output.as_ptr().cast(),
+                        output_device.bytes(),
+                    )?;
+                }
+                for (row, expected) in [(&input, expected), (&zeros, 0.0)] {
+                    unsafe {
+                        ctx.memcpy_h2d(
+                            input_device.as_mut_ptr(),
+                            row.as_ptr().cast(),
+                            input_device.bytes(),
+                        )?;
+                    }
+                    let before = crate::profile::snapshot();
+                    unsafe {
+                        workspace.enqueue(
+                            &matrix,
+                            input_device.as_ptr(),
+                            output_device.as_mut_ptr().cast::<f32>().add(1).cast(),
+                            threshold,
+                        )?;
+                    }
+                    let counters =
+                        crate::profile::counter_delta(&before, &crate::profile::snapshot());
+                    assert_eq!(counters.launches, if cutoff > 0.0 { 3 } else { 2 });
+                    assert_eq!(
+                        counters.device_allocs + counters.device_frees + counters.stream_syncs,
+                        0
+                    );
+                    ctx.synchronize_stream(CudaStream::Decode)?;
+                    unsafe {
+                        ctx.memcpy_d2h(
+                            output.as_mut_ptr().cast(),
+                            output_device.as_ptr(),
+                            output_device.bytes(),
+                        )?;
+                    }
+                    assert_eq!(output[0], guard);
+                    assert_eq!(output[output.len() - 1], guard);
+                    assert!(output[1..output.len() - 1]
+                        .iter()
+                        .all(|&value| value == expected));
+                }
+            }
+        }
+        drop(output_device);
+        drop(input_device);
+        drop(ctx);
+        assert_eq!(CudaContext::total_device_bytes(), initial);
         Ok(())
     }
 }

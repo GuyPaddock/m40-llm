@@ -34,7 +34,7 @@ pub struct FfnCapture {
 }
 
 impl LoadedModel {
-    fn ffn_capture_source(&self, view: &DeviceTensorView) -> Result<FfnTensorSource> {
+    pub(crate) fn ffn_capture_source(&self, view: &DeviceTensorView) -> Result<FfnTensorSource> {
         ensure!(
             matches!(view.dtype, GgmlDType::Q4_0 | GgmlDType::Q8_0) && view.shape.len() == 2,
             "FFN capture requires Q4_0 or Q8_0 projection weights"

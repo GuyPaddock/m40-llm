@@ -19,7 +19,10 @@ pub use device::DeviceSparseInputWorkspace;
 #[cfg(feature = "cuda")]
 mod runtime;
 #[cfg(feature = "cuda")]
-pub use runtime::{ActivationLayerStats, ActivationResearch, ActivationResearchStats};
+pub use runtime::{
+    ActivationLayerStats, ActivationResearch, ActivationResearchStats, Q4ResearchCutoff,
+    Q4ResearchStats,
+};
 
 #[cfg(test)]
 mod tests;

@@ -1,7 +1,6 @@
 //! Export real down projections for the standalone Maxwell study.
 use anyhow::{ensure, Context, Result};
 use clap::Parser;
-use half::f16;
 use m40_llm::{
     gguf::{load_gguf, GgmlDType},
     infer::q4_channels::Q4ChannelWeights,
@@ -21,44 +20,6 @@ const OUTPUT: usize = 2048;
 struct Arguments {
     model: PathBuf,
     output: PathBuf,
-}
-
-/// Requantize 32 adjacent outputs per input and store by output tile, then input.
-fn zigzag(packed: &Q4ChannelWeights) -> Result<(Vec<u8>, f64, f64)> {
-    let mut blocks = Vec::with_capacity(OUTPUT * INPUT / 32 * 18);
-    let mut squared_error = 0.0_f64;
-    let mut max_error = 0.0_f64;
-    for base in (0..OUTPUT).step_by(32) {
-        for input in 0..INPUT {
-            let mut values = [0.0_f32; 32];
-            let mut extreme = 0.0_f32;
-            for (lane, value) in values.iter_mut().enumerate() {
-                *value = packed.decode_weight(input, base + lane)?;
-                ensure!(value.is_finite(), "nonfinite native weight");
-                if value.abs() > extreme.abs() {
-                    extreme = *value;
-                }
-            }
-            let scale = extreme / -8.0;
-            let inverse = if scale == 0.0 { 0.0 } else { scale.recip() };
-            let stored = f16::from_f32(scale);
-            blocks.extend_from_slice(&stored.to_bits().to_le_bytes());
-            let codes = values.map(|value| ((value * inverse + 8.5) as u8).min(15));
-            for lane in 0..16 {
-                blocks.push(codes[lane] | (codes[16 + lane] << 4));
-            }
-            for (code, weight) in codes.into_iter().zip(values) {
-                let error = f64::from(stored.to_f32() * (f32::from(code) - 8.0) - weight);
-                squared_error += error * error;
-                max_error = max_error.max(error.abs());
-            }
-        }
-    }
-    Ok((
-        blocks,
-        (squared_error / (INPUT * OUTPUT) as f64).sqrt(),
-        max_error,
-    ))
 }
 
 fn main() -> Result<()> {
@@ -95,7 +56,7 @@ fn main() -> Result<()> {
             "lossless layout round trip failed"
         );
         let prepare = Instant::now();
-        let (alternate, rms, max) = zigzag(&packed)?;
+        let (alternate, rms, max) = packed.repack_zigzag()?;
         let zigzag_ms = prepare.elapsed().as_secs_f64() * 1000.0;
         let folder = args.output.join(layer.to_string());
         fs::create_dir(&folder)?;

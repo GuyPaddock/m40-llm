@@ -25,6 +25,16 @@ int m40llm_q4_selected_ffn_async(
     return -1;
 }
 
+int m40llm_q4_repacked_down_async(
+    M40llmCudaContext* ctx, const void* input, const void* weights,
+    const void* codes, void* indices, void* compact, void* active_count,
+    void* partial, void* output, int zigzag, float cutoff) {
+    (void)ctx; (void)input; (void)weights; (void)codes; (void)indices;
+    (void)compact; (void)active_count; (void)partial; (void)output;
+    (void)zigzag; (void)cutoff;
+    return -1;
+}
+
 int m40llm_quantize_q8_1_async(M40llmCudaContext* ctx, const void* input, void* output,
     int rows, int columns, int padded_columns) {
     (void)ctx; (void)input; (void)output; (void)rows; (void)columns; (void)padded_columns;

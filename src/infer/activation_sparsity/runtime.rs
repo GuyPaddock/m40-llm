@@ -17,6 +17,9 @@ use anyhow::{ensure, Context, Result};
 use serde::Serialize;
 use std::{collections::HashMap, ffi::c_void, sync::Mutex, time::Instant};
 
+mod q4;
+pub use q4::{Q4ResearchCutoff, Q4ResearchStats};
+
 fn digest(bytes: &[u8]) -> String {
     ring::digest::digest(&ring::digest::SHA256, bytes)
         .as_ref()
@@ -70,6 +73,7 @@ enum Mode {
         target: f64,
         preparation_ms: f64,
     },
+    ApplyQ4(q4::Q4Research),
 }
 
 /// Configure through LoadedModel before KV/workspace creation. No process-global
@@ -185,7 +189,9 @@ impl LoadedModel {
             .map_err(|_| anyhow::anyhow!("poisoned activation state"))?
         {
             Mode::Capture { collector, .. } => collector.begin_task(id, prompt_tokens),
-            Mode::Apply { .. } => anyhow::bail!("cannot calibrate an applied activation variant"),
+            Mode::Apply { .. } | Mode::ApplyQ4(_) => {
+                anyhow::bail!("cannot calibrate an applied activation variant")
+            }
         }
     }
 
@@ -200,7 +206,9 @@ impl LoadedModel {
             .map_err(|_| anyhow::anyhow!("poisoned activation state"))?
         {
             Mode::Capture { collector, .. } => collector.finish_task(generated_tokens),
-            Mode::Apply { .. } => anyhow::bail!("cannot calibrate an applied activation variant"),
+            Mode::Apply { .. } | Mode::ApplyQ4(_) => {
+                anyhow::bail!("cannot calibrate an applied activation variant")
+            }
         }
     }
 
@@ -231,7 +239,7 @@ impl LoadedModel {
             .map_err(|_| anyhow::anyhow!("poisoned activation state"))?
         {
             Mode::Capture { collector, .. } => collector.finish(),
-            Mode::Apply { .. } => {
+            Mode::Apply { .. } | Mode::ApplyQ4(_) => {
                 anyhow::bail!("cannot export applied activation state as calibration")
             }
         }
@@ -369,6 +377,7 @@ impl LoadedModel {
             .lock()
             .map_err(|_| anyhow::anyhow!("poisoned activation state"))?;
         match &*state {
+            Mode::ApplyQ4(state) => Ok(state.memory_stats()),
             Mode::Capture { .. } => Ok(ActivationResearchStats {
                 is_enabled: true,
                 is_capturing: true,
@@ -453,20 +462,25 @@ impl LoadedModel {
                 .is_some_and(|cache| !cache.is_compressed()),
             "activation research requires explicit dense reference KV"
         );
-        let layer = *research
-            .pointers
-            .get(&(source as usize))
-            .context("unrecognized activation down pointer")?;
-        ensure!(
-            research.sources[layer].input_dim == h && research.sources[layer].output_dim == n,
-            "activation down dimensions differ from configured model"
-        );
         let mut state = research
             .mode
             .lock()
             .map_err(|_| anyhow::anyhow!("poisoned activation state"))?;
+        let q8_layer = || {
+            let layer = *research
+                .pointers
+                .get(&(source as usize))
+                .context("unrecognized activation down pointer")?;
+            ensure!(
+                research.sources[layer].input_dim == h && research.sources[layer].output_dim == n,
+                "activation down dimensions differ from configured model"
+            );
+            Ok(layer)
+        };
         match &mut *state {
+            Mode::ApplyQ4(state) => state.try_project(source, input, output, [h, n]),
             Mode::Capture { collector, row } => {
+                let layer = q8_layer()?;
                 if collector.should_observe(position) {
                     ensure!(row.len() == h, "capture row dimension mismatch");
                     self.cuda.synchronize_stream(CudaStream::Decode)?;
@@ -483,6 +497,7 @@ impl LoadedModel {
                 totals,
                 ..
             } => {
+                let layer = q8_layer()?;
                 if thresholds[layer].magnitude() == 0.0 {
                     return Ok(false);
                 }

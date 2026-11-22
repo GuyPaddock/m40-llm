@@ -42,6 +42,7 @@ struct M40llmCudaContext {
 #include "q8_execution.cuh"
 #include "q8_ffn.cuh"
 #include "q4_channels.cuh"
+#include <cmath>
 #include "decode_reductions.cuh"
 #include "q8_unfused.cuh"
 #include "q8_separate_warp.cuh"
@@ -8054,6 +8055,58 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (cudaPeekAtLastError() != cudaSuccess) return -5;
         down_reduce<<<dim3((k + 255) / 256, rows), 256, 0, stream>>>(
             static_cast<const float*>(partial), static_cast<float*>(output), k);
+        return cudaPeekAtLastError() == cudaSuccess ? 0 : -6;
+    }
+
+    int m40llm_q4_repacked_down_async(
+        M40llmCudaContext* ctx, const void* input, const void* weights,
+        const void* codes, void* indices, void* compact, void* active_count,
+        void* partial, void* output, int zigzag, float cutoff) {
+        if (!ctx || !input || !weights || !indices || !compact ||
+            !active_count || !partial || !output) return -1;
+        if ((zigzag != 0 && zigzag != 1) || (!zigzag && !codes) ||
+            !std::isfinite(cutoff) || cutoff < 0.0f) return -2;
+        const cudaStream_t stream = ctx->decode_stream;
+        if (!stream) return -3;
+        using namespace m40llm_q4_channels;
+        const auto* values = static_cast<const float*>(input);
+        auto* row_indices = static_cast<unsigned*>(indices);
+        auto* count = static_cast<unsigned*>(active_count);
+        auto* result_parts = static_cast<float*>(partial);
+        const bool threshold = cutoff > 0.0f;
+        if (threshold) {
+            auto* compact_values = static_cast<float*>(compact);
+            select_sparse_inputs_kernel<<<1, 256, 0, stream>>>(
+                values, row_indices, compact_values, count, zigzag_inputs, cutoff, nullptr);
+            if (cudaPeekAtLastError() != cudaSuccess) return -4;
+            values = compact_values;
+        }
+        const dim3 grid(zigzag_outputs / 256, down_splits);
+        if (zigzag) {
+            const auto* packed = static_cast<const unsigned char*>(weights);
+            if (threshold) {
+                zigzag_partial<false, true><<<grid, 256, 0, stream>>>(
+                    values, row_indices, count, 0, packed, result_parts);
+            } else {
+                zigzag_partial<true, false><<<grid, 256, 0, stream>>>(
+                    values, row_indices, count, zigzag_inputs, packed, result_parts);
+            }
+        } else {
+            const auto* scales = static_cast<const __half*>(weights);
+            const auto* nibbles = static_cast<const unsigned char*>(codes);
+            if (threshold) {
+                down_partial<true, true><<<grid, 256, 0, stream>>>(
+                    values, row_indices, nullptr, scales, nibbles, result_parts,
+                    zigzag_outputs, zigzag_inputs, zigzag_inputs, count);
+            } else {
+                down_partial<true, false><<<grid, 256, 0, stream>>>(
+                    values, row_indices, nullptr, scales, nibbles, result_parts,
+                    zigzag_outputs, zigzag_inputs, zigzag_inputs);
+            }
+        }
+        if (cudaPeekAtLastError() != cudaSuccess) return -5;
+        down_reduce<<<zigzag_outputs / 256, 256, 0, stream>>>(
+            result_parts, static_cast<float*>(output), zigzag_outputs);
         return cudaPeekAtLastError() == cudaSuccess ? 0 : -6;
     }
 

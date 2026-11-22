@@ -49,26 +49,6 @@ Bytes read_plane(const std::string& folder, const char* name, size_t bytes) {
     return result;
 }
 
-// Layout [output tile][input][FP16 scale, 16 Q4 bytes], 32 outputs per tile.
-template<bool dense, bool charged>
-__global__ void zigzag_partial(const float* x, const unsigned* indices,
-                               const unsigned* actual, int oracle_count,
-                               const unsigned char* weights, float* partial) {
-    const int output = blockIdx.x * blockDim.x + threadIdx.x;
-    const int split = blockIdx.y;
-    const int limit = dense ? inputs : (charged ? int(*actual) : oracle_count);
-    float sum = 0;
-    for (int i = split; i < limit; i += splits) {
-        const int channel = dense ? i : int(indices[i]);
-        const size_t base = (size_t(output / 32) * inputs + channel) * 18;
-        const int lane = output % 32;
-        const int code = ((weights[base+2+lane%16] >> (4*(lane/16))) & 15) - 8;
-        const float scale = __half2float(*reinterpret_cast<const __half*>(weights+base));
-        sum += x[i] * (scale * float(code));
-    }
-    partial[split * outputs + output] = sum;
-}
-
 struct Fixture {
     Bytes native, alternate, scales, codes;
     Buffer<unsigned char> d_native, d_alternate, d_scales, d_codes;
@@ -117,7 +97,7 @@ void enqueue(Fixture& f, Arm arm, int count, float cutoff = 0.0f) {
     const dim3 grid(outputs/256,splits);
     switch (arm) {
     case dense_zigzag:
-        zigzag_partial<true,false><<<grid,256,0,f.stream>>>(f.x.ptr,f.indices.ptr,f.count.ptr,count,
+        m40llm_q4_channels::zigzag_partial<true,false><<<grid,256,0,f.stream>>>(f.x.ptr,f.indices.ptr,f.count.ptr,count,
             f.d_alternate.ptr,f.partial.ptr);
         break;
     case native_oracle: selected<false,false>(f,count); break;
@@ -125,11 +105,11 @@ void enqueue(Fixture& f, Arm arm, int count, float cutoff = 0.0f) {
     case native_charged: selected<false,true>(f,count); break;
     case packed_charged: selected<true,true>(f,count); break;
     case zigzag_oracle:
-        zigzag_partial<false,false><<<grid,256,0,f.stream>>>(f.compact.ptr,f.indices.ptr,f.count.ptr,
+        m40llm_q4_channels::zigzag_partial<false,false><<<grid,256,0,f.stream>>>(f.compact.ptr,f.indices.ptr,f.count.ptr,
             count,f.d_alternate.ptr,f.partial.ptr);
         break;
     case zigzag_charged:
-        zigzag_partial<false,true><<<grid,256,0,f.stream>>>(f.compact.ptr,f.indices.ptr,f.count.ptr,
+        m40llm_q4_channels::zigzag_partial<false,true><<<grid,256,0,f.stream>>>(f.compact.ptr,f.indices.ptr,f.count.ptr,
             0,f.d_alternate.ptr,f.partial.ptr);
         break;
     default: throw std::runtime_error("unknown arm");

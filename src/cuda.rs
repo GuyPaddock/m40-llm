@@ -28,6 +28,8 @@ mod decode_reductions;
 #[cfg(feature = "cuda")]
 mod q4_channels;
 #[cfg(feature = "cuda")]
+pub(crate) use q4_channels::{DeviceQ4RepackedDown, Q4RepackedWorkspace};
+#[cfg(feature = "cuda")]
 pub use q4_channels::{DeviceQ4SelectedFfn, Q4DownLayout};
 #[cfg(feature = "cuda")]
 mod q8_ffn;
@@ -866,6 +868,19 @@ mod ffi {
             count: i32,
             packed: i32,
             stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_q4_repacked_down_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            weights: *const c_void,
+            codes: *const c_void,
+            indices: *mut c_void,
+            compact: *mut c_void,
+            active_count: *mut c_void,
+            partial: *mut c_void,
+            output: *mut c_void,
+            zigzag: i32,
+            cutoff: f32,
         ) -> i32;
         pub fn m40llm_gemm_f32xq8_warp_packet_async(
             ctx: *mut M40llmCudaContext,
