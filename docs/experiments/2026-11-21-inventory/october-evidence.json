@@ -1,0 +1,246 @@
+[
+  {
+    "topic": "channel-selection",
+    "head": "cf429318cd9a4897ee4f7a6c1c32b815a3c5b022",
+    "decision": "screening cost fails; stop dependent top-k, recovery and runtime work",
+    "covered_requirements": [
+      "Q8-derived Q4 fixtures, preserved Q4 block values/scales, conventional and repacked selected execution",
+      "Three layers, batches 1/2/4/8, five retained-channel budgets plus 100%, three selection patterns",
+      "216 supplied-index cases, 810 numerical checks, 756 comparisons and 3815 timing pairs",
+      "Twelve stronger-control comparisons establish screening budgets before adding prediction",
+      "Weight-derived ternary screening is implemented and measured on 24 distinct captured inputs",
+      "All 120 screen samples complete; no case fits either 150.88us or 56.89us overhead budget"
+    ],
+    "replayed_evidence": [
+      "channel-oracle.json",
+      "channel-selection.json"
+    ],
+    "source_report": "docs/experiments/2026-10-31-ternary-screen-result.md",
+    "raw_screen_sha256": "2c4272ff123202654645a0e59fde30d5b1771cda0e43c9654bdea58932ba30e9",
+    "not_claimed": [
+      "MoE validation",
+      "selector quality",
+      "low-rank recovery performance",
+      "model quality or token speedup"
+    ],
+    "branch": "research/1030-channel-selection"
+  },
+  {
+    "topic": "shiftadd",
+    "head": "753f3ca231c7025ddd910db847592c6eef961843",
+    "decision": "neither latency nor memory/error route admits integration",
+    "covered_requirements": [
+      "One pinned binary-coded format, source-derived encoder and FP32 sign-add Maxwell consumer",
+      "Native Q4, native Q8 and prepared Q8 controls; Q4_K backend absence explicitly reported",
+      "36 retained-input cases, 108 comparisons, 540 timing pairs and 72 before/after validations",
+      "Payload/error accounting, static instruction/register evidence and dynamic-counter limitation",
+      "Q4 latency wins are preserved; all Q8 comparisons and quality-at-size gate fail"
+    ],
+    "replayed_evidence": [
+      "shiftadd.json",
+      "shiftadd-checksums.log"
+    ],
+    "source_report": "docs/experiments/2026-10-31-shiftadd-result.md",
+    "raw_sha256": "e2d107a2457ba4089e0a5e5049fcefad98a68e15d0a99ae767f43a81111ee610",
+    "not_claimed": [
+      "Released checkpoint reproduction",
+      "Q8_1 upstream arithmetic",
+      "model-level quality",
+      "whole-model speedup"
+    ],
+    "branch": "research/1030-shiftadd"
+  },
+  {
+    "topic": "ffn-fusion",
+    "head": "b44d71ed9fff3469938513fd9627027bb5eb87b7",
+    "decision": "existing single-row fusion confirmed; incremental multi-row candidate fails complete-FFN gate",
+    "covered_requirements": [
+      "Audit of existing Q4 and Q8 fusion and diagnostic unfused controls",
+      "Multi-row gate/up/SwiGLU prototype with same-down comparison",
+      "Twelve cases, 60 comparisons and 300 alternating pairs",
+      "FP64, bitwise hidden and same-down output, immutable storage and ownership checks",
+      "Same-down complete gains -1.137% to +0.809%, below 5%"
+    ],
+    "replayed_evidence": [
+      "ffn-fusion.json"
+    ],
+    "source_report": "docs/experiments/2026-10-31-q4-fusion-result.md",
+    "raw_sha256": "a3a42d9a0cf2f42090b95a7a3611fb1566fa0ab927fbeed4cbc8865e7c25d6a0",
+    "not_claimed": [
+      "MoE prefill gains",
+      "runtime integration",
+      "whole-model speedup"
+    ],
+    "branch": "research/1030-ffn-fusion"
+  },
+  {
+    "topic": "activation-preparation",
+    "head": "f8e7a18fb50f201ae65b4cd6655159eb7e1722fc",
+    "decision": "positive isolated fusion result; selected model lacks the required rotation consumer",
+    "covered_requirements": [
+      "Existing shared Q8_1 gate/up input is identified as already implemented",
+      "Staged versus fused sign/Walsh128/Q8_1 preparation with same fixed consumer",
+      "Invocation ownership, producer dependencies, reuse and exact encoded-byte checks",
+      "24 cases, 48 comparisons and 300 pairs, including three fresh confirmations",
+      "Every complete boundary clears the fixed gate; absolute savings and small-consumer limits retained"
+    ],
+    "replayed_evidence": [
+      "activation-preparation.json"
+    ],
+    "source_report": "docs/experiments/2026-10-31-rotated-preparation-result.md",
+    "raw_sha256": "31d3e859f6e9be479bd333bd14a7a0f31f3fee1587f428ba31b175386110d2a4",
+    "not_claimed": [
+      "Full-width FFN gains",
+      "compatible rotated model",
+      "Q8_1 model quality",
+      "runtime integration"
+    ],
+    "branch": "research/1030-activation-preparation"
+  },
+  {
+    "topic": "legacy-graphs",
+    "head": "24709406b17f132838df1f9f2e45189e91064981",
+    "decision": "exact FP16 state gate fails before execution-only performance comparison",
+    "covered_requirements": [
+      "Existing graph implementation, interleaved sequences, changing positions, repeated lifetimes and teardown",
+      "Real capture cancellation, first-launch rejection and later-launch rejection",
+      "128 token comparisons pass numerical logits/greedy IDs/callbacks/lengths/cleanup",
+      "Four final isolated cases retain failed exact-cache assertions with 93/37/37/63 differences",
+      "Ordinary and graph attention dispatch differ; matching dispatch is an explicit future prerequisite"
+    ],
+    "replayed_evidence": [
+      "graphs-checksums.log"
+    ],
+    "inspected_raw_logs": "docs/experiments/2026-10-31-graph-state-final-*.log.gz",
+    "source_report": "docs/experiments/2026-10-31-native-graph-state.md",
+    "not_claimed": [
+      "Passing exact-state tests",
+      "asynchronous CUDA fault recovery",
+      "graph performance",
+      "compound capture support"
+    ],
+    "branch": "research/1030-legacy-graphs"
+  },
+  {
+    "topic": "soft-mtp",
+    "head": "ee7a2263a30c4ba7447250f079d8dc433823816c",
+    "decision": "training-method assessment complete; no compatible drop-in change or learned acceptance evidence",
+    "covered_requirements": [
+      "Shared NTP/MTP vocabulary-gradient requirements compared with independent rank256 drafter",
+      "Existing four-row verifier, three-guess proposal and finite-request rejection/tail costs reused",
+      "Cost audit/model replay byte-identical; five recurrence cases pass",
+      "All 18 verifier and 12 proposal artifact hashes verified from original repository",
+      "Pinned DSpark source separates proposal tokens/probabilities from target verification; PR-body probabilistic claim remains unproven"
+    ],
+    "replayed_evidence": [
+      "soft-mtp-recurrence.log",
+      "soft-mtp-cost-audit.json",
+      "soft-mtp-model.json",
+      "verifier-checksums.log",
+      "proposal-checksums.log"
+    ],
+    "source_report": "docs/experiments/2026-10-31-soft-mtp-result.md",
+    "not_claimed": [
+      "learned acceptance",
+      "new context or draft-length qualification",
+      "new GPU timing",
+      "training or data admission"
+    ],
+    "branch": "research/1030-soft-mtp"
+  },
+  {
+    "topic": "lossless-kv",
+    "decision": "complete bounded negative; compressed attention and append reject integration",
+    "source_report": "docs/experiments/2026-10-31-lossless-kv-decision.md",
+    "covered_requirements": [
+      "Complete eight-sequence real-KV capture and exact codec reconstruction",
+      "4.573980967% sampled 8K storage saving including directory bytes",
+      "Dense, separate-decompression and fused-consumption controls plus serial/batched and append costs",
+      "Twelve cases, 288 groups, 1455 pairs, three extensions, zero timing errors",
+      "240 attention and 48 append admissions; exact matched bits, FP64 checks and allocation cleanup",
+      "Failed release preserved before explicit floating-point contraction correction"
+    ],
+    "replayed_evidence": [
+      "lossless-summary.json",
+      "lossless-checksums.log"
+    ],
+    "not_claimed": [
+      "whole-model speedup",
+      "model quality",
+      "universal codec rejection"
+    ],
+    "head": "73a9417e39a31f2e337a9dc7f1206558e7300189",
+    "branch": "research/1030-lossless-kv"
+  },
+  {
+    "topic": "quantized-kv",
+    "decision": "complete positive measurement of already implemented direct consumers",
+    "source_report": "docs/experiments/2026-10-31-quantized-kv-decision.md",
+    "covered_requirements": [
+      "Q8/head64 and mixed/head64/head128 over three layers, four contexts and four batches",
+      "36 cases, 384 final groups, 2340 pairs, 21 fresh confirmations, zero timing errors",
+      "All 144 matched staged/direct groups pass; latency reduction 3.53% to 20.40%",
+      "Batching separated from staging benefit; 144 different-coverage dense costs have no adoption gate",
+      "Exact selected positions/staged words, independent FP64 reference and zero tracked/external teardown",
+      "Two failed standalone runs preserved; separate pre-existing Q8 reduction race fix at 1e445a5"
+    ],
+    "replayed_evidence": [
+      "quantized-summary.json",
+      "quantized-checksums.log"
+    ],
+    "not_claimed": [
+      "model quality or throughput",
+      "exact sparse-versus-dense outputs",
+      "dynamic racechecker coverage",
+      "separate bulk-Q8-builder hardware invocation"
+    ],
+    "head": "e23d1621bc3b8bbb5c73a531201e6ae0850fa819",
+    "branch": "research/1030-quantized-kv"
+  },
+  {
+    "topic": "dualpace",
+    "decision": "complete priced prerequisite and simulation study; no scheduler integration",
+    "source_report": "docs/experiments/2026-10-31-dualpace-decision.md",
+    "covered_requirements": [
+      "No complete CPU decoder found; one-core AVX2 measurements and explicit missing-work assumptions",
+      "CPU15/node0 and CPU30/node1 each 36 cases and 180 stable pairs; same original weights and captured inputs",
+      "CPU31 affinity failure preserved before node1 amendment; node0 retained without repetition",
+      "Original unstable transfer cohort preserved before one bounded sustained-warmup/100-operation follow-up",
+      "Final 26 directional-copy and two idle-sync groups stable; 18 handoff diagnostics remain unresolved",
+      "All 108 sourced inputs and 324 modes complete with CPU/GPU queues, storage, transfer costs and per-owner latency",
+      "One optimistic assisted scenario exceeds GPU-only by 0.0716%; no credible scheduler promotion follows",
+      "Priced initial-copy estimates and resident storage; full CPU backend, model quality, ownership and contention remain prerequisites",
+      "237-file replay bundle in Git; full 344-file interval archive protected outside Cargo/Git and hash verified"
+    ],
+    "replayed_evidence": [
+      "dualpace-cpu0.json",
+      "dualpace-cpu1.json",
+      "dualpace-transfer0.json",
+      "dualpace-transfer1.json",
+      "dualpace-overview.json",
+      "dualpace-checksums.log"
+    ],
+    "full_archive": {
+      "schema_version": 1,
+      "path": "/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm/local-artifacts/qualified-references/research-1030-dualpace/simulations-2026-10-31.tar.gz",
+      "sha256": "2ac7c0c7754b0897456f1c1661d387189ea0423c66f19b1151bb98c10a73b1d4",
+      "bytes": 20982245,
+      "source_revision": "4b7bb61",
+      "scenarios": 108,
+      "scheduling_modes": 324,
+      "verified_file_count": 344,
+      "contents": "Complete inputs, raw per-interval results, summaries, copied cost sources and artifacts-full.sha256",
+      "is_in_git": false,
+      "reason": "Large text-result archive retained outside Cargo cleanup; compact replay inputs and summaries are committed"
+    },
+    "not_claimed": [
+      "complete CPU decoding",
+      "measured serving gain",
+      "model-token equivalence",
+      "stable stream-handoff costs",
+      "concurrent contention or asynchronous overlap"
+    ],
+    "head": "69b8a3e52a785bf30e730e71ca19757a354815fd",
+    "branch": "research/1030-dualpace"
+  }
+]

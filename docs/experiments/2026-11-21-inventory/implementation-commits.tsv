@@ -1,0 +1,49 @@
+branch	commit	subject
+research/1030-activation-preparation	7ac84f2a6d7445f2af2d516bfb37d68918ce900c	feat(cuda): fuse rotated activation preparation
+research/1030-activation-preparation	0749dcfa38f97d017d364d30d51b7547690d4e39	feat(bench): measure rotated preparation fusion
+research/1030-channel-selection	2705ef27b256fa3f620fabbc8779251806a38d62	feat(infer): pack Q4 down channels losslessly
+research/1030-channel-selection	1aaaddc70670c45f209f027207fbbf6472dfb5da	feat(cuda): probe selected Q4 channels
+research/1030-channel-selection	300e8471c6c4993c2db1dbe950f8bb73cbec571f	feat(research): derive matched Q4 fixtures
+research/1030-channel-selection	e46bf13e4728cab22602dbd4a3ae2943ca9dd856	feat(bench): compare selected Q4 channels
+research/1030-channel-selection	c16559ee5412820609ba4a9ffc58230d5f3dd3f8	feat(bench): add stronger sparse Q4 controls
+research/1030-channel-selection	0dcbd8eff1bb2730159eebc05fded70d07d42dc6	feat(research): encode rotated ternary sketches
+research/1030-channel-selection	7c6fce30e071db3e3c2b43070eb61ad1a7c0fc97	feat(cuda): probe ternary channel screening
+research/1030-channel-selection	327aa324e9b50125943dfaba98a2f9bc997f3c37	feat(bench): measure ternary screening cost
+research/1030-dualpace	15dc0fe1431199f5ba0441c56f383c0ad25ca8ad	feat(bench): model cooperative scheduling
+research/1030-dualpace	bf8dc96e718c6705078b7fe8a6e18433f7b877b9	feat(bench): price AVX2 projection primitives
+research/1030-dualpace	42156da44140734cfa0bfc1a8467bb79f8317362	feat(bench): model serialized GPU copies
+research/1030-dualpace	ee8fbbeff9060362e852f75fdd15d124d2f17a47	refactor(bench): share CPU placement checks
+research/1030-dualpace	68a3d0a4dda39eb619a7af8d6022d59f06354dbe	feat(bench): model omitted processor work
+research/1030-dualpace	8171d7f3337eb50bd04e226578627cb1ebc2f079	feat(bench): price completed GPU transfers
+research/1030-dualpace	4b7bb61b713789e27bd204d2f945822acc1438ca	fix(bench): sustain transfer warmup
+research/1030-ffn-fusion	85485b8a553028b73d09cb2bd67c377b3f1903d9	feat(research): derive matched Q4 fixtures
+research/1030-ffn-fusion	fa0956848d91038c53e935542ebfe6f515807c5e	feat(cuda): probe multi-row Q4 fusion
+research/1030-ffn-fusion	9aa906e33c62b3f2f39d7627252b6c7687aa51cd	feat(bench): compare multi-row Q4 fusion
+research/1030-legacy-graphs	a45cfcf55500a47c66c52abd282f94ed95937a0c	test(cuda): expose graph cache divergence
+research/1030-lossless-kv	1a368f23948b5e9d8c97d4f4e931375134112b98	feat(kv): add lossless FP16 block probe
+research/1030-lossless-kv	82a118a0b8b5caba41daa907d1bfdbaf343ba9c1	feat(research): capture lossless KV inputs
+research/1030-lossless-kv	dbac9b2cc6d3221913f951969237cec1c6dd0d36	feat(research): admit lossless KV fixtures
+research/1030-lossless-kv	e9343b425bf588cbf5c67e36e1eb61970c231588	feat(cuda): consume lossless FP16 KV blocks
+research/1030-lossless-kv	464ec29f724f92bcd5512bea7b97372003ac97c1	feat(bench): compare lossless KV attention costs
+research/1030-lossless-kv	fe213e18d7667e2f79cfac9dd3df9524b07519cb	fix(cuda): match lossless attention rounding
+research/1030-quantized-kv	5362671feca44876c7b0beab50d46a7e30a0efe7	feat(research): admit captured KV fixtures
+research/1030-quantized-kv	b60f4c3000b2339edeff98118af5aa22a9726e6c	feat(research): add KV attention references
+research/1030-quantized-kv	ebc5d5fedece577ffa37934c52dababff5c9f392	feat(cuda): preserve staged KV comparison
+research/1030-quantized-kv	07c2642ed0f144cdd8f188d14165c3e940f01dbc	test(cuda): reconstruct Q4 integer zero
+research/1030-quantized-kv	c9f6066e9b06b4b21e4fb105e8cd793675719533	feat(bench): compare direct quantized KV costs
+research/1030-quantized-kv	2cbbc28ac6a902ec4a5bf35a506c041b845d50dd	test(bench): diagnose real KV selection
+research/1030-quantized-kv	1e445a5fc9bbad6358d759590ef4ff2a6247d5ad	fix(cuda): synchronize Q8 scale reduction reuse
+research/1030-shiftadd	a6ef091e69575e879b500e06bb5ada480e499e2c	feat(quant): add SA4_128 research encoding
+research/1030-shiftadd	07e7fd7c857d530562284e47b08e3450e966c228	feat(cuda): add SA4_128 sign-add GEMV
+research/1030-shiftadd	b6d57cd07b5ff516c255da991ff9fcc2c4016812	feat(research): derive matched Q4 fixtures
+research/1030-shiftadd	2c8e98502442dc7a646a5a22d65dff25a83b1d75	feat(research): compare ShiftAdd projections
+research/1031-adaptive-drafting	1892432ebf5944e8ac87a12b1fe2f826ba7652b4	feat(research): replay adaptive draft decisions
+research/1031-graph-dispatch	b5ea0028bd13eae244ff319d3a43ceb7679ec9f2	test(cuda): retain graph state qualification
+research/1031-graph-dispatch	dbceae10ee5e8f78d6a92611807aa4c6d46f5c0f	fix(cuda): preserve graph attention dispatch
+research/1031-kv-quality	558203f31152ee1ab09077b77668b65f7b2a3814	feat(research): freeze KV quality inputs
+research/1031-kv-quality	421df83e085212b78ca0d2e57b91a20ebb879e1e	feat(research): evaluate real-model KV quality
+research/1031-selector-followup	6aa52d850eecd50fd08d7092c7fb7e8b26b7c857	fix(cuda): synchronize Q8 scale reuse
+research/1031-selector-followup	1e3a6d324b4fa5f4351f16bfda95ff41a736cc05	feat(infer): retain Q4 channel packing
+research/1031-selector-followup	22ee0d3758d4acacc596e1bad6bf44446b5f4022	feat(cuda): retain selected Q4 execution
+research/1031-selector-followup	d6f6ae9898db16b31956a3a07a6511de4b7ace95	feat(research): capture complete FFN histories
+research/1031-selector-followup	f2114c2e267d252a4a4c5e32db83e4670f9a2ff1	feat(research): measure causal channel signals
