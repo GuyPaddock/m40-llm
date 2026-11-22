@@ -1,0 +1,16 @@
+783db8e71815ce5db10e4df3bc809366f64857578a88b241290bad57c6453f8b  target/release/examples/q8_execution_bench
+a438032f85c8d9f1cb516cf1a7c3d7810bb59747
+ELF file    1: q8_execution_bench.1.sm_52.cubin
+ Function _Z20q8_small_rows_kernelILi4EEvPKfPK6__halfPKaPfiii:
+  REG:93 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:364 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z20q8_small_rows_kernelILi3EEvPKfPK6__halfPKaPfiii:
+  REG:72 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:364 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z20q8_small_rows_kernelILi2EEvPKfPK6__halfPKaPfiii:
+  REG:56 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:364 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z20q8_small_rows_kernelILi1EEvPKfPK6__halfPKaPfiii:
+  REG:40 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:364 TEXTURE:0 SURFACE:0 SAMPLER:0
+--
+ Function _Z29q8_separate_projection_kernelILi4EEvPKfPK6__halfPKaPfii:
+  REG:40 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:360 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _Z29q8_separate_projection_kernelILi1EEvPKfPK6__halfPKaPfii:
+  REG:29 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:360 TEXTURE:0 SURFACE:0 SAMPLER:0

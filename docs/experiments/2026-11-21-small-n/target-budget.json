@@ -1,0 +1,13 @@
+{
+  "source": "50d4d17f3ca59e7a8999fea7c385ff01f288c276",
+  "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+  "layers": 36,
+  "four_row_batches": 635,
+  "median_of_request_mean_batch_ms": 57.82026534645672,
+  "five_percent_target_latency_saving_ms": 2.8910132673228364,
+  "equivalent_saving_per_layer_us": 80.30592409230101,
+  "five_percent_target_throughput_saving_ms": 2.7533459688788944,
+  "median_resident_request_ms": 7781.266565,
+  "resident_request_latency_saving_ms": 389.06332825000004,
+  "scope": "historical measured four-row begin + verified commit, perfect drafts; operator extrapolation screens feasibility only"
+}
