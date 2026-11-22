@@ -44,6 +44,10 @@ rows referred to 26 distinct source reports with 121 local Markdown
 links. All source commits were reachable from their named local branches.
 Run from the project root with
 `python3 docs/experiments/2026-11-21-evidence-audit/provenance.py`.
+The same replay resolves every short Git ID in the rebuild plan and
+matches each ledger row's full ID, subject and original author against
+the Git object. Review an individual commit's original message and
+trailers with `git show -s --format=fuller FULL_SHA`.
 The counts change as new evidence is indexed. The replay checks object
 identity and local link targets. Each research report supplies the
 hardware, workload and qualification boundaries for its conclusions.

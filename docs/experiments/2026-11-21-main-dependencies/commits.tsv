@@ -1,69 +1,71 @@
-e1403e0dbe2037cd8fc2b0af32addf97a4df3488	fix(cuda): synchronize compressed kv debug reads
-48c63332462e009964e891be1cabaf139e3b50f8	docs(research): close runtime follow-up study
-dd81f0501e099eb94fff5353ec0b62c03cb3ac9c	docs(bench): record main checkpoint admission
-a1b247089775ef612e0681154e90dbddc47cd90e	feat(bench): qualify normal serving entry points
-f351a2836445c26a6be6de0ef7dd40730082530a	test(server): measure prefill during active decode
-541cec19c91fe5289d9645c0e16c08834b2be125	fix(gguf): check tensor shape products once
-1989d823eef4f94f05af0df1c334d312c3f0674e	docs(gguf): qualify checked tensor layouts
-e930d2109f7940804c2aa17f8f5fede83ae18fe1	fix(cuda): retain Q8 scale synchronization
-a898ac28004aaaad23924526e1eb3ce7afdd2079	test(cuda): check Q8 KV scales on main
-75ed22f6d1a0ced788900349130b768a639fbece	fix(cuda): synchronize Q8 history scales
-dbceae10ee5e8f78d6a92611807aa4c6d46f5c0f	fix(cuda): preserve graph attention dispatch
-e2b4739d8ec73b8387086dc09f9552e158fba9b0	fix(cuda): preserve graph attention dispatch
-bfae1119d6c4467174ba2e7554adb44db0856ce4	docs(research): reproduce graph cache divergence
-66f21e30a8452c11f8bbc97aa4f6dfd11885b2f8	perf(research): pair graph and ordinary HTTP
-7f3bcfd20d381442759bcf37b25ba5c510d1589f	feat(cuda): batch direct compressed kv attention
-97102a1c17568a87d29e0a5aa79018de2259e2b3	perf(research): reuse matched KV operator grid
-9489bb6e292b4d7dc3427fe74a83e4c766f14930	feat(bench): measure resident KV allocations
-f1bb7a4201ca1300af08282215d4bbb95620e8a9	test(quality): compare full and clipped KV history
-6f9e57311170a07f8326a28f07313ce9e5f86e91	feat(cuda): add fused q8 projection primitive
-b0fb85198c80bf1c88f06e439204d0955de01aec	feat(infer): select projection backend by memory budget
-616d628cf3f01cec84987bac5f9a2e7ac5bf06e1	fix(infer): support q8 tied output embeddings
-2f7b89aa5321d34b9f21ed04e76e912cd0e78deb	test(cuda): add q8 generation canary
-33891e8816a46110717f96dd6b12d101130d7370	refactor(infer): own Q8 execution weight views
-81948df80ceb9a66beea6a5d7feaa52fc52f1f1e	fix(cuda): account for dropped model weights
-11f2fb667b33e51d03a53da77d039178181c7012	feat(infer): prepare model-owned Q8 layouts
-a48d87bc6a57396ae4dc14128439066020358862	perf(cuda): separate Q8 scales and values
-4db3c1e54e0b58ed045eb9a3a4e44a17d35d5cba	perf(cuda): use prepared Q8 for fused QKV
-e2dbc616b0995c1de90f85cf78b051e8a42ed242	perf(cuda): reuse prepared Q8 in fused MLP
-b76177dbc27e5337b81cb7e16a1106e3e90f81a2	perf(infer): use prepared Q8 greedy logits
-3d176fe820b0031e1ddd09faa0309c0eab624a43	feat(infer): select prepared Q8 families
-dd8c5f60340100ff854bbc8593bb68f9b5ed053d	fix(infer): preserve native down reduction order
-05607ab724db6097a3091ab0615196573623350a	feat(infer): select split-plane FP32 FFN
-e5a06accf0f29a582938c8d8982dcff4764d4a35	feat(infer): load opt-in compound FFN pairs
-e83e1722610b27e3d36eb6e855d7409baea83e29	feat(infer): add joint-only weight ownership
-f6aafd1ae1cba967a2e063c4357bfe9c54848fc3	perf(research): reproduce Q8 ownership cohorts
-0b7992b9da863473f2d13214bbb37ef6751a265e	feat(infer): add transactional verification
-9aff60ad522ca4c1c14806b06479333b90cc345c	feat(research): add direct four-row verification
-9d55c9abe2d28f1a48b01aa490e7ec4b712a9992	test(infer): verify consecutive rollback states
-fc487e89fd700f50135e885d9d38b3d8893f2a45	test(cuda): check close Q8 head predictions
-081cc65d2d21834813bc2c4ccccdc3fe92dd2a64	docs(research): verify packed rollback on M40
-06765706fa6d9bbe4bcf122828bc689867ad24a7	feat(cuda): reuse Q8 weights across input rows
-a438032f85c8d9f1cb516cf1a7c3d7810bb59747	test(bench): gate small-row timing on parity
-3df1dd2556b0d66a46a7544568aa7105274c3b49	feat(infer): retain Q4 channel packing
-9a6800383efc50f8cd4ea1ac7a8de59b318832a7	feat(cuda): retain selected Q4 execution
-6629f75e14dd83397b53a7c21bf8704d1592e474	perf(cuda): fuse qwen decode projections
-c71254cfe7e5f66f62c589de3c0472c6beda83d2	perf(cuda): fuse q8 decode projections
-54226d75bb2cf6423d25bdf40a700c164208833f	feat(cuda): add q4 gguf projection support
-63ea66a2b5f83bf07ac1945b64554796343d6cfd	fix(cuda): preserve main graph attention arithmetic
-4efc654cd87c1809c89b58c50899ae0ed356c414	test(bench): bind main graph parity binaries
-4d0a79fda28d1eab0f64f2bfccf0350c23a34953	test(bench): admit the local Q4 baseline
-44f15e9376d560b2663c1e9d6bb446e9ae08908b	docs(quality): retain two top-eight regressions
-46b4a461c1eaf16a6b99239b6787c4fe943345a7	docs(kvcache): reconcile mixed storage costs
-110f8c7b6a84e4758e5e7a2aeb7bfa3fccaa6621	docs(perf): replay Q8 projection stage costs
-21aca1cb11034d127b27d6169e98933dbc97222d	test(bench): verify actual graph node counts
-8881763d1599d51f8c8228d4a36f3a4333379649	feat(cuda): test joint Q8 gate/up packing
-c6294717e423057cec566cd7951fb0031e12d18e	feat(cuda): probe joint shared-scale FFN
-c3a512205fa508cbfd72b28dd9be374f1cb22487	feat(infer)!: select model-local Q8 FFN paths
-a37cedc87607497a17b2e05919952ee7c21cd9d2	feat(infer): prefer joint-only compound owners
-38e14a0af061fda3b32a6dd3e9e5cbc33f7789f1	feat(cuda): add bounded FP32 FFN ablations
-2e2bb5c6c4a0a3ea30c3b51c9c3147b66df23589	docs(perf): record prepared Q8 HTTP results
-5a2966ba8131ff00c6b361dcb96d06b17883f17a	feat(cuda): share down weights in verification
-16fbcc48878d0bb272f7ca17249954b548ba8013	docs(research): admit four-row Q8 verification
-5a99f1a79283db407cfbd2442fd860a0e4fbfe56	docs(research): qualify compound Q8 ownership
-99ca16a9087b691accfc760f155d7d71b64b68b8	test(bench): isolate compound HTTP memory peaks
-8b7b20c4ae0e9840a9a67a139e66865a0e7a16a7	feat(cuda): probe packed Q8 projection loads
-c264c894b486941ae59b6943c67cedb2182a4778	feat(infer): select packed Q8 projections
-cac4c290afe8ac0482f36d7c6d6b339faf090eb4	feat(cuda): probe fixed four-row Q8 reuse
-b0afd1b40c3e22cd2351d66261385a235b1add20	feat(bench): compare complete verifier schedules
-2dff3f8276c77ec8acd5ad519177169f096e12e3	test(bench): bind full verifier qualification
+e1403e0dbe2037cd8fc2b0af32addf97a4df3488	fix(cuda): synchronize compressed kv debug reads	Guy Elsmore-Paddock
+48c63332462e009964e891be1cabaf139e3b50f8	docs(research): close runtime follow-up study	Guy Elsmore-Paddock
+dd81f0501e099eb94fff5353ec0b62c03cb3ac9c	docs(bench): record main checkpoint admission	Guy Elsmore-Paddock
+a1b247089775ef612e0681154e90dbddc47cd90e	feat(bench): qualify normal serving entry points	Guy Elsmore-Paddock
+f351a2836445c26a6be6de0ef7dd40730082530a	test(server): measure prefill during active decode	Guy Elsmore-Paddock
+541cec19c91fe5289d9645c0e16c08834b2be125	fix(gguf): check tensor shape products once	Guy Elsmore-Paddock
+1989d823eef4f94f05af0df1c334d312c3f0674e	docs(gguf): qualify checked tensor layouts	Guy Elsmore-Paddock
+e930d2109f7940804c2aa17f8f5fede83ae18fe1	fix(cuda): retain Q8 scale synchronization	Guy Elsmore-Paddock
+a898ac28004aaaad23924526e1eb3ce7afdd2079	test(cuda): check Q8 KV scales on main	Guy Elsmore-Paddock
+75ed22f6d1a0ced788900349130b768a639fbece	fix(cuda): synchronize Q8 history scales	Guy Elsmore-Paddock
+dbceae10ee5e8f78d6a92611807aa4c6d46f5c0f	fix(cuda): preserve graph attention dispatch	Guy Elsmore-Paddock
+e2b4739d8ec73b8387086dc09f9552e158fba9b0	fix(cuda): preserve graph attention dispatch	Guy Elsmore-Paddock
+bfae1119d6c4467174ba2e7554adb44db0856ce4	docs(research): reproduce graph cache divergence	Guy Elsmore-Paddock
+66f21e30a8452c11f8bbc97aa4f6dfd11885b2f8	perf(research): pair graph and ordinary HTTP	Guy Elsmore-Paddock
+7f3bcfd20d381442759bcf37b25ba5c510d1589f	feat(cuda): batch direct compressed kv attention	Guy Elsmore-Paddock
+97102a1c17568a87d29e0a5aa79018de2259e2b3	perf(research): reuse matched KV operator grid	Guy Elsmore-Paddock
+9489bb6e292b4d7dc3427fe74a83e4c766f14930	feat(bench): measure resident KV allocations	Guy Elsmore-Paddock
+f1bb7a4201ca1300af08282215d4bbb95620e8a9	test(quality): compare full and clipped KV history	Guy Elsmore-Paddock
+6f9e57311170a07f8326a28f07313ce9e5f86e91	feat(cuda): add fused q8 projection primitive	Guy Elsmore-Paddock
+b0fb85198c80bf1c88f06e439204d0955de01aec	feat(infer): select projection backend by memory budget	Guy Elsmore-Paddock
+616d628cf3f01cec84987bac5f9a2e7ac5bf06e1	fix(infer): support q8 tied output embeddings	Guy Elsmore-Paddock
+2f7b89aa5321d34b9f21ed04e76e912cd0e78deb	test(cuda): add q8 generation canary	Guy Elsmore-Paddock
+33891e8816a46110717f96dd6b12d101130d7370	refactor(infer): own Q8 execution weight views	Guy Elsmore-Paddock
+81948df80ceb9a66beea6a5d7feaa52fc52f1f1e	fix(cuda): account for dropped model weights	Guy Elsmore-Paddock
+11f2fb667b33e51d03a53da77d039178181c7012	feat(infer): prepare model-owned Q8 layouts	Guy Elsmore-Paddock
+a48d87bc6a57396ae4dc14128439066020358862	perf(cuda): separate Q8 scales and values	Guy Elsmore-Paddock
+4db3c1e54e0b58ed045eb9a3a4e44a17d35d5cba	perf(cuda): use prepared Q8 for fused QKV	Guy Elsmore-Paddock
+e2dbc616b0995c1de90f85cf78b051e8a42ed242	perf(cuda): reuse prepared Q8 in fused MLP	Guy Elsmore-Paddock
+b76177dbc27e5337b81cb7e16a1106e3e90f81a2	perf(infer): use prepared Q8 greedy logits	Guy Elsmore-Paddock
+3d176fe820b0031e1ddd09faa0309c0eab624a43	feat(infer): select prepared Q8 families	Guy Elsmore-Paddock
+dd8c5f60340100ff854bbc8593bb68f9b5ed053d	fix(infer): preserve native down reduction order	Guy Elsmore-Paddock
+05607ab724db6097a3091ab0615196573623350a	feat(infer): select split-plane FP32 FFN	Guy Elsmore-Paddock
+e5a06accf0f29a582938c8d8982dcff4764d4a35	feat(infer): load opt-in compound FFN pairs	Guy Elsmore-Paddock
+e83e1722610b27e3d36eb6e855d7409baea83e29	feat(infer): add joint-only weight ownership	Guy Elsmore-Paddock
+f6aafd1ae1cba967a2e063c4357bfe9c54848fc3	perf(research): reproduce Q8 ownership cohorts	Guy Elsmore-Paddock
+0b7992b9da863473f2d13214bbb37ef6751a265e	feat(infer): add transactional verification	Guy Elsmore-Paddock
+9aff60ad522ca4c1c14806b06479333b90cc345c	feat(research): add direct four-row verification	Guy Elsmore-Paddock
+9d55c9abe2d28f1a48b01aa490e7ec4b712a9992	test(infer): verify consecutive rollback states	Guy Elsmore-Paddock
+fc487e89fd700f50135e885d9d38b3d8893f2a45	test(cuda): check close Q8 head predictions	Guy Elsmore-Paddock
+081cc65d2d21834813bc2c4ccccdc3fe92dd2a64	docs(research): verify packed rollback on M40	Guy Elsmore-Paddock
+06765706fa6d9bbe4bcf122828bc689867ad24a7	feat(cuda): reuse Q8 weights across input rows	Guy Elsmore-Paddock
+a438032f85c8d9f1cb516cf1a7c3d7810bb59747	test(bench): gate small-row timing on parity	Guy Elsmore-Paddock
+3df1dd2556b0d66a46a7544568aa7105274c3b49	feat(infer): retain Q4 channel packing	Guy Elsmore-Paddock
+9a6800383efc50f8cd4ea1ac7a8de59b318832a7	feat(cuda): retain selected Q4 execution	Guy Elsmore-Paddock
+6629f75e14dd83397b53a7c21bf8704d1592e474	perf(cuda): fuse qwen decode projections	Guy Elsmore-Paddock
+c71254cfe7e5f66f62c589de3c0472c6beda83d2	perf(cuda): fuse q8 decode projections	Guy Elsmore-Paddock
+54226d75bb2cf6423d25bdf40a700c164208833f	feat(cuda): add q4 gguf projection support	Guy Elsmore-Paddock
+63ea66a2b5f83bf07ac1945b64554796343d6cfd	fix(cuda): preserve main graph attention arithmetic	Guy Elsmore-Paddock
+4efc654cd87c1809c89b58c50899ae0ed356c414	test(bench): bind main graph parity binaries	Guy Elsmore-Paddock
+4d0a79fda28d1eab0f64f2bfccf0350c23a34953	test(bench): admit the local Q4 baseline	Guy Elsmore-Paddock
+44f15e9376d560b2663c1e9d6bb446e9ae08908b	docs(quality): retain two top-eight regressions	Guy Elsmore-Paddock
+46b4a461c1eaf16a6b99239b6787c4fe943345a7	docs(kvcache): reconcile mixed storage costs	Guy Elsmore-Paddock
+110f8c7b6a84e4758e5e7a2aeb7bfa3fccaa6621	docs(perf): replay Q8 projection stage costs	Guy Elsmore-Paddock
+21aca1cb11034d127b27d6169e98933dbc97222d	test(bench): verify actual graph node counts	Guy Elsmore-Paddock
+8881763d1599d51f8c8228d4a36f3a4333379649	feat(cuda): test joint Q8 gate/up packing	Guy Elsmore-Paddock
+c6294717e423057cec566cd7951fb0031e12d18e	feat(cuda): probe joint shared-scale FFN	Guy Elsmore-Paddock
+c3a512205fa508cbfd72b28dd9be374f1cb22487	feat(infer)!: select model-local Q8 FFN paths	Guy Elsmore-Paddock
+a37cedc87607497a17b2e05919952ee7c21cd9d2	feat(infer): prefer joint-only compound owners	Guy Elsmore-Paddock
+38e14a0af061fda3b32a6dd3e9e5cbc33f7789f1	feat(cuda): add bounded FP32 FFN ablations	Guy Elsmore-Paddock
+2e2bb5c6c4a0a3ea30c3b51c9c3147b66df23589	docs(perf): record prepared Q8 HTTP results	Guy Elsmore-Paddock
+5a2966ba8131ff00c6b361dcb96d06b17883f17a	feat(cuda): share down weights in verification	Guy Elsmore-Paddock
+16fbcc48878d0bb272f7ca17249954b548ba8013	docs(research): admit four-row Q8 verification	Guy Elsmore-Paddock
+5a99f1a79283db407cfbd2442fd860a0e4fbfe56	docs(research): qualify compound Q8 ownership	Guy Elsmore-Paddock
+99ca16a9087b691accfc760f155d7d71b64b68b8	test(bench): isolate compound HTTP memory peaks	Guy Elsmore-Paddock
+8b7b20c4ae0e9840a9a67a139e66865a0e7a16a7	feat(cuda): probe packed Q8 projection loads	Guy Elsmore-Paddock
+c264c894b486941ae59b6943c67cedb2182a4778	feat(infer): select packed Q8 projections	Guy Elsmore-Paddock
+cac4c290afe8ac0482f36d7c6d6b339faf090eb4	feat(cuda): probe fixed four-row Q8 reuse	Guy Elsmore-Paddock
+b0afd1b40c3e22cd2351d66261385a235b1add20	feat(bench): compare complete verifier schedules	Guy Elsmore-Paddock
+2dff3f8276c77ec8acd5ad519177169f096e12e3	test(bench): bind full verifier qualification	Guy Elsmore-Paddock
+b072baf59cd070279b13b0511cda971727e294fd	docs(research): report all KV answer outcomes	Guy Elsmore-Paddock
+9d4b78c24741342c81f1f4b61320e89f501e35d6	docs(research): report matched KV logit drift	Guy Elsmore-Paddock

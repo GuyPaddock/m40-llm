@@ -98,5 +98,24 @@ def check_decisions() -> dict[str, int]:
     return {"decisions": len(decisions), "source_reports": len(reports), "relative_links": linked_paths}
 
 
+def check_rebuild_sources() -> dict[str, int]:
+    """Resolve each abbreviated rebuild reference and check recorded Git authors."""
+    directory = EXPERIMENTS / "2026-11-21-main-dependencies"
+    with (directory / "commits.tsv").open(newline="") as ledger:
+        rows = list(csv.reader(ledger, delimiter="\t"))
+    commits = [row[0] for row in rows]
+    if len(set(commits)) != len(commits) or any(len(row) != 3 for row in rows):
+        raise ValueError("Duplicate or incomplete rebuild source")
+    original = read_git("show", "-s", "--no-walk", "--format=%H%x09%s%x09%an", *commits)
+    if sorted(rows) != sorted(csv.reader(original.decode().splitlines(), delimiter="\t")):
+        raise ValueError("Rebuild source identity, subject or author differs")
+    references = set(re.findall(r"\b[0-9a-f]{7}\b", (directory / "README.md").read_text()))
+    for reference in references:
+        if read_git("rev-parse", "--verify", f"{reference}^{{commit}}").decode().strip() not in commits:
+            raise ValueError(f"Unlisted rebuild reference {reference}")
+    return {"sources": len(rows), "cited_short_ids": len(references)}
+
+
 if __name__ == "__main__":
-    print(json.dumps({"inventory": check_inventory(), "integration": check_decisions()}, indent=2))
+    print(json.dumps({"inventory": check_inventory(), "integration": check_decisions(),
+                      "rebuild": check_rebuild_sources()}, indent=2))

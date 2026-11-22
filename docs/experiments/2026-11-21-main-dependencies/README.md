@@ -7,6 +7,16 @@ The final feature selection depends on the serial M40 runs. All existing
 defaults, including compressed KV for supported generation, remain the
 reference behavior.
 
+The ledger records each source commit's full Git ID, subject and original
+author. For a future port of an intact patch, preserve its Git author and
+record the source hash in the port's commit message. For a port assembled
+from several patches, identify the contributing commits and the hunks
+adapted for main. Preserve applicable author trailers and copyright or
+license notices from the source. The November technique references have
+their own [upstream revisions](../2026-11-21-protocol/upstream-prs.tsv).
+For example, the OpenCL multi-column study motivated C1's weight reuse.
+The Maxwell implementation to trace is this project's 0676570.
+
 ## Independent fixes
 
 1. **GGUF shape validation.** Main-based 541cec1 checks products and row
@@ -221,8 +231,10 @@ type and tied flag. The Q4 secondary admission (4d0a79f) selected a real,
 dedicated Q6_K head; it did not rely on tied substitution. Q4 support
 and its slower historical 32-token probe require separate review.
 
-**Quantized KV has two separate decisions.** Mixed top-8 failed two
-dense-passing long tasks on research/1121-quantized-kv 44f15e9. Its
+**Quantized KV has two separate decisions.** The early snapshot 44f15e9
+retained two top-8 counterexamples. The completed 48-case grid at b072baf
+found three losses among ten dense-passing long tasks. The aligned logits
+at 9d4b78c also show the greater drift under top-8. Its
 existing use in supported generation on both bases makes this a recorded
 default-behavior risk. Changing its default needs separate authorization
 and quality/serving evidence. A sidecar-stride redesign is also unnecessary
