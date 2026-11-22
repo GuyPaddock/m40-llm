@@ -55,9 +55,12 @@ workload and profile that meets the frozen threshold.
 | Decode and verification | Ordinary target decode needs the final hidden row for logits or top-1. `src/verification.rs::VerificationSession::begin` consumes per-row predictions, including the next prediction after an accepted prefix. Its packed and direct backends require hidden outputs for these rows. Dense rollback truncates valid lengths without another layer evaluation. |
 | Specialized MTP | Phase 4 has no qualified learned MTP checkpoint or KV-only MTP graph. A separate checkpoint-specific state graph has no validated workload here. |
 
-Remote main e1403e0dbe2037cd8fc2b0af32addf97a4df3488 also has packed
-session/HTTP prefix callers and a general hidden-output forward. Its source
-must be traced again for any future port. No kernel, feature flag or
+Remote main e1403e0dbe2037cd8fc2b0af32addf97a4df3488 has distinct
+callers. The ordinary session passes all but the final token, as above.
+The HTTP scheduler passes the entire prompt in `prefill_sequence`, and
+`finish_prefill` immediately computes logits from its returned hidden row.
+A KV-only terminal layer there would corrupt the first-token result.
+Any future port must distinguish these contracts. No kernel, feature flag or
 production dispatch is proposed for the measured case.
 
 ### Replay
