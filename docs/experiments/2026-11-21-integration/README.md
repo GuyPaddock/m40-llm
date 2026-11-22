@@ -57,9 +57,12 @@ its frozen 3% gate and fell below the general November 5% threshold.
 [Compound comparison](../2026-10-27-maxwell-compound-runtime.md).
 [Portfolio comparison](../2026-10-29-portfolio-runtime.md).
 
-**Excluded work.** Seven October hypotheses failed their gates, one
-activation-preparation operator has no compatible local model, and the
-learned draft lacks a qualified checkpoint. Keep the supplied-index Q4
+**Excluded work.** The original channel selector, ShiftAdd, additional
+multi-row gate/up fusion, lossless KV compression and DualPace all missed
+their October gates. The later causal-selector and general adaptive
+drafting studies also missed their gates. Activation preparation still
+requires a compatible rotated model, and the learned draft requires a
+qualified checkpoint. Keep the supplied-index Q4
 executor as a control for sparse-layout work. Retain GSQ as a checkpoint
 preparation question, and preserve the terminal-prefill dependency trace
 for workloads with a larger measured opportunity. [Closure register](../2026-11-21-closed-directions/README.md).

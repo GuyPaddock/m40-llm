@@ -18,7 +18,7 @@ Phase 4 is pinned at 48c6333 and remote main at e1403e0. The [inventory](experim
 | Study | November evidence or outstanding decision |
 |---|---|
 | Graph | On research/1121-graph-dispatch, bfae111 records four failing unrepaired paths and e2b4739 passes the exact dispatch and replay checks with cuBLAS on and off. Full-model HTTP and setup diagnostics use 66f21e3. The Qwen native-head128 HTTP gain was 0.361% at e6567e5, below the 5% gate. TinyLlama synchronous F16 fell back before capture. |
-| KV | On research/1121-quantized-kv, c484536 retains all dense answers (19/24 short and 10/24 long pass). At 9d4b78c, top-8 loses three long dense-passing answers and top-64 retains all 29 passes where all history fits. At 46b4a46 the 3072-position allocation reconciles to the byte. At e100c54, mixed backing saves 47 MiB of 4,674 MiB whole-process peak at capacity 8,448. At 4281ad8 all 144 matched direct/staged operator groups passed. At 341e34f the complete October rerun matched all 86 deterministic records and retained seven dense passes. Full-model consumer timing and beyond-top-64 quality remain open. |
+| KV | On research/1121-quantized-kv, c484536 retains all dense answers (19/24 short and 10/24 long pass). At 9d4b78c, top-8 loses three long dense-passing answers and top-64 retains all 29 passes where all history fits. At 46b4a46 the 3072-position allocation reconciles to the byte. At e100c54, mixed backing saves 47 MiB of 4,674 MiB whole-process peak at capacity 8,448. At 4281ad8 all 144 matched direct/staged operator groups passed. At 341e34f the complete October rerun matched all 86 deterministic records and retained seven dense passes. Full-model consumer timing and the complete beyond-top-64 cohort remain open. |
 | Prepared Q8 | Research/1121-q8-projections 110f8c7 recovers all 36 layer timings in five M40 configurations. Gate/up/SwiGLU and down projection dominate the remaining projection cost. The November short split comparison uses a different baseline from the compound and portfolio runs. |
 | Small-N and rollback | Research/1121-verifier-correctness 081cc65 records actual two-build rollback/near-tie results. Research/1121-small-n-verification 16fbcc4 passes four-row operator admission on three weights. The complete-target binary is pinned at cfb0c58. The [target audit](experiments/2026-11-22-verifier-rejections/README.md) reproduces 635 historical transactions and checks both multi-row down schedules against the same launch budget. |
 | Other studies | Research/1121-active-row-kv 377bec4 closes idle-slot indexing with exact outputs at four idle lengths and a distinct two-active positive control. Research/1121-gsq-quality 59aaf76 identifies comparable model files and the missing layer dispatch. On independently main-based research/1121-gguf-compatibility, 541cec1 fixes checked shape arithmetic and 1989d82 qualifies it. |
@@ -28,11 +28,25 @@ The 64-token packed-prefix output trace is complete on research/1121-output-prun
 on main the HTTP scheduler immediately consumes its full-prompt final row.
 The entire terminal-layer window in five historical M40 requests was 2.693%
 of prefill and 0.0920% of HTTP wall (medians), below the frozen admission
-gate. Research/1121-sparse-q4-layout a08da81 built the eight-arm Q4 operator
-screen. CPU fixture preparation post-pause (14f2a31) produced identical
-bytes at lower host cost. GPU results are pending. Research/1121-kv-history-boundary
-f1bb7a4 froze two independent preparations of four input cases at
-2051/3210/3203/3200 prompt IDs and built the full-history equivalence check.
+gate.
+
+At 19e6db8 the fixed-mask M40 run cleared the operator gate for lossless
+packed Q4 and for regrouped zigzag at 25% active. Native indexed execution
+missed the gate. The real Q4 capture in f1ef866 replays each task on a
+separately loaded dense model. At a971f90 it freezes cutoffs before observing
+held-out inputs. The charged operator and its comparison gates at 5dde384
+await those observations. No sparse configuration has passed model quality
+or complete-request qualification.
+[Fixed-mask result](https://github.com/GuyPaddock/m40-llm/blob/19e6db86326f261db52858bb3cc63b3bd0a14c9e/docs/experiments/2026-11-21-sparse-q4/result/README.md).
+
+The [KV boundary audit](experiments/2026-11-21-kv-audit/README.md) at 7cf33bc
+read 24 full-vocabulary vectors and recomputed 30 paired comparisons for the
+first two of four frozen cases on f1bb7a4. At 2,051 prompt IDs, full mixed
+and top-64 were byte-identical in all three matched prefixes. At 3,210
+IDs, top-64 had a budget of 64 for 69 old blocks and kept the dense retrieval
+answer. Against full mixed history, maximum KL over three samples was
+0.00001341 for top-64 and 0.01507 for top-8. The other two tasks and
+device teardown still have to complete.
 
 The operator paused Gentoo upgrades. Native versus split short HTTP used a
 wall-clock denominator and lacked per-trial host measurements. On consolidation
