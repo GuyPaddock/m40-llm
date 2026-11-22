@@ -1,0 +1,5 @@
+# Dense reference on the 48 new quality cases
+
+The M40 dense FP16-KV reference passed 19 of 24 short cases and 10 of 24 long cases. Of the 48 comparisons per candidate arm, 29 can support a conclusion about retaining a passing answer. The 19 reference failures remain inconclusive for preservation. At long context all four multi-fact cases passed, one each passed in code/config, chat and retrieval, three long-form cases passed their surface rubrics, and none of the four arithmetic cases passed. The family file identifies the individual failures. Keep complete outputs for semantic review.
+
+first-pass.jsonl.gz contains the original run from its manifest through dense_grid_complete inclusive. Its 50 records comprise one manifest, 48 dense generations and the completion marker. The source is c49e208; the model hash, input hash, executable, prompt IDs, conditions, output tokens, dispatch and cache checks are embedded in the raw report. This checkpoint establishes dense outcomes only. It includes neither quantized quality verdicts nor timing qualification. The host sampler recorded Gentoo build activity during this run.

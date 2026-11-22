@@ -1,0 +1,114 @@
+[
+  {
+    "family": "arithmetic",
+    "context": "long",
+    "dense_passed": 0,
+    "total": 4,
+    "failed_cases": [
+      "nov-stock-long",
+      "nov-chain-long",
+      "nov-cost-long",
+      "nov-time-long"
+    ]
+  },
+  {
+    "family": "arithmetic",
+    "context": "short",
+    "dense_passed": 2,
+    "total": 4,
+    "failed_cases": [
+      "nov-stock-short",
+      "nov-cost-short"
+    ]
+  },
+  {
+    "family": "chat",
+    "context": "long",
+    "dense_passed": 1,
+    "total": 4,
+    "failed_cases": [
+      "nov-rewrite-long",
+      "nov-omit-long",
+      "nov-format-long"
+    ]
+  },
+  {
+    "family": "chat",
+    "context": "short",
+    "dense_passed": 3,
+    "total": 4,
+    "failed_cases": [
+      "nov-omit-short"
+    ]
+  },
+  {
+    "family": "code_config",
+    "context": "long",
+    "dense_passed": 1,
+    "total": 4,
+    "failed_cases": [
+      "nov-slice-long",
+      "nov-loop-long",
+      "nov-sql-long"
+    ]
+  },
+  {
+    "family": "code_config",
+    "context": "short",
+    "dense_passed": 3,
+    "total": 4,
+    "failed_cases": [
+      "nov-slice-short"
+    ]
+  },
+  {
+    "family": "factual_retrieval",
+    "context": "long",
+    "dense_passed": 1,
+    "total": 4,
+    "failed_cases": [
+      "nov-ledger-long",
+      "nov-platform-long",
+      "nov-drawer-long"
+    ]
+  },
+  {
+    "family": "factual_retrieval",
+    "context": "short",
+    "dense_passed": 4,
+    "total": 4,
+    "failed_cases": []
+  },
+  {
+    "family": "long_form",
+    "context": "long",
+    "dense_passed": 3,
+    "total": 4,
+    "failed_cases": [
+      "nov-host-long"
+    ]
+  },
+  {
+    "family": "long_form",
+    "context": "short",
+    "dense_passed": 3,
+    "total": 4,
+    "failed_cases": [
+      "nov-host-short"
+    ]
+  },
+  {
+    "family": "multi_fact",
+    "context": "long",
+    "dense_passed": 4,
+    "total": 4,
+    "failed_cases": []
+  },
+  {
+    "family": "multi_fact",
+    "context": "short",
+    "dense_passed": 4,
+    "total": 4,
+    "failed_cases": []
+  }
+]
