@@ -120,4 +120,15 @@ in prefill mode and residency. The normal 5% request gate and confirmation
 rules apply. A result on TinyLlama cannot establish an equivalent Qwen
 comparison or attribute the entire wall-time difference to one kernel.
 
-The [dense TinyLlama comparison](tiny-dense/README.md) records the first completed cross-revision cohort with matching CLI and HTTP token IDs.
+After both profiled requests complete, run `python3 kv-trace.py RAW_DIRECTORY`
+from this directory. The replay checks one attention wrapper row for every
+layer and consumed input position, through the final generated sample.
+It requires the requested consumer throughout and reports recent-only
+prefill, historical prefill and decode separately. The profiler's
+elapsed value belongs to the wrapper in its instrumented request.
+Use the warmed, tracing-off comparison for whole-request latency.
+
+The [dense TinyLlama comparison](tiny-dense/README.md) records the first
+completed cross-revision cohort with matching CLI and HTTP token IDs.
+The [local Q4 baseline](qwen-q4-short/README.md) records Phase 4 default
+and dense KV through the same boundaries on a separate supported checkpoint.
