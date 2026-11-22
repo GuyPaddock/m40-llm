@@ -1,0 +1,46 @@
+{
+  "pairs": 5,
+  "ids": 512,
+  "arms": [
+    {
+      "arm": 0,
+      "http_s": 23.394005,
+      "http_tokens_s": 21.885948985648245,
+      "generation_ttft_ms": 3708.31004,
+      "decode_ms_per_interval": 38.437445927592954,
+      "process_cpu_s": 23.42,
+      "process_cpu_seconds_by_trial": [
+        23.36,
+        23.41,
+        23.42,
+        23.42,
+        23.43
+      ],
+      "isolated_trace_peak_mib": 3288
+    },
+    {
+      "arm": 1,
+      "http_s": 23.309817,
+      "http_tokens_s": 21.964994405575986,
+      "generation_ttft_ms": 3734.6422390000002,
+      "decode_ms_per_interval": 38.21213819960861,
+      "process_cpu_s": 23.37,
+      "process_cpu_seconds_by_trial": [
+        23.36,
+        23.34,
+        23.39,
+        23.37,
+        23.39
+      ],
+      "isolated_trace_peak_mib": 3288
+    }
+  ],
+  "median_paired_decode_saving_ms": 0.23249942270058455,
+  "capture_us": 2829.94,
+  "instantiate_us": 1238.885,
+  "nodes": 396,
+  "diagnostic_replays": 32,
+  "launch_cpu_median_us": 36.5665,
+  "replay_cuda_event_median_ms": 26.4155,
+  "setup_only_break_even_intervals": 17.5003660341982
+}
