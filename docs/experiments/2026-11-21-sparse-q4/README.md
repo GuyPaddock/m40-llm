@@ -50,3 +50,21 @@ uses a reconstruction of the known native Q4 weights as its input. Its
 incremental quantization error is specific to this conversion, and it cannot
 establish the quality of quantizing from original high-precision weights.
 [SpQt §4.1–4.2](https://arxiv.org/html/2511.04477v1)
+
+### CPU fixture preparation
+
+All three GGUF tensors have the expected type and dimensions. Each native,
+losslessly repacked or zigzag weight tensor occupies 12,681,216 payload
+bytes. Keeping either alternate in addition to native duplicates that payload.
+The lossless repack round-tripped all source bytes. Regrouping changes the
+weights, with per-layer RMS differences of 0.0010901, 0.0010117 and
+0.0007504 and maximum absolute differences of 0.04031, 0.09436 and 0.12903.
+These are weight differences, not model-quality or speed results. Timings in
+[prepare.jsonl](prepare.jsonl) include packing and conversion separately
+and exclude file I/O. Host contention may affect the single observations.
+
+From the worktree, source `scripts/dev-env.sh`, then build with
+`cargo build --locked --release --no-default-features --example sparse_q4_inputs`.
+Run `target/release/examples/sparse_q4_inputs MODEL NEW_DIRECTORY` and
+compare its four named files per layer with [planes.sha256](planes.sha256).
+The original run directory is `../raw/sparse-q4-inputs-01`.
