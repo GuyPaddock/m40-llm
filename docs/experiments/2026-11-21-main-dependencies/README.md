@@ -36,6 +36,9 @@ The Maxwell implementation to trace is this project's 0676570.
    storage and a Q8 sidecar. Main only allocates this sidecar in the
    compressed constructor. Report the bulk path as compiled; exercise
    incremental eviction and existing attention parity on hardware.
+   At a383c40, both repaired main builds passed the incremental fixture
+   and ten attention tests on the M40. The unrepaired main control also
+   passed. Use the Phase 4 failure witness alongside these port checks.
 3. **Opt-in dense graph state correctness.** Main already has graph
    capture, replay and device-resident sequence lengths in
    `src/decode_session.rs`. Its ordinary last-token GQA uses 128 threads

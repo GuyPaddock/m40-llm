@@ -1,6 +1,6 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 38 decisions for which the
+The [candidate matrix](candidates.tsv) records 39 decisions for which the
 scope can already be established. Each row has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
@@ -14,8 +14,15 @@ a reproduced failing input and a passing isolated main-based repair.
 It introduces no CUDA dependency.
 
 **Correctness before performance.** The graph state repair passes the
-Phase 4 M40 grid and failure paths. The separate main-based graph and Q8
-eviction repairs have pinned test binaries awaiting hardware results. The verifier rollback and near-tie cases should
+Phase 4 M40 grid and failure paths. The main-based graph run is queued.
+On main, the Q8 eviction repair passed the guarded fixture and all ten
+attention cases with cuBLAS enabled and disabled. The unfixed eviction
+control passed, leaving direct reproduction of the race on main
+inconclusive. The Phase 4 failure witness and the shared-scratch write
+order support a narrow Tier 1 port. The bulk Q8 builder is compile-covered.
+[Main-based M40 checks](https://github.com/GuyPaddock/m40-llm/blob/a383c40d381b5374211069c9ab5de1e64517d0df/docs/experiments/2026-11-21-main-kv-scale/result/README.md).
+
+The verifier rollback and near-tie cases should
 accompany any future verifier port. They do not warrant bringing the
 verifier into main by themselves. [Archived CUDA evidence](../2026-11-21-evidence-audit/README.md).
 
@@ -82,6 +89,13 @@ On the frozen 65-prompt-token, 512-output-token workload, the portfolio's
 625.45 ms to reach the 56.153149 target. The latter is 1.30 times the
 October official Ollama result. The paired November gate remains 5%.
 [Historical request budgets](../2026-11-22-http-targets/README.md).
+
+**Bounded serving experiment.** In all five paired trials, a
+2,060-token prefill stalled an already decoding request by 344–351 s
+on the opt-in dense buffered scheduler. Both clients matched their
+isolated IDs. The five tracing-off pairs matched the instrumented work.
+This admits a 16-position chunking test with cache and output parity
+and paired latency gates. [Completed serving baseline](https://github.com/GuyPaddock/m40-llm/blob/a37d0bc8b9d9537f626b696868857f88dd80ada2/docs/experiments/2026-11-21-prefill-fairness/result/README.md).
 
 **Excluded work.** The original channel selector, ShiftAdd, additional
 multi-row gate/up fusion, lossless KV compression and DualPace all missed

@@ -7,7 +7,7 @@ against the current code, worktree, Git history, and linked raw results.
 ## November consolidation
 
 Use the [integration matrix](experiments/2026-11-21-integration/README.md)
-for the current 38 dispositions. Graph parity and speculative rollback have
+for the current 39 dispositions. Graph parity and speculative rollback have
 hardware evidence in both cuBLAS builds. The [evidence audit](experiments/2026-11-21-evidence-audit/README.md)
 includes the original raw logs and verifier source patch. Seven
 [source-isolated build checks](experiments/2026-11-21-build-compatibility/README.md)
@@ -66,16 +66,19 @@ comparisons. Research/1121-prefill-fairness f351a28 measures real overlap
 between prefill and ongoing decode. On research/1121-kv-scale-port,
 a898ac2 builds the original Q8 regression directly on main, 75ed22f
 ports both barriers, and d56ca89 binds the serial positive and negative
-tests. Fixed and unfixed sm_52 release binaries exist. Their main-based
-hardware qualification remains pending. The first cross-revision serving
+tests. Both fixed sm_52 builds passed 11 tests each on the M40, and the
+unfixed control also passed. Bulk Q8 conversion remains compile-covered.
+[Main-based scale tests](https://github.com/GuyPaddock/m40-llm/blob/a383c40d381b5374211069c9ab5de1e64517d0df/docs/experiments/2026-11-21-main-kv-scale/result/README.md).
+The first cross-revision serving
 cohort found Phase 4 19.423% slower than main on matched dense F16 HTTP.
 [TinyLlama results](experiments/2026-11-21-serving-baseline/tiny-dense/README.md).
 
-All five D3 diagnostic pairs show a much longer gap during a 2,060-token
-prefill than during a 65-token prefill. Both requests matched their
-isolated sampled IDs in all ten trials. The instrumentation-off series
-is underway. Its workload checks are required before the scheduling
-prototype advances. [Diagnostic results and replay](https://github.com/GuyPaddock/m40-llm/blob/ef04859cb48bd20702e75bbb79cad0a91eae5c4e/docs/experiments/2026-11-21-prefill-fairness/diagnostic/README.md).
+All five D3 pairs qualified the dense buffered prefill stall. Both
+requests matched their isolated sampled IDs in all ten diagnostic trials.
+All five tracing-off pairs matched the diagnostic work. Research branch
+research/1121-prefill-chunking implements a 16-position opt-in prototype.
+Its hardware correctness and performance remain open.
+[Full baseline and replay](https://github.com/GuyPaddock/m40-llm/blob/a37d0bc8b9d9537f626b696868857f88dd80ada2/docs/experiments/2026-11-21-prefill-fairness/result/README.md).
 
 The [closed-direction register](experiments/2026-11-21-closed-directions/README.md)
 records nine October dispositions and exact reopening conditions. The [dense

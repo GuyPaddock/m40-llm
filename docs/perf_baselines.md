@@ -4,6 +4,13 @@ This file tracks measured CUDA baselines before M40-specific optimization work.
 
 ## 2026-11-22 Maxwell qualification
 
+On the opt-in dense buffered scheduler the M40 completed five valid
+staggered pairs. A 2,060-token prefill coincided with a 344.171–350.970 s
+active-decode gap, compared with 8.585–8.749 s for a 65-token prefill.
+The same short request retained all 128 sampled IDs. Tracing-off
+workloads matched their diagnostic outputs, counts and stops.
+[Serving results and raw measurements](https://github.com/GuyPaddock/m40-llm/blob/a37d0bc8b9d9537f626b696868857f88dd80ada2/docs/experiments/2026-11-21-prefill-fairness/result/README.md).
+
 After Portage paused, five fresh alternating Qwen Q8_0 HTTP pairs
 reproduced the benefit of preparing only down and vocabulary weights.
 Throughput rose from 31.922 to 35.681 tok/s on the dense 65-input,
