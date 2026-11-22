@@ -24,3 +24,27 @@ package source path in both build logs. Each run hides the GPU. The
 qualification comprises formatting, warning-as-error non-CUDA tests, and
 NVCC/cuBLAS CUDA/server all-target Clippy. Hardware tests are recorded in
 their individual studies.
+
+## First source-isolated results
+
+**PASS for formatting, the invoked non-CUDA tests, and CUDA/server
+compilation on the five revisions below.** Each started with an empty
+target directory named for its complete source commit. The test binaries
+ran from that directory. Both build logs identify the expected worktree.
+
+| Research branch | Source | Reported non-CUDA passes |
+|---|---|---:|
+| consolidation | f2b8802 | 226 |
+| graph-node-cost | 21aca1c | 223 |
+| graph-dispatch | 66f21e3 | 223 |
+| q8-projections | 110f8c7 | 223 |
+| quantized-kv | 44f15e9 | 224 |
+
+All five suites reported zero failures. Consolidation again executed
+`metrics_round_trip_without_sample_offsets`, `sampled_offsets_include_the_stop_token`
+and `test_november_kv_answers_cover_all_families`. This resolves the
+three missing checks in its prior shared-target run. The [new index](isolated/index.tsv)
+identifies each complete archive, including command lines and all logs.
+The [packaging check](pack-isolated.sh) verifies the compile paths, run
+paths, exits, source revision and uncompressed log bytes. Separate
+device tests remain necessary for any CUDA correctness or timing claim.
