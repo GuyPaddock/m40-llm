@@ -56,6 +56,8 @@ fn compare_logits(actual: &[f32], expected: &[f32]) {
     }
 }
 fn compare_kv(actual: &(Vec<u16>, Vec<u16>), expected: &(Vec<u16>, Vec<u16>)) {
+    assert_eq!(actual.0.len(), expected.0.len());
+    assert_eq!(actual.1.len(), expected.1.len());
     for (&a, &b) in actual
         .0
         .iter()
@@ -225,6 +227,76 @@ fn test_direct_verification_rejects_unsupported_and_aliased_models() -> Result<(
         );
         let mut old = VerificationSession::new(&mut loaded, &[])?;
         assert!(old.prefill(&[1, 2, 3])? < 96);
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
+/// Interleave an independent session with cancellation and every partial
+/// commit length. A second verification must consume only committed history.
+#[test]
+#[ignore = "requires serial M40 transactional verification"]
+fn test_repeated_verification_after_interleaved_rollback() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let _env = configure();
+    let initial = CudaContext::total_device_bytes();
+    {
+        let mut target = model(true, Q8PrefillBackend::Native, 32)?;
+        let mut oracle = model(true, Q8PrefillBackend::Native, 32)?;
+        let mut packed = VerificationSession::new(&mut target, &[])?;
+        let mut serial = VerificationSession::new(&mut oracle, &[])?;
+        let prompt = [19, 2, 13, 8];
+        for accepted in 0..=4 {
+            let mut next = serial.prefill(&prompt)?;
+            let mut proposals = Vec::new();
+            let mut predictions = Vec::new();
+            let mut logits = Vec::new();
+            for _ in 0..8 {
+                proposals.push(next);
+                let (prediction, row) = serial.serial_step_with_logits(next)?;
+                next = prediction;
+                predictions.push(next);
+                logits.push(row);
+            }
+            let prefix = serial.debug_kv_token(1, 2)?;
+            assert_eq!(packed.prefill(&prompt)?, proposals[0]);
+            let cancelled = packed.begin(&proposals[..4], false)?;
+            // Hold this request's speculative suffix live across a genuinely
+            // different full-forward request on the independent owner.
+            serial.prefill(&[12, 1, 2])?;
+            drop(cancelled);
+            assert_eq!(packed.committed_len(), prompt.len() as u32);
+            let out = packed
+                .begin(&proposals[..4], false)?
+                .commit_prefix(accepted)?;
+            assert_eq!(out.next_token, proposals[accepted]);
+            let second = packed.begin(&proposals[accepted..accepted + 4], true)?;
+            assert_eq!(second.accepted_len(), 4);
+            assert_eq!(second.predictions(), &predictions[accepted..accepted + 4]);
+            for (batch, reference) in second
+                .captured_logits()
+                .unwrap()
+                .iter()
+                .zip(&logits[accepted..accepted + 4])
+            {
+                compare_logits(batch, reference);
+            }
+            second.commit()?;
+            assert_eq!(packed.debug_kv_token(1, 2)?, prefix);
+            serial.prefill(&prompt)?;
+            for &token in &proposals[..accepted + 4] {
+                serial.serial_step(token)?;
+            }
+            assert_eq!(packed.debug_lengths()?, serial.debug_lengths()?);
+            for layer in 0..2 {
+                for position in 0..packed.committed_len() {
+                    compare_kv(
+                        &packed.debug_kv_token(layer, position)?,
+                        &serial.debug_kv_token(layer, position)?,
+                    );
+                }
+            }
+        }
     }
     assert_eq!(CudaContext::total_device_bytes(), initial);
     Ok(())
