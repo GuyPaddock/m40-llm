@@ -113,3 +113,23 @@ qualification also failed. The full-grid archive runs the same checks on
 all 144 outputs. The frozen concepts scorer enforces a minimum paragraph
 count. A manual review must still assess audience, meaning and strict
 instructions such as a request for exactly one paragraph.
+
+## Independent operator timing replay
+
+The [pair replay](operator-pairs.jq) recalculates the four throughput
+medians in each screen, extension and confirmation from the individual
+GPU-event and wall intervals. It checks alternating arm order, counts,
+absence of allocations and host transfers inside timing, and the
+coverage label on the dense-only control. Run it alongside the original
+36-case grid and FP64 validation audit. The retained October report
+reproduced [2,340 pairs](october-operator-pairs.json). Reversing the
+order recorded for pair zero caused a rejection. An unfinished November
+report also failed admission.
+
+```sh
+audit=docs/experiments/2026-11-21-kv-audit
+out=$(mktemp -d)
+git show e23d162:docs/experiments/2026-10-31-quantized-kv-timing-summary.jq > "$out/grid.jq"
+jq -es -f "$out/grid.jq" COMPLETED_REPORT.jsonl > "$out/grid.json"
+jq -es -f "$audit/operator-pairs.jq" COMPLETED_REPORT.jsonl
+```
