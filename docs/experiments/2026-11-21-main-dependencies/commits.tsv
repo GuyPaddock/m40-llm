@@ -71,3 +71,4 @@ b072baf59cd070279b13b0511cda971727e294fd	docs(research): report all KV answer ou
 9d4b78c24741342c81f1f4b61320e89f501e35d6	docs(research): report matched KV logit drift	Guy Elsmore-Paddock
 e25b2ed41a022870fcebad776e352310f6f221d4	docs(bench): retain post-pause Q8 repeat	Guy Elsmore-Paddock
 ce1cc2661391e3761238170ad1651714930d7367	docs(bench): retain dense TinyLlama baseline	Guy Elsmore-Paddock
+cfb9df0b84a51909763f66cd96814d9fb02810cb	test(bench): measure buffered serving concurrency	Guy Elsmore-Paddock
