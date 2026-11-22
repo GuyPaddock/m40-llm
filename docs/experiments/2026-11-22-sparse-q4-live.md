@@ -90,3 +90,31 @@ magnitude strictly exceeds the cutoff. Ties are discarded. The runner
 writes the threshold digest before opening the held-out split and checks it
 again after the run. Both splits use the original dense GGUF and explicitly
 disabled graph and prepared-weight paths. These observations are untimed.
+
+## Held-out operator replay
+
+The explicit full packed control uses all indices in order and the original
+uncompressed input. It pays no selection or compaction cost. Each charged
+path includes selection, the device count, projection and reduction. A
+diagnostic all-zero row precedes the actual held-out rows. For each vector,
+the numerical check compares every output with the matched FP64 sum and
+reports error against the original full native and full matched layouts.
+The run measures all three cutoffs on all six arms in rotating order with
+one warm-up and five measured rounds of twenty calls.
+
+For promotion, use both the synchronized wall interval and the CUDA-event
+span. Compute paired fractional reductions within each row and weigh each
+task equally by its median row. Use 4,096 deterministic task-level bootstrap
+resamples (seed 1121) for the paired interval. Require the median gain to
+exceed twice the median within-row relative MAD of the noisier arm. Fewer
+than three represented tasks gives an inconclusive interval. The primary
+cutoffs, two control comparisons, 10% threshold and two-layer rule above
+were fixed before capture. Each arm receives a separate decision. No
+kernel parameter search or timing extension is part of this follow-up.
+
+```bash
+source scripts/dev-env.sh
+cargo build --release --locked --no-default-features --target-dir target/capture --example sparse_q4_rows
+bash docs/experiments/2026-11-21-sparse-q4/build.sh sparse_q4_live
+flock ../raw/m40-benchmark.lock bash docs/experiments/2026-11-22-sparse-q4-live/operator.sh ../raw/sparse-q4-live-01 ../raw/sparse-q4-live-operator-01
+```
