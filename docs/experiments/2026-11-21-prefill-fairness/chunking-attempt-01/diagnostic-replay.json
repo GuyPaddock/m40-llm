@@ -1,0 +1,15 @@
+{
+  "identical_ids_per_request": [
+    128,
+    32
+  ],
+  "arrived_during_decode": [
+    true,
+    true
+  ],
+  "process_peaks_mib": [
+    3564,
+    3564
+  ],
+  "included_in_qualification": false
+}
