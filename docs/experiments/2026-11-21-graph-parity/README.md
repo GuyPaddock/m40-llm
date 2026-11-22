@@ -1,0 +1,5 @@
+# Graph dispatch parity on the November research base
+
+PASS for the repaired cases on e2b4739. In each of cuBLAS-enabled and cuBLAS-disabled release builds, five session tests and three dispatch tests executed. Each build produced 144 short and 84 boundary comparisons, all exact, including the 8192/8193 transition and cache guard checks. Four full-forward sequences per build each checked 32 token positions and reported zero logit or FP16 cache discrepancies. They cover ordinary replay, capture cancellation, rejected first launch, and rejected later launch. The fifth session case exercised the unsupported parallel backend. Both builds passed teardown. The after-snapshot shows no compute process.
+
+Run the release tests with M40LLM_ENABLE_CUBLAS=1 and 0 and isolated CARGO_TARGET_DIRs. Use cargo test --locked --release --features cuda --lib decode_session::graph_tests and --test attention_graph_dispatch, both with -- --include-ignored --nocapture --test-threads=1. The historical unfixed measurements remain at b5ea002. These rows concern state equivalence and failure handling; they do not measure full-model graph replay latency.
