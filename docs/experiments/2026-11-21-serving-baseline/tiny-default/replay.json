@@ -1,0 +1,1105 @@
+{
+  "same_greedy_ids": true,
+  "screen": {
+    "pairs": 5,
+    "arms": [
+      {
+        "arm": 0,
+        "token_accounting": {
+          "prompt_tokens": 46,
+          "generated_tokens": 128,
+          "stop_reason": "length"
+        },
+        "metric_source": "companion IDs",
+        "median_http_s": 5.261234555,
+        "median_http_tokens_s": 24.328890617194695,
+        "median_admission_to_first_sample_ms": null,
+        "median_prompt_tokens_s": null,
+        "median_decode_tokens_s": null,
+        "median_server_cpu_s": 5.26,
+        "max_sampled_process_mib": 6208,
+        "median_launch_to_health_s": 6.750504686
+      },
+      {
+        "arm": 1,
+        "token_accounting": {
+          "prompt_tokens": 46,
+          "generated_tokens": 128,
+          "stop_reason": "length"
+        },
+        "metric_source": "server",
+        "median_http_s": 4.984993726,
+        "median_http_tokens_s": 25.677063409808593,
+        "median_admission_to_first_sample_ms": 146.37887899999998,
+        "median_prompt_tokens_s": 314.25298727694184,
+        "median_decode_tokens_s": 26.256092173156922,
+        "median_server_cpu_s": 3.32,
+        "max_sampled_process_mib": 6216,
+        "median_launch_to_health_s": 6.752457814
+      }
+    ],
+    "gate": {
+      "bootstrap_gain_ci95": [
+        0.04343404585039279,
+        0.06299757803718564
+      ],
+      "bootstrap_resamples": 10000,
+      "bootstrap_seed": 0,
+      "candidate_tps": {
+        "mad_over_median": 0.0011207937942512396,
+        "max": 25.861551802409572,
+        "median": 25.677063409808593,
+        "min": 25.357646710682154
+      },
+      "control_tps": {
+        "mad_over_median": 0.0011008628919813468,
+        "max": 24.547531979723992,
+        "median": 24.328890617194695,
+        "min": 24.302107844311152
+      },
+      "gain": 0.05541447877039918,
+      "next": "confirm",
+      "pairs": 5,
+      "passes_november_speed_gate": false,
+      "promotion_threshold": 0.05,
+      "workload": [
+        46,
+        128,
+        "length"
+      ]
+    }
+  },
+  "extended": null,
+  "confirmation": {
+    "pairs": 20,
+    "arms": [
+      {
+        "arm": 0,
+        "token_accounting": {
+          "prompt_tokens": 46,
+          "generated_tokens": 128,
+          "stop_reason": "length"
+        },
+        "metric_source": "companion IDs",
+        "median_http_s": 5.251936474000001,
+        "median_http_tokens_s": 24.371968285965323,
+        "median_admission_to_first_sample_ms": null,
+        "median_prompt_tokens_s": null,
+        "median_decode_tokens_s": null,
+        "median_server_cpu_s": 5.25,
+        "max_sampled_process_mib": 6208,
+        "median_launch_to_health_s": 6.7524255055
+      },
+      {
+        "arm": 1,
+        "token_accounting": {
+          "prompt_tokens": 46,
+          "generated_tokens": 128,
+          "stop_reason": "length"
+        },
+        "metric_source": "server",
+        "median_http_s": 5.048569371000001,
+        "median_http_tokens_s": 25.35377016530316,
+        "median_admission_to_first_sample_ms": 144.95691,
+        "median_prompt_tokens_s": 317.3359177507252,
+        "median_decode_tokens_s": 25.938298029054643,
+        "median_server_cpu_s": 3.38,
+        "max_sampled_process_mib": 6216,
+        "median_launch_to_health_s": 6.7544174755
+      }
+    ],
+    "gate": {
+      "bootstrap_gain_ci95": [
+        0.031819011499276684,
+        0.050964573118355005
+      ],
+      "bootstrap_resamples": 10000,
+      "bootstrap_seed": 0,
+      "candidate_tps": {
+        "mad_over_median": 0.00938181744235777,
+        "max": 26.364587012409753,
+        "median": 25.35377016530316,
+        "min": 25.010926804966214
+      },
+      "control_tps": {
+        "mad_over_median": 0.002155224858978597,
+        "max": 24.501091654465206,
+        "median": 24.371968285965323,
+        "min": 24.269834299101838
+      },
+      "gain": 0.04028406191153677,
+      "next": "complete",
+      "pairs": 20,
+      "passes_november_speed_gate": false,
+      "promotion_threshold": 0.05,
+      "workload": [
+        46,
+        128,
+        "length"
+      ]
+    }
+  },
+  "diagnostics": [
+    {
+      "arm": 0,
+      "cli": {
+        "wall_s": 12.42,
+        "user_s": 6.31,
+        "sys_s": 6.11,
+        "peak_rss_kib": 4545124
+      },
+      "diagnostic_http_ms": 5348.423995,
+      "generation_first_sample_ms": null,
+      "token_intervals": 0,
+      "itl_median_ms": null,
+      "itl_p95_ms": null,
+      "stream_http_ms": 5273.590983,
+      "stream_records": 128,
+      "stream_first_nonterminal_record_ms": 1402.311825
+    },
+    {
+      "arm": 1,
+      "cli": {
+        "wall_s": 12.16,
+        "user_s": 3.92,
+        "sys_s": 6.69,
+        "peak_rss_kib": 4545848
+      },
+      "diagnostic_http_ms": 5170.844605,
+      "generation_first_sample_ms": 231.440701,
+      "token_intervals": 127,
+      "itl_median_ms": 39.709209999999985,
+      "itl_p95_ms": 42.44148600000062,
+      "stream_http_ms": 6347.341192,
+      "stream_records": 128,
+      "stream_first_nonterminal_record_ms": 1784.289783
+    }
+  ],
+  "trials": [
+    {
+      "label": "pair-0-0",
+      "arm": 0,
+      "http_seconds": 5.261234555,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.328890617194695,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.26,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.750504686
+    },
+    {
+      "label": "pair-0-1",
+      "arm": 1,
+      "http_seconds": 4.9494323069999995,
+      "metrics": {
+        "decode_elapsed_ms": 4796.961593,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 147.972129,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 4944.963065999999
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.861551802409572,
+      "prompt_tokens_s": 310.8693529711937,
+      "decode_tokens_s": 26.475092105245462,
+      "server_cpu_s": 3.27,
+      "process_peak_mib": 6216,
+      "launch_to_health_s": 7.011379551
+    },
+    {
+      "label": "pair-1-1",
+      "arm": 1,
+      "http_seconds": 4.989796093999999,
+      "metrics": {
+        "decode_elapsed_ms": 4840.970988,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 142.66921,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 4983.687610000001
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.65235083532053,
+      "prompt_tokens_s": 322.4241586534334,
+      "decode_tokens_s": 26.234406344267065,
+      "server_cpu_s": 3.37,
+      "process_peak_mib": 6216,
+      "launch_to_health_s": 6.752457814
+    },
+    {
+      "label": "pair-1-0",
+      "arm": 0,
+      "http_seconds": 5.262825112000001,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.32153781970477,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.26,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.748799351
+    },
+    {
+      "label": "pair-2-0",
+      "arm": 0,
+      "http_seconds": 5.267032835999999,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.302107844311152,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.27,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.491591055
+    },
+    {
+      "label": "pair-2-1",
+      "arm": 1,
+      "http_seconds": 5.047787023,
+      "metrics": {
+        "decode_elapsed_ms": 4892.355761,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 148.48114,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 5040.8711459999995
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.357646710682154,
+      "prompt_tokens_s": 309.8036558717154,
+      "decode_tokens_s": 25.95886444162457,
+      "server_cpu_s": 3.29,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.749493801
+    },
+    {
+      "label": "pair-3-1",
+      "arm": 1,
+      "http_seconds": 4.984993726,
+      "metrics": {
+        "decode_elapsed_ms": 4836.972659999999,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 139.69726599999998,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 4976.701953
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.677063409808593,
+      "prompt_tokens_s": 329.28346643519853,
+      "decode_tokens_s": 26.256092173156922,
+      "server_cpu_s": 3.32,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.752633419
+    },
+    {
+      "label": "pair-3-0",
+      "arm": 0,
+      "http_seconds": 5.21437349,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.547531979723992,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.21,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.753479543
+    },
+    {
+      "label": "pair-4-0",
+      "arm": 0,
+      "http_seconds": 5.24306585,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.413197099174333,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.25,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 7.006742271
+    },
+    {
+      "label": "pair-4-1",
+      "arm": 1,
+      "http_seconds": 4.979412831,
+      "metrics": {
+        "decode_elapsed_ms": 4828.585279,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 146.37887899999998,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 4974.994754
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.7058421031329,
+      "prompt_tokens_s": 314.25298727694184,
+      "decode_tokens_s": 26.301699703293156,
+      "server_cpu_s": 3.36,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.491019843
+    },
+    {
+      "label": "confirm-0-0",
+      "arm": 0,
+      "http_seconds": 5.264025870999999,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.315989916608068,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.27,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.497264994
+    },
+    {
+      "label": "confirm-0-1",
+      "arm": 1,
+      "http_seconds": 5.116125715,
+      "metrics": {
+        "decode_elapsed_ms": 4964.692852,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 144.83216,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 5109.56462
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.018931732798517,
+      "prompt_tokens_s": 317.60901722379896,
+      "decode_tokens_s": 25.58063585924328,
+      "server_cpu_s": 3.72,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.746369898
+    },
+    {
+      "label": "confirm-1-1",
+      "arm": 1,
+      "http_seconds": 5.041271075000001,
+      "metrics": {
+        "decode_elapsed_ms": 4885.316381,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 149.250306,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 5034.598297
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.390421997888694,
+      "prompt_tokens_s": 308.20707329069063,
+      "decode_tokens_s": 25.99626924756176,
+      "server_cpu_s": 3.43,
+      "process_peak_mib": 6216,
+      "launch_to_health_s": 6.75628542
+    },
+    {
+      "label": "confirm-1-0",
+      "arm": 0,
+      "http_seconds": 5.260020692,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.334505032399594,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.26,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.493322297
+    },
+    {
+      "label": "confirm-2-0",
+      "arm": 0,
+      "http_seconds": 5.244498098999999,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.406529964117357,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.24,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.755122506
+    },
+    {
+      "label": "confirm-2-1",
+      "arm": 1,
+      "http_seconds": 5.065148624000001,
+      "metrics": {
+        "decode_elapsed_ms": 4916.144087000001,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 144.238033,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 5060.417625
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.2707293510604,
+      "prompt_tokens_s": 318.91727197915964,
+      "decode_tokens_s": 25.83325422373854,
+      "server_cpu_s": 3.38,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.48925652
+    },
+    {
+      "label": "confirm-3-1",
+      "arm": 1,
+      "http_seconds": 5.117763168,
+      "metrics": {
+        "decode_elapsed_ms": 4961.227385,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 150.51811,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 5111.792775999999
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.010926804966214,
+      "prompt_tokens_s": 305.61106567176535,
+      "decode_tokens_s": 25.598504189503096,
+      "server_cpu_s": 3.37,
+      "process_peak_mib": 6216,
+      "launch_to_health_s": 6.75656236
+    },
+    {
+      "label": "confirm-3-0",
+      "arm": 0,
+      "http_seconds": 5.270830311,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.284598905198944,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.27,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.493172307
+    },
+    {
+      "label": "confirm-4-0",
+      "arm": 0,
+      "http_seconds": 5.246420674,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.397586078893223,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.24,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.759951281
+    },
+    {
+      "label": "confirm-4-1",
+      "arm": 1,
+      "http_seconds": 5.075551761,
+      "metrics": {
+        "decode_elapsed_ms": 4926.998693,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 142.994631,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 5070.0243980000005
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.218933039662485,
+      "prompt_tokens_s": 321.690399690601,
+      "decode_tokens_s": 25.776341321225516,
+      "server_cpu_s": 3.37,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.756426084
+    },
+    {
+      "label": "confirm-5-1",
+      "arm": 1,
+      "http_seconds": 4.967792821,
+      "metrics": {
+        "decode_elapsed_ms": 4815.5155460000005,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 145.728947,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 4961.283504
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.765969840552657,
+      "prompt_tokens_s": 315.65451440474624,
+      "decode_tokens_s": 26.373084831071168,
+      "server_cpu_s": 3.31,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.748297481
+    },
+    {
+      "label": "confirm-5-0",
+      "arm": 0,
+      "http_seconds": 5.240138121,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.426837049778598,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.23,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.756903262
+    },
+    {
+      "label": "confirm-6-0",
+      "arm": 0,
+      "http_seconds": 5.2644543420000005,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.314010851763214,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.27,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.752405298
+    },
+    {
+      "label": "confirm-6-1",
+      "arm": 1,
+      "http_seconds": 5.01939253,
+      "metrics": {
+        "decode_elapsed_ms": 4867.579977,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 146.33169800000002,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 5013.98061
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.50109385447884,
+      "prompt_tokens_s": 314.3543103012445,
+      "decode_tokens_s": 26.09099400525371,
+      "server_cpu_s": 3.41,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.750676027
+    },
+    {
+      "label": "confirm-7-1",
+      "arm": 1,
+      "http_seconds": 4.931072016999999,
+      "metrics": {
+        "decode_elapsed_ms": 4780.7509279999995,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 141.600496,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 4922.384819000001
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.957844371105647,
+      "prompt_tokens_s": 324.857619142803,
+      "decode_tokens_s": 26.564864372285914,
+      "server_cpu_s": 3.38,
+      "process_peak_mib": 6216,
+      "launch_to_health_s": 7.013552219
+    },
+    {
+      "label": "confirm-7-0",
+      "arm": 0,
+      "http_seconds": 5.2544442490000005,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.36033078557458,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.25,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.756579795
+    },
+    {
+      "label": "confirm-8-0",
+      "arm": 0,
+      "http_seconds": 5.262668806999999,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.322260186646023,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.27,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.491934403
+    },
+    {
+      "label": "confirm-8-1",
+      "arm": 1,
+      "http_seconds": 5.106518012,
+      "metrics": {
+        "decode_elapsed_ms": 4949.049757,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 149.779858,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 5098.8785419999995
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.06600382084386,
+      "prompt_tokens_s": 307.1173962523052,
+      "decode_tokens_s": 25.66149184909074,
+      "server_cpu_s": 3.41,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 7.011804544
+    },
+    {
+      "label": "confirm-9-1",
+      "arm": 1,
+      "http_seconds": 5.010455729999999,
+      "metrics": {
+        "decode_elapsed_ms": 4862.971323,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 140.507687,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 5003.514473
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.546578374817816,
+      "prompt_tokens_s": 327.3842234695672,
+      "decode_tokens_s": 26.115720526530442,
+      "server_cpu_s": 3.38,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.75344106
+    },
+    {
+      "label": "confirm-9-0",
+      "arm": 0,
+      "http_seconds": 5.239773017,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.42853909600947,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.24,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.751931594
+    },
+    {
+      "label": "confirm-10-0",
+      "arm": 0,
+      "http_seconds": 5.265668445,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.308404780316547,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.26,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.752445713
+    },
+    {
+      "label": "confirm-10-1",
+      "arm": 1,
+      "http_seconds": 4.854997346999999,
+      "metrics": {
+        "decode_elapsed_ms": 4705.94626,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 142.68913999999998,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 4848.667211000001
+      },
+      "metric_source": "server",
+      "http_tokens_s": 26.364587012409753,
+      "prompt_tokens_s": 322.3791242977567,
+      "decode_tokens_s": 26.98713350798018,
+      "server_cpu_s": 3.21,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.755827607
+    },
+    {
+      "label": "confirm-11-1",
+      "arm": 1,
+      "http_seconds": 5.0011136,
+      "metrics": {
+        "decode_elapsed_ms": 4850.990306,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 142.530981,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 4993.551831
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.59429963758472,
+      "prompt_tokens_s": 322.7368511551885,
+      "decode_tokens_s": 26.180221354579636,
+      "server_cpu_s": 3.35,
+      "process_peak_mib": 6216,
+      "launch_to_health_s": 6.486496567
+    },
+    {
+      "label": "confirm-11-0",
+      "arm": 0,
+      "http_seconds": 5.249428699,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.383605786356068,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.26,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.748050889
+    },
+    {
+      "label": "confirm-12-0",
+      "arm": 0,
+      "http_seconds": 5.224257017,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.50109165446521,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.23,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.74855917
+    },
+    {
+      "label": "confirm-12-1",
+      "arm": 1,
+      "http_seconds": 5.084595854,
+      "metrics": {
+        "decode_elapsed_ms": 4932.032783000001,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 147.609255,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 5079.672263
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.174075516602503,
+      "prompt_tokens_s": 311.6335760925018,
+      "decode_tokens_s": 25.750031597062883,
+      "server_cpu_s": 3.46,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.756777291
+    },
+    {
+      "label": "confirm-13-1",
+      "arm": 1,
+      "http_seconds": 5.091606543,
+      "metrics": {
+        "decode_elapsed_ms": 4940.02501,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 146.563665,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 5086.619251
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.139413055389344,
+      "prompt_tokens_s": 313.8567802599642,
+      "decode_tokens_s": 25.708371869153755,
+      "server_cpu_s": 3.6,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.755393891
+    },
+    {
+      "label": "confirm-13-0",
+      "arm": 0,
+      "http_seconds": 5.241712581,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.419499929082434,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.24,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 7.00700207
+    },
+    {
+      "label": "confirm-14-0",
+      "arm": 0,
+      "http_seconds": 5.257543104000001,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.34597253280075,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.25,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.755656544
+    },
+    {
+      "label": "confirm-14-1",
+      "arm": 1,
+      "http_seconds": 4.976982456,
+      "metrics": {
+        "decode_elapsed_ms": 4832.630502999999,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 139.458582,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 4972.119196
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.718394857046288,
+      "prompt_tokens_s": 329.8470365918391,
+      "decode_tokens_s": 26.27968348111054,
+      "server_cpu_s": 3.32,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.488887759
+    },
+    {
+      "label": "confirm-15-1",
+      "arm": 1,
+      "http_seconds": 5.095831338,
+      "metrics": {
+        "decode_elapsed_ms": 4944.175934999999,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 140.84704200000002,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 5085.138736
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.118570751251973,
+      "prompt_tokens_s": 326.5954282518762,
+      "decode_tokens_s": 25.686788186674836,
+      "server_cpu_s": 3.51,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.753301578
+    },
+    {
+      "label": "confirm-15-0",
+      "arm": 0,
+      "http_seconds": 5.225340399999999,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.49601178135687,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.22,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 7.007274749
+    },
+    {
+      "label": "confirm-16-0",
+      "arm": 0,
+      "http_seconds": 5.238492753,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.434509320776755,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.23,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.75410083
+    },
+    {
+      "label": "confirm-16-1",
+      "arm": 1,
+      "http_seconds": 4.955239716,
+      "metrics": {
+        "decode_elapsed_ms": 4802.9648179999995,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 145.08166,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 4948.083459
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.831242752333477,
+      "prompt_tokens_s": 317.0628182776514,
+      "decode_tokens_s": 26.442000891625106,
+      "server_cpu_s": 3.36,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.757740032
+    },
+    {
+      "label": "confirm-17-1",
+      "arm": 1,
+      "http_seconds": 5.055867667,
+      "metrics": {
+        "decode_elapsed_ms": 4907.202329000001,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 142.856676,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 5050.097026
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.317118332717627,
+      "prompt_tokens_s": 322.0010522994389,
+      "decode_tokens_s": 25.88032681054753,
+      "server_cpu_s": 3.41,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.750968474
+    },
+    {
+      "label": "confirm-17-0",
+      "arm": 0,
+      "http_seconds": 5.274036832,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.269834299101838,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.27,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.751132227
+    },
+    {
+      "label": "confirm-18-0",
+      "arm": 0,
+      "http_seconds": 5.2592944820000005,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.337865171475293,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.26,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.753849144
+    },
+    {
+      "label": "confirm-18-1",
+      "arm": 1,
+      "http_seconds": 5.000698869,
+      "metrics": {
+        "decode_elapsed_ms": 4846.737817,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 149.204378,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 4995.975311
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.596422290790013,
+      "prompt_tokens_s": 308.3019454027013,
+      "decode_tokens_s": 26.203191671426033,
+      "server_cpu_s": 3.43,
+      "process_peak_mib": 6216,
+      "launch_to_health_s": 7.01700525
+    },
+    {
+      "label": "confirm-19-1",
+      "arm": 1,
+      "http_seconds": 5.085102532,
+      "metrics": {
+        "decode_elapsed_ms": 4931.04133,
+        "generated_tokens": 128,
+        "prefill_elapsed_ms": 149.02688899999998,
+        "prompt_tokens": 46,
+        "stop_reason": "length",
+        "total_elapsed_ms": 5080.0975
+      },
+      "metric_source": "server",
+      "http_tokens_s": 25.171567179719553,
+      "prompt_tokens_s": 308.6691288308381,
+      "decode_tokens_s": 25.755208991525528,
+      "server_cpu_s": 3.35,
+      "process_peak_mib": 6216,
+      "launch_to_health_s": 6.752327622
+    },
+    {
+      "label": "confirm-19-0",
+      "arm": 0,
+      "http_seconds": 5.241143011,
+      "metrics": {
+        "prompt_tokens": 46,
+        "generated_tokens": 128,
+        "stop_reason": "length"
+      },
+      "metric_source": "companion IDs",
+      "http_tokens_s": 24.422153665976353,
+      "prompt_tokens_s": null,
+      "decode_tokens_s": null,
+      "server_cpu_s": 5.24,
+      "process_peak_mib": 6208,
+      "launch_to_health_s": 6.495274692
+    }
+  ]
+}
