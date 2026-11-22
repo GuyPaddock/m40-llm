@@ -1,6 +1,6 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 45 decisions for which the
+The [candidate matrix](candidates.tsv) records 46 decisions for which the
 scope can already be established. Each row has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
@@ -164,6 +164,13 @@ started sooner. The prompts fit in the recent ring. The measured gain
 qualifies this concurrency cohort and leaves historical-block serving
 and general defaults open.
 [Two-client result](https://github.com/GuyPaddock/m40-llm/blob/c708a507a3d28a8bdbb1f634fb4ed45d055239f6/docs/experiments/2026-11-21-serving-concurrency/default-two/README.md).
+
+The matched dense two-client cohort gained 59.495% aggregate
+throughput. Both clients reached their first sample sooner and
+returned the same 128 IDs. P95 token gaps rose from about
+135–136 ms to 226 ms and sampled process peak rose by 134 MiB.
+This scopes the batching win to aggregate throughput for two equal
+short prompts. [Dense two-client result](https://github.com/GuyPaddock/m40-llm/blob/dbc20a66eeb5fb3977063a83b65e876f744236e2/docs/experiments/2026-11-21-serving-concurrency/dense-two/README.md).
 
 **Excluded work.** The original channel selector, ShiftAdd, additional
 multi-row gate/up fusion, lossless KV compression and DualPace all missed
