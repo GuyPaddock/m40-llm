@@ -40,6 +40,7 @@ struct M40llmCudaContext {
 };
 
 #include "q8_execution.cuh"
+#include "q8_small_rows.cuh"
 #include "q8_ffn.cuh"
 #include "q4_channels.cuh"
 #include "decode_reductions.cuh"

@@ -237,3 +237,60 @@ fn test_separate_256_preserves_native_decode_accumulation_bits() -> Result<()> {
     assert_eq!(CudaContext::total_device_bytes(), initial);
     Ok(())
 }
+
+/// Weight reuse must preserve each serial output bit and leave the following
+/// guard words intact when the last quantization block, output tile and input
+/// row group are all partial. Include exact-zero scales with nonzero codes.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_small_row_weight_reuse_preserves_serial_bits_and_guards() -> Result<()> {
+    let _scope = cuda_test_scope::lock_cuda();
+    let ctx = CudaContext::new_m40()?;
+    let (k, n) = (2083usize, 7usize);
+    let shape = Q8MatrixShape::new(k, n)?;
+    let identity = Q8SourceIdentity::from_column_blocks([3; 32], "small-rows".into(), 0, shape)?;
+    let mut bytes = fixture::make_column_blocks(k, n);
+    for block in bytes.chunks_exact_mut(34).step_by(3) {
+        block[..2].fill(0);
+    }
+    let split = DeviceQ8ExecutionWeight::upload(
+        &ctx,
+        &HostQ8ExecutionWeight::separate_scales_values(Q8SourceView::from_tensor_bytes(
+            &identity, &bytes,
+        )?)?,
+    )?;
+    for rows in [1, 2, 3, 4, 5, 7, 8, 16] {
+        let mut input = fixture::make_input(rows, k);
+        input[..k].fill(0.);
+        for row in input.chunks_exact_mut(k) {
+            row[64..96].fill(0.);
+        }
+        let expected = DeviceBuffer::new_tagged(&ctx, rows * n * 4, "small_rows:reference")?;
+        let input_device = DeviceBuffer::new_tagged(&ctx, input.len() * 4, "small_rows:inputs")?;
+        let sentinel = 1337.25_f32;
+        let initial = vec![sentinel; rows * n + 15];
+        let output = DeviceBuffer::new_tagged(&ctx, initial.len() * 4, "small_rows:guarded")?;
+        unsafe {
+            ctx.memcpy_h2d(
+                input_device.as_mut_ptr(),
+                input.as_ptr().cast(),
+                input_device.bytes(),
+            )?;
+            ctx.memcpy_h2d(output.as_mut_ptr(), initial.as_ptr().cast(), output.bytes())?;
+            split.project_serial_rows_async(&input_device, &expected, rows)?;
+            split.project_small_rows_async(&input_device, &output, rows)?;
+        }
+        ctx.synchronize_stream(CudaStream::Decode)?;
+        let actual = read_output(&ctx, &output)?;
+        let reference = read_output(&ctx, &expected)?;
+        assert_eq!(&actual[rows * n..], &initial[rows * n..]);
+        assert!(actual[..n].iter().all(|v| *v == 0.));
+        for (index, (a, b)) in actual[..rows * n].iter().zip(&reference).enumerate() {
+            assert!(a.is_finite());
+            assert_eq!(a.to_bits(), b.to_bits(), "rows={rows} element={index}");
+            let cpu = fixture::project_cpu(&input, &bytes, index / n, index % n, k);
+            assert!((f64::from(*a) - cpu).abs() < 1e-3 + cpu.abs() * 2e-5);
+        }
+    }
+    Ok(())
+}

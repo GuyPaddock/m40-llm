@@ -812,6 +812,16 @@ mod ffi {
             threads: i32,
             stream_kind: u32,
         ) -> i32;
+        pub fn m40llm_q8_small_rows_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const c_void,
+            values: *const c_void,
+            output: *mut c_void,
+            m: i32,
+            n: i32,
+            k: i32,
+        ) -> i32;
         pub fn m40llm_gemm_f32xq8_separate_f32_async(
             ctx: *mut M40llmCudaContext,
             input: *const c_void,
@@ -4095,6 +4105,36 @@ impl CudaContext {
             ));
         }
         record_async_kernel("project_sparse_inputs_q8");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Supply disjoint, dimension-checked spans on this context. Keep their
+    /// owners alive until the decode stream finishes.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn q8_small_rows_async(
+        &self,
+        input: *const c_void,
+        scales: *const c_void,
+        values: *const c_void,
+        output: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_q8_small_rows_async(
+            self.inner.raw.as_ptr(),
+            input,
+            scales,
+            values,
+            output,
+            m,
+            n,
+            k,
+        );
+        anyhow::ensure!(rc == 0, "m40llm_q8_small_rows_async failed: {rc}");
+        record_async_kernel("q8_small_rows");
         Ok(())
     }
 

@@ -768,3 +768,10 @@ int m40llm_persistent_decode_poll(
 #ifdef __cplusplus
 }
 #endif
+
+int m40llm_q8_small_rows_async(M40llmCudaContext* ctx, const void* input,
+    const void* scales, const void* values, void* output, int m, int n, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)m; (void)n; (void)k;
+    return -1;
+}

@@ -111,6 +111,63 @@ impl DeviceQ8ExecutionWeight {
         )
     }
 
+    /// Apply the research weight-sharing kernel to up to 16 contiguous rows.
+    ///
+    /// # Safety
+    /// The buffers must belong to this context and their producers must have
+    /// completed. Retain all owners until the decode stream finishes.
+    pub unsafe fn project_small_rows_async(
+        &self,
+        input: &DeviceBuffer,
+        output: &DeviceBuffer,
+        rows: usize,
+    ) -> Result<()> {
+        let (m, n, k) = self.validate_projection_buffers(input, output, rows)?;
+        ensure!(rows <= 16, "small-row projection supports at most 16 rows");
+        let DeviceQ8ExecutionView::SeparateScalesValues { scales, values, .. } = self.view() else {
+            anyhow::bail!("small-row projection requires separate weight planes");
+        };
+        self.ctx.q8_small_rows_async(
+            input.as_ptr(),
+            scales.as_ptr(),
+            values.as_ptr(),
+            output.as_mut_ptr(),
+            m,
+            n,
+            k,
+        )
+    }
+
+    /// Launch the matched four-column, 256-thread baseline once for each row.
+    ///
+    /// # Safety
+    /// Same buffer ownership and producer requirements as `project_separate_async`.
+    pub unsafe fn project_serial_rows_async(
+        &self,
+        input: &DeviceBuffer,
+        output: &DeviceBuffer,
+        rows: usize,
+    ) -> Result<()> {
+        let (_, n, k) = self.validate_projection_buffers(input, output, rows)?;
+        let launch = Q8SeparateLaunch::new(4, 256)?;
+        for row in 0..rows {
+            self.enqueue_projection_async(
+                input.as_ptr().cast::<f32>().add(row * k as usize).cast(),
+                output
+                    .as_mut_ptr()
+                    .cast::<f32>()
+                    .add(row * n as usize)
+                    .cast(),
+                1,
+                n,
+                k,
+                CudaStream::Decode,
+                Q8ProjectionLaunch::Separate(launch),
+            )?;
+        }
+        Ok(())
+    }
+
     /// Benchmark-only original-tree warp finish on the same owned split planes.
     /// This does not change runtime dispatch or allocate temporary storage.
     ///
