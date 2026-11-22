@@ -1,0 +1,320 @@
+{
+  "input_sha256": "da01d6328aef717902edbc93c215f0468f2bc9d789211effbc1b61b1569d1242",
+  "final_timing_errors": [],
+  "matched_staging": {
+    "groups": 144,
+    "passes": 144,
+    "unresolved": 0,
+    "wall_latency_reduction_percent": {
+      "minimum": 3.526197911897355,
+      "maximum": 20.450519926044098
+    },
+    "event_latency_reduction_percent": {
+      "minimum": 3.524999132869,
+      "maximum": 20.453001182606755
+    },
+    "median_control_ms_range": {
+      "minimum": 3.0264491000000002,
+      "maximum": 65.4622798
+    },
+    "median_candidate_ms_range": {
+      "minimum": 2.4699797,
+      "maximum": 61.22357579999999
+    }
+  },
+  "formats": [
+    {
+      "backing": "mixed",
+      "head_dim": 64,
+      "summary": {
+        "groups": 48,
+        "passes": 48,
+        "unresolved": 0,
+        "wall_latency_reduction_percent": {
+          "minimum": 3.526197911897355,
+          "maximum": 19.125528080270314
+        },
+        "event_latency_reduction_percent": {
+          "minimum": 3.524999132869,
+          "maximum": 19.12230776622421
+        },
+        "median_control_ms_range": {
+          "minimum": 3.0264491000000002,
+          "maximum": 62.494170299693955
+        },
+        "median_candidate_ms_range": {
+          "minimum": 2.4752326,
+          "maximum": 60.253316746458324
+        }
+      }
+    },
+    {
+      "backing": "mixed",
+      "head_dim": 128,
+      "summary": {
+        "groups": 48,
+        "passes": 48,
+        "unresolved": 0,
+        "wall_latency_reduction_percent": {
+          "minimum": 4.347726241882766,
+          "maximum": 20.450519926044098
+        },
+        "event_latency_reduction_percent": {
+          "minimum": 4.347438153398276,
+          "maximum": 20.453001182606755
+        },
+        "median_control_ms_range": {
+          "minimum": 3.1048559,
+          "maximum": 63.1685703
+        },
+        "median_candidate_ms_range": {
+          "minimum": 2.4699797,
+          "maximum": 60.3960898
+        }
+      }
+    },
+    {
+      "backing": "q8",
+      "head_dim": 64,
+      "summary": {
+        "groups": 48,
+        "passes": 48,
+        "unresolved": 0,
+        "wall_latency_reduction_percent": {
+          "minimum": 6.4251165329196835,
+          "maximum": 19.53059589279803
+        },
+        "event_latency_reduction_percent": {
+          "minimum": 6.424217780590147,
+          "maximum": 19.52146700114229
+        },
+        "median_control_ms_range": {
+          "minimum": 3.0286868,
+          "maximum": 65.4622798
+        },
+        "median_candidate_ms_range": {
+          "minimum": 2.4819469,
+          "maximum": 61.22357579999999
+        }
+      }
+    }
+  ],
+  "head128_one_request": [
+    {
+      "context": 1024,
+      "summary": {
+        "groups": 3,
+        "passes": 3,
+        "unresolved": 0,
+        "wall_latency_reduction_percent": {
+          "minimum": 20.233132048812642,
+          "maximum": 20.450519926044098
+        },
+        "event_latency_reduction_percent": {
+          "minimum": 20.226676229347984,
+          "maximum": 20.453001182606755
+        },
+        "median_control_ms_range": {
+          "minimum": 3.1048559,
+          "maximum": 3.1143808999999996
+        },
+        "median_candidate_ms_range": {
+          "minimum": 2.4699797,
+          "maximum": 2.4842441
+        }
+      }
+    },
+    {
+      "context": 2048,
+      "summary": {
+        "groups": 3,
+        "passes": 3,
+        "unresolved": 0,
+        "wall_latency_reduction_percent": {
+          "minimum": 16.277351351003322,
+          "maximum": 16.316378679914877
+        },
+        "event_latency_reduction_percent": {
+          "minimum": 16.267605983453404,
+          "maximum": 16.316840369432782
+        },
+        "median_control_ms_range": {
+          "minimum": 4.4446952,
+          "maximum": 4.4577276999999995
+        },
+        "median_candidate_ms_range": {
+          "minimum": 3.7194819,
+          "maximum": 3.7321277000000004
+        }
+      }
+    },
+    {
+      "context": 4096,
+      "summary": {
+        "groups": 3,
+        "passes": 3,
+        "unresolved": 0,
+        "wall_latency_reduction_percent": {
+          "minimum": 8.83054887064696,
+          "maximum": 9.238007737462794
+        },
+        "event_latency_reduction_percent": {
+          "minimum": 8.807314529267519,
+          "maximum": 9.240877856329387
+        },
+        "median_control_ms_range": {
+          "minimum": 5.6037083,
+          "maximum": 5.6100819
+        },
+        "median_candidate_ms_range": {
+          "minimum": 5.0918221,
+          "maximum": 5.1088701
+        }
+      }
+    },
+    {
+      "context": 8192,
+      "summary": {
+        "groups": 3,
+        "passes": 3,
+        "unresolved": 0,
+        "wall_latency_reduction_percent": {
+          "minimum": 4.3517560197981915,
+          "maximum": 4.571487228605875
+        },
+        "event_latency_reduction_percent": {
+          "minimum": 4.348740642686499,
+          "maximum": 4.5706064918775375
+        },
+        "median_control_ms_range": {
+          "minimum": 7.8902377,
+          "maximum": 7.9054995
+        },
+        "median_candidate_ms_range": {
+          "minimum": 7.543264500000001,
+          "maximum": 7.5540018
+        }
+      }
+    }
+  ],
+  "batched_direct": [
+    {
+      "batch": 1,
+      "summary": {
+        "groups": 24,
+        "passes": 6,
+        "unresolved": 0,
+        "wall_latency_reduction_percent": {
+          "minimum": 0.17660261335424865,
+          "maximum": 3.272296110924189
+        },
+        "event_latency_reduction_percent": {
+          "minimum": 0.18995094694770343,
+          "maximum": 3.267778040961389
+        },
+        "median_control_ms_range": {
+          "minimum": 2.4454357,
+          "maximum": 7.551761599360381
+        },
+        "median_candidate_ms_range": {
+          "minimum": 2.4386702,
+          "maximum": 7.31710974986739
+        }
+      }
+    },
+    {
+      "batch": 2,
+      "summary": {
+        "groups": 24,
+        "passes": 24,
+        "unresolved": 0,
+        "wall_latency_reduction_percent": {
+          "minimum": 44.34269511819976,
+          "maximum": 50.76985612566239
+        },
+        "event_latency_reduction_percent": {
+          "minimum": 44.34739176877063,
+          "maximum": 50.77175050485343
+        },
+        "median_control_ms_range": {
+          "minimum": 4.9042715999999995,
+          "maximum": 15.1043121
+        },
+        "median_candidate_ms_range": {
+          "minimum": 2.7266398,
+          "maximum": 7.532548600000001
+        }
+      }
+    },
+    {
+      "batch": 4,
+      "summary": {
+        "groups": 24,
+        "passes": 24,
+        "unresolved": 0,
+        "wall_latency_reduction_percent": {
+          "minimum": 73.7875546449012,
+          "maximum": 74.83104163665072
+        },
+        "event_latency_reduction_percent": {
+          "minimum": 73.79327652807426,
+          "maximum": 74.83376849099042
+        },
+        "median_control_ms_range": {
+          "minimum": 10.5785716,
+          "maximum": 30.207770399999998
+        },
+        "median_candidate_ms_range": {
+          "minimum": 2.7729022999999997,
+          "maximum": 7.7172111
+        }
+      }
+    },
+    {
+      "batch": 8,
+      "summary": {
+        "groups": 24,
+        "passes": 24,
+        "unresolved": 0,
+        "wall_latency_reduction_percent": {
+          "minimum": 86.299604491107,
+          "maximum": 86.87578138913065
+        },
+        "event_latency_reduction_percent": {
+          "minimum": 86.30351474762676,
+          "maximum": 86.87743596212081
+        },
+        "median_control_ms_range": {
+          "minimum": 21.5786815,
+          "maximum": 60.40023169999999
+        },
+        "median_candidate_ms_range": {
+          "minimum": 2.8961438999999998,
+          "maximum": 8.133092999999999
+        }
+      }
+    }
+  ],
+  "coverage_changing_groups": 144,
+  "october_matched_staging": {
+    "groups": 144,
+    "passes": 144,
+    "unresolved": 0,
+    "wall_latency_reduction_percent": {
+      "minimum": 3.532076064939915,
+      "maximum": 20.40426849055673
+    },
+    "event_latency_reduction_percent": {
+      "minimum": 3.5303271087686494,
+      "maximum": 20.409332154376468
+    },
+    "median_control_ms_range": {
+      "minimum": 3.0254973,
+      "maximum": 65.6138517
+    },
+    "median_candidate_ms_range": {
+      "minimum": 2.4699439,
+      "maximum": 61.3427225
+    }
+  }
+}
