@@ -30,22 +30,39 @@ can go first. The Q8 scale and graph fixes touch distinct code paths
 in the same CUDA file and can be reviewed separately. All three
 patches apply to e1403e0. Applying them and their fixtures in order
 to a temporary Git index produced tree
-`9ab6cee687f0d06a7ee6c0b942471db5f917a5bf` and passed
-`git diff --cached --check`. The worktree and branch refs stayed clean.
+`100d408cea0882d0728c08f16e1af76c980bd4e1` and passed
+`git diff --cached --check`. This replaces the earlier assembly check at
+`9ab6cee687f0d06a7ee6c0b942471db5f917a5bf`, which omitted the graph
+fixtures' debug reader and support files. Individual sources ran the
+recorded build and device gates. Run the combined qualification on the
+authorized integration branch.
 
 | Order | Proposed commit | Changes and verification |
 |---:|---|---|
 | 1 | `fix(gguf): check device tensor sizes` | Port 541cec1 with its `gguf_device_views` tests. Run locked CPU checks and validate existing legal layouts and malformed shapes before device allocation. |
 | 2 | `fix(cuda): synchronize Q8 history scales` | Use the two barriers from 75ed22f and include the guarded incremental test from a898ac2 in the same commit. Repeat it and `attention_parity_cuda_grid` with cuBLAS on and off. Record the successful unfixed main control and the Phase 4 failure witness. |
-| 3 | `fix(cuda): align graph attention dispatch` | Use the two production files from 63ea66a with the final grid and session fixtures from 5877729. Require exact attention on both builds and real F16 replay with cuBLAS. On the unsupported no-cuBLAS F16 combination, verify ordinary fallback with exact state and complete cleanup. Retain the opt-in flag. |
+| 3 | `fix(cuda): align graph attention dispatch` | Use the production delta from 63ea66a and the final grid and session fixtures from 5877729, including the KV-length debug reader, stub and two test helpers. Require exact attention on both builds and real F16 replay with cuBLAS. On the unsupported no-cuBLAS F16 combination, verify ordinary fallback with exact state and complete cleanup. Retain the opt-in flag. |
 
-Run these checks from a clean e1403e0 checkout in the same repository.
+Reproduce the combined application check in a temporary index in a
+checkout with the cited source objects.
 
 ```bash
-git diff 541cec1^ 541cec1 | git apply --check
-git diff e1403e0 75ed22f -- cuda/kernels.cu tests/q8_kv_scale_reuse.rs \
-    tests/common/guarded_bytes.rs | git apply --check
-git diff 63ea66a^ 63ea66a | git apply --check
+(
+    set -euo pipefail
+    index_dir=$(mktemp -d)
+    trap 'rm -f "$index_dir/index"; rmdir "$index_dir"' EXIT
+    export GIT_INDEX_FILE="$index_dir/index"
+    git read-tree e1403e0
+    git diff --binary 541cec1^ 541cec1 | git apply --cached
+    git diff --binary e1403e0 a898ac2 -- cuda/kernels.cu \
+        tests/q8_kv_scale_reuse.rs tests/common/guarded_bytes.rs | git apply --cached
+    git diff --binary e1403e0 5877729 -- cuda/kernels.cu cuda/stub.c \
+        src/cuda.rs src/decode_session.rs src/decode_session/main_graph_tests.rs \
+        tests/attention_graph_dispatch.rs tests/common/cuda_test_scope.rs \
+        tests/common/env_restore.rs | git apply --cached
+    git diff --cached --check e1403e0
+    git write-tree
+)
 ```
 
 1. **GGUF shape validation.** Main-based 541cec1 checks products and row
