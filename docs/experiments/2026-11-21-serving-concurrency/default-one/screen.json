@@ -1,0 +1,30 @@
+{
+  "bootstrap_gain_ci95": [
+    -0.0008224119607300739,
+    0.0034866576214851452
+  ],
+  "bootstrap_resamples": 10000,
+  "bootstrap_seed": 0,
+  "candidate_tps": {
+    "mad_over_median": 0.001236311754049575,
+    "max": 5.021029413130756,
+    "median": 5.014829520450069,
+    "min": 4.990731027573079
+  },
+  "control_tps": {
+    "mad_over_median": 0.0016743001465253312,
+    "max": 5.015767079488644,
+    "median": 4.9974052792455375,
+    "min": 4.98903812285425
+  },
+  "gain": 0.0034866576214851452,
+  "next": "complete",
+  "pairs": 5,
+  "passes_november_speed_gate": false,
+  "promotion_threshold": 0.05,
+  "workload": [
+    65,
+    64,
+    "length"
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "admission": {
+    "clients": 1,
+    "max_completed_decode_width": 0,
+    "diagnostic_gate": true
+  },
+  "eligibility": {
+    "all_outputs_match": true,
+    "equivalent_work": true
+  },
+  "verified_timed_trials": 10,
+  "traces": [
+    {
+      "aggregate_tps": 4.998091163775084,
+      "requests": [
+        {
+          "client_to_first_sample_ms": 3811.358676,
+          "completion_ms": 12805.972595,
+          "decode_ms": 8951.726279,
+          "generated_tokens": 64,
+          "itl_max_ms": 147.6632040000004,
+          "itl_median_ms": 142.7667390000006,
+          "itl_p95_ms": 146.2107670000005,
+          "prompt_tokens": 65,
+          "queue_and_transport_ms": 0.43452,
+          "server_prefill_ms": 3810.924156,
+          "server_total_ms": 12762.666779,
+          "slot": 0,
+          "stop": "length",
+          "wall_ms": 12804.888487
+        }
+      ],
+      "wall_ms": 12804.888487
+    },
+    {
+      "aggregate_tps": 4.9922703157618695,
+      "requests": [
+        {
+          "client_to_first_sample_ms": 3801.622685,
+          "completion_ms": 12820.900748,
+          "decode_ms": 8971.214817,
+          "generated_tokens": 64,
+          "itl_max_ms": 146.52238200000102,
+          "itl_median_ms": 142.43206999999984,
+          "itl_p95_ms": 146.14483499999915,
+          "prompt_tokens": 65,
+          "queue_and_transport_ms": 0.313658,
+          "server_prefill_ms": 3801.309027,
+          "server_total_ms": 12772.538391,
+          "slot": 0,
+          "stop": "length",
+          "wall_ms": 12819.81863
+        }
+      ],
+      "wall_ms": 12819.81863
+    }
+  ]
+}
