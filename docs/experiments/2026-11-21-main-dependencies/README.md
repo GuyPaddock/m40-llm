@@ -263,6 +263,10 @@ shared serving harness reused the trial index and stopped after the
 pair. The readiness correction at 3ac7bb4 leaves the executable and
 qualification workload unchanged. The full HTTP qualification uses
 `M40LLM_RESEARCH_DENSE_PREFILL_CHUNKS=1` as the only arm change.
+The corrected result at 3e362c7 passed the frozen gate with a 99.028%
+median paired reduction in the worst gap and 4.632% higher medium
+TTFT. The short request's P95 cadence became slower. Keep candidate
+admission opt-in and scope it to measured dense buffered workloads.
 
 Both revisions classify a request as pending prefill only while
 `processed_len() == 0`. A partial prompt must remain eligible for its
@@ -274,6 +278,18 @@ one-token and uneven final chunks, exact generated IDs and valid KV,
 cancellation between chunks, and sequence-slot reuse. The experiment can
 use main's existing scheduler and dense sequence leases independently of
 the Phase 4 compressed batched-prefill backend.
+
+If separately authorized, adapt the scheduler portion of 092dcc4 to
+main's `DecodeSchedulerRequest::step`, `is_pending_prefill`,
+`scheduler_can_use_batched_prefill`, `process_scheduler_batch_tick`
+and `decode_scheduler_loop`. Keep one absolute prefix cursor and sample
+only at the complete prompt. The original `src/server.rs` patch fails
+`git apply --check` on e1403e0. Include both cases in
+`src/server/prefill_chunk_tests.rs`, adapted to the main scheduler.
+Start with the main-supported F16 head64 stack. Native Q8 support and
+head128 packed admission are separate prerequisites to reproduce the
+Qwen serving result. Preserve the one-client and four-client controls
+and repeat the mixed end-to-end gate on each proposed deployment path.
 
 For a final port, execute the affected tests first, then formatting, locked
 non-CUDA tests with warnings denied, CUDA/server Clippy, CUDA cuBLAS both

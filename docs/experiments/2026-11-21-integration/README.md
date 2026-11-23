@@ -167,6 +167,15 @@ isolated IDs. The five tracing-off pairs matched the instrumented work.
 This admits a 16-position chunking test with cache and output parity
 and paired latency gates. [Completed serving baseline](https://github.com/GuyPaddock/m40-llm/blob/a37d0bc8b9d9537f626b696868857f88dd80ada2/docs/experiments/2026-11-21-prefill-fairness/result/README.md).
 
+The corrected follow-up passed all five fairness pairs. The 16-position
+policy reduced the worst short-request gap 99.028% and increased its
+P95 gap from 0.379 to 3.318 s. The medium request's first sample
+arrived 4.632% later, inside the frozen allowance. Tracing-off group
+time stayed within 0.3% at the median and the sampled process peak
+remained 3,564 MiB. Keep the candidate opt-in and qualify each future
+serving policy against its own latency goals.
+[Complete prefill chunking result](https://github.com/GuyPaddock/m40-llm/blob/3e362c7a7c14883cdbe7f45cff5e321b279d7afa/docs/experiments/2026-11-21-prefill-fairness/chunking-result/README.md).
+
 Two simultaneous short requests gained 21.56% aggregate throughput in
 the opt-in compressed buffered scheduler. Both clients returned the same
 IDs and the batched process peaked 189 MiB higher. The first client's

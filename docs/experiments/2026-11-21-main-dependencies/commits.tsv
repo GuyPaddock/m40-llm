@@ -102,3 +102,5 @@ f2333456ec479e4bd5fb68ed8a4bf7090bf341d7	docs(bench): retain mislabelled prefill
 6113c490e72663615e09436464e63ae0f1560f72	docs(bench): freeze long dense feasibility gate	Guy Elsmore-Paddock
 86e15affca6975a44689156cb584f2ff8918e9d1	test(bench): time the dense attention boundary	Guy Elsmore-Paddock
 721a52bea0ddc72858342c41ea19ef20f98c5f62	docs(perf): retain the long dense request stop	Guy Elsmore-Paddock
+3e362c7a7c14883cdbe7f45cff5e321b279d7afa	docs(perf): qualify dense prefill fairness	Guy Elsmore-Paddock
+092dcc4b5cccdb6afe5f525f26e9a0303dd8f7d0	feat(server): bound mixed dense prefill ticks	Guy Elsmore-Paddock

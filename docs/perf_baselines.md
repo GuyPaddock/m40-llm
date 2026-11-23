@@ -11,6 +11,13 @@ The same short request retained all 128 sampled IDs. Tracing-off
 workloads matched their diagnostic outputs, counts and stops.
 [Serving results and raw measurements](https://github.com/GuyPaddock/m40-llm/blob/a37d0bc8b9d9537f626b696868857f88dd80ada2/docs/experiments/2026-11-21-prefill-fairness/result/README.md).
 
+The corrected 16-position dense chunking cohort passed five exact-ID
+pairs. Its median worst short-client gap moved from 347.470 to
+3.377 s, with 4.632% higher medium-client TTFT and −0.287% group
+makespan with tracing off. Typical short-client cadence slowed. Both
+arms sampled a 3,564 MiB process peak.
+[Chunked prefill qualification](https://github.com/GuyPaddock/m40-llm/blob/3e362c7a7c14883cdbe7f45cff5e321b279d7afa/docs/experiments/2026-11-21-prefill-fairness/chunking-result/README.md).
+
 Two simultaneous short Qwen Q8_0 clients with direct mixed KV gained
 21.557% median aggregate HTTP throughput with batching over the
 generation mutex, with 128 matching sampled IDs. The peak rose from
