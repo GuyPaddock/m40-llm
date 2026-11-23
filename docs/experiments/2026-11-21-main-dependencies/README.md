@@ -208,6 +208,33 @@ separately in the pinned code. [Long-serving feasibility](../2026-11-21-serving-
 
 ## Conditional paths and explicit exclusions
 
+### Exact dense attention beyond 8,192 tokens
+
+The Phase 4 ordinary launcher at 86e15af switched from the head128
+warp-reduce kernel to the generic fallback when the active length
+went from 8,192 to 8,193. The M40 decode-stream event median rose from
+7.921 ms to 9,045.630 ms while the six FP64 reference checks passed.
+Main has the same ordinary specialization cutoff. This measurement
+justifies a bounded high-priority long-context study after the
+foundation, with separate real-model qualification. [Operator result](https://github.com/GuyPaddock/m40-llm/blob/141ad984b3bcac6f3da738f9850c3f0d3bedc3ff/docs/experiments/2026-11-22-long-context-boundary/result/README.md).
+
+Use the existing split/merge kernel at a07d1ec as one architectural
+control. Its Phase 4 launcher and its direct entry point both cap the
+active length at 8,192. Main lacks that backend and its reusable
+workspace. Enabling the existing Phase 4 flag cannot cross the limit.
+Start with the fixed head128 geometry in `tests/head128_attention_parallel.rs`.
+Budget the dynamic shared-memory and partial workspace before replacing
+the existing dense fallback in `cuda/kernels.cu`. Keep any new dispatch
+opt-in. Exercise 8,192, 8,193, 8,197 and the declared new upper limit, FP64
+operator parity, full logits, generated IDs and valid FP16 KV with both
+cuBLAS build modes. Recheck graph and packed scheduler boundaries if the
+port changes either launcher. Native Qwen Q8 admission is required before
+the real CLI/HTTP regression. Require the frozen 8,197-token request to
+finish inside its existing deadline and remeasure the established short
+and medium controls before considering changes to automatic routing.
+
+### Other optional runtime changes
+
 - **Direct mixed KV on a single sequence** is already on main.
   `src/kv_compression.rs` validates the compatible backing/consumer, and
   `cuda/kernels.cu` already implements the staged and direct old-value

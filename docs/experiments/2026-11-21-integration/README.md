@@ -1,6 +1,6 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 51 decisions for which the
+The [candidate matrix](candidates.tsv) records 52 decisions for which the
 scope can already be established. Each row has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
@@ -198,6 +198,12 @@ The 8,197-token Qwen default CLI and buffered diagnostic matched all
 request bound with zero outputs. Preserve the dense feasibility stop
 and separate default timings. [Long serving result](../2026-11-21-serving-baseline/qwen-long/README.md).
 
+The separate M40 operator diagnostic measured the ordinary dense
+head128 switch from 7.921 ms at 8,192 tokens to 9,045.630 ms at 8,193.
+The existing generic fallback passed its FP64 output check. This
+supports a bounded exact long-context study with its own model gates.
+[Dense boundary result](https://github.com/GuyPaddock/m40-llm/blob/141ad984b3bcac6f3da738f9850c3f0d3bedc3ff/docs/experiments/2026-11-22-long-context-boundary/result/README.md).
+
 The matched dense two-client cohort gained 59.495% aggregate
 throughput. Both clients reached their first sample sooner and
 returned the same 128 IDs. P95 token gaps rose from about
@@ -237,10 +243,14 @@ Both include device selection and compaction, with three measured
 layers on the same checkpoint. Each thresholded arm preserved four
 dense-passing answers. Zigzag thresholding raised the first held-out
 passage's perplexity 4.348%, which stopped that arm at its 3% gate.
-Only packed advances to the broader quality grid. Both arms add
-38,043,648 requested device bytes for weights and 350,212 for scratch.
+The packed arm completed all 48 cases in the broader grid and preserved
+all 26 dense-passing answers. Neither long code nor long arithmetic
+had a dense pass. Packed now enters a same-checkpoint, single-owner
+request-cost comparison. Both layouts add 38,043,648 requested device
+bytes for weights and 350,212 for scratch.
 [Held-out operator result](https://github.com/GuyPaddock/m40-llm/blob/be7bf4bbfa90eb468b2af53f5c8732e8d1a05c04/docs/experiments/2026-11-22-sparse-q4-live/operator-result/README.md) ·
-[Four-arm quality result](https://github.com/GuyPaddock/m40-llm/blob/d64a2edc93ee60c5f148874b51b6e2eac3174ce5/docs/experiments/2026-11-22-sparse-q4-live/quality-result/README.md).
+[Four-arm quality result](https://github.com/GuyPaddock/m40-llm/blob/d64a2edc93ee60c5f148874b51b6e2eac3174ce5/docs/experiments/2026-11-22-sparse-q4-live/quality-result/README.md) ·
+[Expanded packed quality](https://github.com/GuyPaddock/m40-llm/blob/2269a0aa1f6fb3f61e4834a3d55cc2ddd82eeb25/docs/experiments/2026-11-22-sparse-q4-live/extended-result/README.md).
 
 The [dependency-ordered rebuild](../2026-11-21-main-dependencies/README.md)
 makes native Q8 checkpoint admission distinct from optional prepared

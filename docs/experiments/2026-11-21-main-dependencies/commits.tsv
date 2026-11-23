@@ -104,3 +104,7 @@ f2333456ec479e4bd5fb68ed8a4bf7090bf341d7	docs(bench): retain mislabelled prefill
 721a52bea0ddc72858342c41ea19ef20f98c5f62	docs(perf): retain the long dense request stop	Guy Elsmore-Paddock
 3e362c7a7c14883cdbe7f45cff5e321b279d7afa	docs(perf): qualify dense prefill fairness	Guy Elsmore-Paddock
 092dcc4b5cccdb6afe5f525f26e9a0303dd8f7d0	feat(server): bound mixed dense prefill ticks	Guy Elsmore-Paddock
+141ad984b3bcac6f3da738f9850c3f0d3bedc3ff	docs(perf): measure dense attention length cliff	Guy Elsmore-Paddock
+a07d1ecb22af18bd3b18a58a96b26a787b3e95a1	perf(attn): parallelize head128 context work	Guy Elsmore-Paddock
+2269a0aa1f6fb3f61e4834a3d55cc2ddd82eeb25	docs(quality): qualify packed Q4 answer retention	Guy Elsmore-Paddock
+1880f66e01ce3844ef3fbe54cdb9f9ff7395dbab	test(bench): measure warmed sparse Q4 requests	Guy Elsmore-Paddock
