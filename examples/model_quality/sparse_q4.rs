@@ -13,14 +13,17 @@ use m40_llm::{
         activation_sparsity::{ActivationThreshold, Q4ResearchCutoff},
         execution_weights::Q8ExecutionConfig,
         q4_channels::Q4ResearchLayout,
+        LoadedModel,
     },
 };
 use serde::Deserialize;
 use serde_json::json;
-use std::{fs, time::Instant};
+use std::{fs, path::Path, time::Instant};
 
 const MODEL_SHA: &str = "670d82d0fbee6289b661eb323612c65bd2e97ec8c65cdbd9131aa44d30e9816a";
 const CORPUS_SHA: &str = "2a1270959ef105a3ec19e0be0ab888048fb619880fd4f014ce216acfb8710c38";
+const REQUEST_MANIFEST_SHA: &str =
+    "a3d3b51c9ce58eb893a74d0efece48f49a112e0a290ce457ddbcdf00530288c1";
 const FROZEN_CUTOFFS: &[u8] =
     include_bytes!("../../docs/experiments/2026-11-22-sparse-q4-live/cutoffs.json");
 
@@ -43,6 +46,119 @@ struct Layer {
     layer: usize,
     down: FfnTensorSource,
     cutoffs: [f32; 3],
+}
+
+#[derive(Deserialize)]
+struct RequestManifest {
+    cases: Vec<RequestCase>,
+}
+
+#[derive(Deserialize)]
+struct RequestCase {
+    name: String,
+    request: RequestPayload,
+    prompt_ids: Vec<u32>,
+}
+
+#[derive(Deserialize)]
+struct RequestPayload {
+    prompt: String,
+}
+
+fn measure_request(
+    args: &Args,
+    input: &Path,
+    configure: impl FnOnce(&mut LoadedModel) -> Result<()>,
+) -> Result<()> {
+    let use_packed_layout = match args.variant_id.as_str() {
+        "dense" => false,
+        "packed-thresholded" => true,
+        _ => anyhow::bail!("request arm must be dense or packed-thresholded"),
+    };
+    let bytes = fs::read(input)?;
+    ensure!(
+        records::sha256(&bytes)? == REQUEST_MANIFEST_SHA,
+        "request manifest differs"
+    );
+    let workload = serde_json::from_slice::<RequestManifest>(&bytes)?
+        .cases
+        .into_iter()
+        .find(|case| case.name == "short")
+        .context("missing frozen short request")?;
+    ensure!(workload.prompt_ids.len() == 65, "wrong short prompt length");
+    let mut report = records::Report::create(&args.output)?;
+    let initial = CudaContext::total_device_bytes();
+    let start = Instant::now();
+    let (model, tokenizer) = run::load_model_with_setup(
+        &args.model,
+        args.context_tokens,
+        Q8ExecutionConfig::disabled(),
+        |model| {
+            if use_packed_layout {
+                configure(model)?;
+            }
+            Ok(())
+        },
+    )?;
+    let load_ms = start.elapsed().as_secs_f64() * 1_000.0;
+    ensure!(
+        tokenizer.encode_with_specials(&workload.request.prompt, false, false)?
+            == workload.prompt_ids,
+        "Q4 tokenizer changed the frozen input"
+    );
+    let generate = || {
+        tasks::generate_with_prefill(
+            &model,
+            &workload.request.prompt,
+            32,
+            PromptPrefill::Sequential,
+        )
+    };
+    let warm = generate()?;
+    let before = model.q4_research_stats()?;
+    let start = Instant::now();
+    let generated = generate()?;
+    let wall_ms = start.elapsed().as_secs_f64() * 1_000.0;
+    let after = model.q4_research_stats()?;
+    for result in [&warm, &generated] {
+        let (prompt, generated) = result.token_ids.split_at(result.prompt_token_len);
+        ensure!(
+            prompt == workload.prompt_ids
+                && !generated.is_empty()
+                && generated.len() == result.metrics.generated_tokens,
+            "generation changed input or token accounting"
+        );
+    }
+    ensure!(
+        warm.token_ids == generated.token_ids,
+        "warm and measured IDs differ"
+    );
+    if use_packed_layout {
+        let before = before.as_ref().context("missing prepared packed owner")?;
+        let after = after.as_ref().context("missing measured packed owner")?;
+        ensure!(
+            after
+                .projection_calls
+                .into_iter()
+                .zip(before.projection_calls)
+                .all(|(end, start)| end.saturating_sub(start) >= workload.prompt_ids.len() as u64),
+            "measured request bypassed an admitted packed layer"
+        );
+    } else {
+        ensure!(
+            before.is_none() && after.is_none(),
+            "dense arm installed a layout"
+        );
+    }
+    report.append(json!({
+        "kind":"sparse_q4_request","variant":args.variant_id,"load_ms":load_ms,
+        "generation":tasks::generation_record(&generated, wall_ms, &model)?,
+        "layout_before":before,"layout_after":after
+    }))?;
+    drop(model);
+    let remaining = CudaContext::total_device_bytes();
+    ensure!(remaining == initial, "request leaked tracked device bytes");
+    report.append(json!({"kind":"sparse_q4_request_complete","tracked_device_bytes":remaining}))
 }
 
 pub(super) fn evaluate(args: &Args) -> Result<()> {
@@ -115,6 +231,15 @@ pub(super) fn evaluate(args: &Args) -> Result<()> {
         })
         .collect::<Result<Vec<_>>>()?;
     let cutoffs: [Q4ResearchCutoff; 3] = cutoffs.try_into().ok().context("wrong Q4 layer count")?;
+    if let Some(input) = &args.sparse_q4_request_input {
+        ensure!(
+            matches!(layout, Q4ResearchLayout::Packed) && args.sparse_q4_thresholded,
+            "request comparison requires the qualified packed thresholds"
+        );
+        return measure_request(args, input, |model| {
+            model.configure_q4_research(layout, &source_weights_sha256, &cutoffs, 40 * 1024 * 1024)
+        });
+    }
     let mut report = records::Report::create(&args.output)?;
     let initial = CudaContext::total_device_bytes();
     let start = Instant::now();

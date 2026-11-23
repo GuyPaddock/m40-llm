@@ -129,6 +129,14 @@ struct Args {
     #[cfg(all(feature = "cuda", nvcc))]
     #[arg(long, requires = "sparse_q4_thresholded")]
     sparse_q4_extended_input: Option<PathBuf>,
+    /// Measure one warmed request with only the chosen short-Q4 arm resident.
+    #[cfg(all(feature = "cuda", nvcc))]
+    #[arg(
+        long,
+        requires = "sparse_q4_thresholded",
+        conflicts_with = "sparse_q4_extended_input"
+    )]
+    sparse_q4_request_input: Option<PathBuf>,
     /// Diagnose the recorded native/prepared down+vocabulary branch on identical
     /// prefixes. No fitting, free generation or performance promotion occurs.
     #[arg(long, conflicts_with_all=["compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target"])]
