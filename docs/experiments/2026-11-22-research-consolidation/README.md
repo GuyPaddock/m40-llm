@@ -115,6 +115,30 @@ record for negative and prerequisite-limited studies.
 | Two-client batching | Packed scheduling increased aggregate throughput by 59.495% with dense KV and 21.557% with default KV in separate short-prompt cohorts. Each retained matchable output IDs and increased P95 token gaps. Peak costs were 134 MiB and 189 MiB, respectively. [Dense](https://github.com/GuyPaddock/m40-llm/blob/dbc20a66eeb5fb3977063a83b65e876f744236e2/docs/experiments/2026-11-21-serving-concurrency/dense-two/README.md) · [Default KV](https://github.com/GuyPaddock/m40-llm/blob/c708a507a3d28a8bdbb1f634fb4ed45d055239f6/docs/experiments/2026-11-21-serving-concurrency/default-two/README.md). |
 | Four-client batching | Aggregate throughput rose 49.435% with default KV and 94.733% with dense KV in separate short-prompt cohorts. Each matched 256 IDs and recorded 64 real width-four forwards. Dense reduced the latest first sample from 59.195 to 14.265 s. Dense P95 token gaps reached 327 ms and peak cost rose 161 MiB. Default P95 reached 332 ms and cost rose 216 MiB. [Default four-client result](https://github.com/GuyPaddock/m40-llm/blob/8d2c839d9fc0922d06eaae3ed3bbf8b76508e9fa/docs/experiments/2026-11-21-serving-concurrency/default-four/README.md) · [Dense four-client result](https://github.com/GuyPaddock/m40-llm/blob/3d10ccaa44be00fa7fd3d66ea7b8b836836ad45e/docs/experiments/2026-11-21-serving-concurrency/dense-four/README.md). |
 
+## Qualification gates
+
+Each verdict applies to the comparison in its row. See the individual
+reports for the raw observations, trial variability and the frozen stop.
+
+| Phase | Verdict and qualification scope |
+|---|---|
+| A1. October inventory | **PASS.** Replay rebuilt 13 topics, 793 changed paths and 48 implementation commits. The inventory assigns an updated disposition to each topic. |
+| A2. Baseline | **PASS** for the matched short-Qwen requests, separately reproducible medium Qwen arms, overlapping TinyLlama controls and the completed two- and four-client cohorts. **FAIL** for 8,197-token dense Qwen feasibility at the existing one-hour limit. **INCONCLUSIVE** for equivalent-work default-versus-dense comparison at medium and long lengths. |
+| B1. Graphs | **PASS** for exact attention arithmetic on both builds and actual cuBLAS F16 replay. **PASS** for expected ordinary fallback and cleanup without cuBLAS, where real F16 graph replay remains unsupported. **FAIL** for full-model speed promotion and fallback-node pruning admission. |
+| B2. Quantized KV | **PASS** for the existing matched head64 direct consumer and scope-limited dense-passing retention under all-history or top-64 settings. **FAIL** for top-8 quality promotion. **FAIL** for a substantial memory-saving claim in the tested allocations. The head128 staged-versus-direct server comparison remains **INCONCLUSIVE** because the staging configuration is unavailable. |
+| B3. Q8 projection economics | **PASS** for the 5% speed gate on selective down/vocabulary preparation and for removing duplicate split owners where compound FFN is already enabled. **FAIL** for the additional-family configurations and for the confirmed portfolio at the November 5% gate. Budget selective preparation against actual peak and cold start. |
+| C1. Small-N target verification | **PASS** for exact complete target and resident request costs at four rows on the frozen Qwen control. Retain the width sweep as evidence for this selection. |
+| C2. Batch and rollback correctness | **PASS** for the measured exact target paths, rejection/repair, zero-scale and near-tie cases. Keep these tests at the transaction boundary of any future target port. |
+| C3. Active-row compressed KV | **FAIL** at admission. The idle slot added no detectable work to the active sequence up to the measured 4,096 idle tokens. |
+| C4. Sparse Q4 | **PASS** for bounded packed and zigzag operator costs. **FAIL** for thresholded zigzag's first perplexity gate. Packed passed the initial quality check and entered the expanded old-versus-new generation gate. |
+| C5. GSQ | **FAIL** at runtime admission for the screened GGUF tensor mixes. Model preparation remains conditional on format-specific runtime support. |
+| D1. Copy speculation | **PASS** for both frozen live copy workloads versus ordinary decode and the correctness requirements. The incremental gains over the existing copy verifier missed the general 5% threshold. |
+| D2. Output-dependent pruning | **FAIL** at the bounded complete-request opportunity gate. The valid terminal dependency case accounted for at most 0.092%. |
+| D3. Prefill fairness | **PASS** for the frozen worst-gap gate in the two-request dense workload, including the medium TTFT allowance, exact IDs, and sampled peak. Higher normal inter-token latency limits the opt-in workload. |
+| D4. GGUF compatibility | **PASS** for the independently tested checked tensor and stride products. Native Q8 model mapping is separate foundation work on `main`. |
+| E. Closed directions | **PASS** for preservation and review. The closure register records each experiment's performance, quality or prerequisite failure and what new evidence could reopen it. |
+| F. Regression compatibility | **PASS** for the source-isolated build gates and the actual, directory-specific M40 tests linked in the reports. **INCONCLUSIVE** for the initial shared-target compatibility logs, retained separately. |
+
 ## Evidence index
 
 | Package deliverable | Record |
