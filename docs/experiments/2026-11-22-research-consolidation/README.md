@@ -73,15 +73,21 @@ record for negative and prerequisite-limited studies.
   requests finished in about 43 minutes. The dense CLI produced zero
   sampled IDs at the one-hour request limit. This leaves a default
   diagnostic and a dense feasibility failure, with no paired speed
-  verdict. [Long scope and retained stop](../2026-11-21-serving-baseline/qwen-long/README.md).
+  verdict. In the separate M40 operator diagnostic, the ordinary dense
+  head128 launcher switched kernels at 8,193 and the median event span
+  rose from 7.921 ms to 9,045.630 ms with FP64 tolerance preserved. The
+  measured cliff identifies the long-context dispatch to investigate.
+  [Long scope and retained stop](../2026-11-21-serving-baseline/qwen-long/README.md) ·
+  [Head128 operator boundary](https://github.com/GuyPaddock/m40-llm/blob/141ad984b3bcac6f3da738f9850c3f0d3bedc3ff/docs/experiments/2026-11-22-long-context-boundary/result/README.md).
 - **Prepared Q8.** Preparing only down and vocabulary layouts had the
   strongest measured short HTTP result against native Q8. Preparing all
   families lost 64.21% on that historical request. When compound FFN is
   already enabled, releasing duplicate split owners saved 1,647 MiB
   in fresh isolated loader and normal-server processes and matched
-  measured logits. Selective preparation added 1,139 MiB of
-  sampled process peak and 11.1 seconds to launch-to-health. The paired
-  request interval was −0.16% to +0.32%. Combined packet and argmax
+  measured logits. The joint-only ownership timing interval was −0.16%
+  to +0.32%. The separate selective preparation study added 1,139 MiB
+  of sampled process peak and 11.1 seconds to launch-to-health.
+  Combined packet and argmax
   dispatch improved 3.842% against an already prepared joint-FFN
   control, below the 5% November gate. It reached 52.469 HTTP tok/s
   against the historical 56.153149 target.
@@ -105,10 +111,19 @@ record for negative and prerequisite-limited studies.
 
 ## November follow-ups
 
+The one-client serving controls preserved all 64 IDs in each cache
+mode and recorded zero packed decode forwards. Enabling batching
+changed throughput +0.349% with default KV and −0.295% with dense KV.
+Both intervals span zero. Sampled peak rose 176 MiB and 108 MiB,
+respectively. The measured aggregate batching gains apply to multiple
+simultaneous short requests.
+[Default one-client control](https://github.com/GuyPaddock/m40-llm/blob/5891b68cb9f9c6662ad1b3c575ccb10e306a7cc1/docs/experiments/2026-11-21-serving-concurrency/default-one/README.md) ·
+[Dense one-client control](https://github.com/GuyPaddock/m40-llm/blob/e047b51036ad3c9b3222571842ed93498ca5050b/docs/experiments/2026-11-21-serving-concurrency/dense-one/README.md).
+
 | Direction | Disposition and evidence |
 |---|---|
 | Active-row compressed KV | Close the idle-slot hypothesis. Up to 4,096 tokens in an idle slot had no measurable effect on another head128 request in the controlled test. [Slot-isolation result](https://github.com/GuyPaddock/m40-llm/blob/377bec468d51844a917648ab3700baa0ad8b4258/docs/experiments/2026-11-21-active-row-result/README.md). |
-| SpQt-style sparse Q4 | Charged thresholding and compaction passed on all three held-out layers. Packed saved 41.63–42.95% against full packed. Zigzag saved 42.89–47.19% against full zigzag, then failed its real-model perplexity gate with a 4.348% increase. Packed retained all four dense-passing answers and stays in the expanded quality gate. The original causal channel predictors remain closed. [Operator result](https://github.com/GuyPaddock/m40-llm/blob/be7bf4bbfa90eb468b2af53f5c8732e8d1a05c04/docs/experiments/2026-11-22-sparse-q4-live/operator-result/README.md) · [Four-arm quality result](https://github.com/GuyPaddock/m40-llm/blob/d64a2edc93ee60c5f148874b51b6e2eac3174ce5/docs/experiments/2026-11-22-sparse-q4-live/quality-result/README.md). |
+| SpQt-style sparse Q4 | Packed saved 41.63–42.95% against full packed at the operator level with thresholding and compaction. Its expanded gate preserved 26 of 26 dense-passing answers in 48 paired cases. Long code and arithmetic had no dense passes. The isolated resident request comparison is separate. Zigzag saved 42.89–47.19% against full zigzag, then failed its perplexity gate with a 4.348% increase. The original causal channel predictors remain closed. [Operator result](https://github.com/GuyPaddock/m40-llm/blob/be7bf4bbfa90eb468b2af53f5c8732e8d1a05c04/docs/experiments/2026-11-22-sparse-q4-live/operator-result/README.md) · [Four-arm quality result](https://github.com/GuyPaddock/m40-llm/blob/d64a2edc93ee60c5f148874b51b6e2eac3174ce5/docs/experiments/2026-11-22-sparse-q4-live/quality-result/README.md) · [Expanded packed quality](https://github.com/GuyPaddock/m40-llm/blob/2269a0aa1f6fb3f61e4834a3d55cc2ddd82eeb25/docs/experiments/2026-11-22-sparse-q4-live/extended-result/README.md). |
 | GSQ checkpoints | Defer to model preparation until supported layer mappings and kernels can execute the Q2_K and Q3_K_M tensor mixes. The GGUF type enums alone establish format recognition. [GSQ feasibility](https://github.com/GuyPaddock/m40-llm/blob/59aaf765e2d21078f41ff0e2f873df7ce029cc96/docs/experiments/2026-11-21-gsq-feasibility.md). |
 | Terminal prefill pruning | Keep the dependency trace. The valid KV-only saving estimated from the measured terminal operations was at most 0.092% of a complete request, below the admission gate. [Dependency and timing screen](https://github.com/GuyPaddock/m40-llm/blob/8965fd3f5f5ee2c021e928917fbfab67d7bdf3a3/docs/experiments/2026-11-21-output-pruning/README.md). |
 | Prefill fairness | The 16-position dense policy passed its frozen five-pair gate with 800 exact IDs. The median worst gap fell from 347.470 to 3.377 s. The short client's P95 gap rose from 0.379 to 3.318 s and the medium client's first sample arrived 4.632% later. Tracing-off makespan changed −0.287%, with a 3,564 MiB sampled peak in both arms. Keep it opt-in for the tested workload. [Completed fairness comparison](https://github.com/GuyPaddock/m40-llm/blob/3e362c7a7c14883cdbe7f45cff5e321b279d7afa/docs/experiments/2026-11-21-prefill-fairness/chunking-result/README.md) · [Chunking guard evidence](https://github.com/GuyPaddock/m40-llm/blob/c0cdbcb373b80248a551d87e6a942330cd5c7161/docs/experiments/2026-11-21-prefill-fairness/chunking-guards/README.md) · [Stopped first diagnostic](https://github.com/GuyPaddock/m40-llm/blob/f2333456ec479e4bd5fb68ed8a4bf7090bf341d7/docs/experiments/2026-11-21-prefill-fairness/chunking-attempt-01/README.md). |
@@ -123,14 +138,14 @@ reports for the raw observations, trial variability and the frozen stop.
 | Phase | Verdict and qualification scope |
 |---|---|
 | A1. October inventory | **PASS.** Replay rebuilt 13 topics, 793 changed paths and 48 implementation commits. The inventory assigns an updated disposition to each topic. |
-| A2. Baseline | **PASS** for the matched short-Qwen requests, separately reproducible medium Qwen arms, overlapping TinyLlama controls and the completed two- and four-client cohorts. **FAIL** for 8,197-token dense Qwen feasibility at the existing one-hour limit. **INCONCLUSIVE** for equivalent-work default-versus-dense comparison at medium and long lengths. |
+| A2. Baseline | **PASS** for matched short Qwen requests, separately reproducible medium arms, common-model TinyLlama controls and complete one-, two- and four-client cohorts. **FAIL** for 8,197-token dense Qwen feasibility at the existing one-hour limit. **INCONCLUSIVE** for equivalent-work default-versus-dense comparison at medium and long lengths. |
 | B1. Graphs | **PASS** for exact attention arithmetic on both builds and actual cuBLAS F16 replay. **PASS** for expected ordinary fallback and cleanup without cuBLAS, where real F16 graph replay remains unsupported. **FAIL** for full-model speed promotion and fallback-node pruning admission. |
 | B2. Quantized KV | **PASS** for the existing matched head64 direct consumer and scope-limited dense-passing retention under all-history or top-64 settings. **FAIL** for top-8 quality promotion. **FAIL** for a substantial memory-saving claim in the tested allocations. The head128 staged-versus-direct server comparison remains **INCONCLUSIVE** because the staging configuration is unavailable. |
 | B3. Q8 projection economics | **PASS** for the 5% speed gate on selective down/vocabulary preparation and for removing duplicate split owners where compound FFN is already enabled. **FAIL** for the additional-family configurations and for the confirmed portfolio at the November 5% gate. Budget selective preparation against actual peak and cold start. |
 | C1. Small-N target verification | **PASS** for exact complete target and resident request costs at four rows on the frozen Qwen control. Retain the width sweep as evidence for this selection. |
 | C2. Batch and rollback correctness | **PASS** for the measured exact target paths, rejection/repair, zero-scale and near-tie cases. Keep these tests at the transaction boundary of any future target port. |
 | C3. Active-row compressed KV | **FAIL** at admission. The idle slot added no detectable work to the active sequence up to the measured 4,096 idle tokens. |
-| C4. Sparse Q4 | **PASS** for bounded packed and zigzag operator costs. **FAIL** for thresholded zigzag's first perplexity gate. Packed passed the initial quality check and entered the expanded old-versus-new generation gate. |
+| C4. Sparse Q4 | **PASS** for bounded packed and zigzag operator costs and the expanded packed quality gate. **FAIL** for thresholded zigzag's first perplexity gate. Packed entered a separate isolated request-cost comparison. |
 | C5. GSQ | **FAIL** at runtime admission for the screened GGUF tensor mixes. Model preparation remains conditional on format-specific runtime support. |
 | D1. Copy speculation | **PASS** for both frozen live copy workloads versus ordinary decode and the correctness requirements. The incremental gains over the existing copy verifier missed the general 5% threshold. |
 | D2. Output-dependent pruning | **FAIL** at the bounded complete-request opportunity gate. The valid terminal dependency case accounted for at most 0.092%. |
