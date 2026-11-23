@@ -97,6 +97,11 @@ verifier `e1fcebb` passed 223, and the sparse-Q4 quality source
 `d64a2ed` passed 224. Each returned zero failures and zero skipped
 tests in its non-CUDA scope. [Source-specific records](isolated/index.tsv).
 
+The long-context KV quality source `efaf5e8` passed formatting, 224
+non-CUDA tests with warnings denied, and CUDA/server all-target Clippy
+in a fresh target with the GPU hidden. The quality study records the
+device results separately. [Source-specific records](isolated/index.tsv).
+
 The expanded packed-Q4 runner at `aef2d62` left the tested core Rust,
 CUDA, Cargo and build files unchanged. Its two release math/evidence
 tests passed and targeted CUDA/server Clippy finished with warnings
