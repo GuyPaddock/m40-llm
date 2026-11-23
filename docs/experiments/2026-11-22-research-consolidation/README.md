@@ -1,8 +1,10 @@
 # Maxwell research consolidation
 
-Research status as of November 22, 2026. The baseline and conditional
-studies listed below still have outstanding measurements. This summary
-records completed evidence and the current rebuild recommendation.
+The November research program completed on November 23, 2026. Start
+the stable review with three narrow correctness commits on the pinned
+`main` at `e1403e0dbe2037cd8fc2b0af32addf97a4df3488`. The remaining
+results support specific opt-in experiments, existing functionality,
+and closed configurations.
 
 ## Integration shortlist
 
@@ -29,8 +31,8 @@ record for negative and prerequisite-limited studies.
 |---|---|
 | 1. Correctness and foundation | Review the checked GGUF tensor products, the Q8-history scale barriers with their guard, and the CUDA Graph dispatch repair with its parity fixtures as three atomic commits. The graph change keeps the existing opt-in dispatch and fallback. |
 | 2. Production-qualified performance | Keep the existing direct FP16-K/Q4-V history consumer. Its measured head64 win qualifies that workload and requires no new port. The current evidence supports zero new changes to automatic performance dispatch. |
-| 3. Opt-in experiments | Selective down/vocabulary preparation, shared four-row verification and fixed copy drafting need the native Q8 and exact-transaction foundations. Dense prefill chunking warrants a separate opt-in evaluation after a narrow server port. Keep top-64 history selection and graphs within their measured scope. |
-| 4. Preserve or exclude | Preserve the selected-Q4 execution controls, rejected Q8 layouts and negative study evidence. The closure register defines when to revisit failed predictors, lossless KV, ShiftAdd, DualPace, generic adaptive drafting and the other closed directions. |
+| 3. Opt-in experiments | Prioritize an exact long-context attention study after the foundation. Selective down/vocabulary preparation, shared four-row verification and fixed copy drafting need native Q8 and exact-transaction support. Dense prefill chunking warrants separate opt-in evaluation after a narrow server port. Keep top-64 history selection and graphs within their measured scope. |
+| 4. Preserve or exclude | Preserve selected-Q4 execution, the tested thresholded sparse layouts, rejected Q8 layouts and negative study evidence as controls. The closure register defines what evidence would reopen the failed predictors, lossless KV, ShiftAdd, DualPace and generic adaptive drafting. |
 
 ## Complete-request and quality findings
 
@@ -123,7 +125,7 @@ simultaneous short requests.
 | Direction | Disposition and evidence |
 |---|---|
 | Active-row compressed KV | Close the idle-slot hypothesis. Up to 4,096 tokens in an idle slot had no measurable effect on another head128 request in the controlled test. [Slot-isolation result](https://github.com/GuyPaddock/m40-llm/blob/377bec468d51844a917648ab3700baa0ad8b4258/docs/experiments/2026-11-21-active-row-result/README.md). |
-| SpQt-style sparse Q4 | Packed saved 41.63–42.95% against full packed at the operator level with thresholding and compaction. Its expanded gate preserved 26 of 26 dense-passing answers in 48 paired cases. Long code and arithmetic had no dense passes. The isolated resident request comparison is separate. Zigzag saved 42.89–47.19% against full zigzag, then failed its perplexity gate with a 4.348% increase. The original causal channel predictors remain closed. [Operator result](https://github.com/GuyPaddock/m40-llm/blob/be7bf4bbfa90eb468b2af53f5c8732e8d1a05c04/docs/experiments/2026-11-22-sparse-q4-live/operator-result/README.md) · [Four-arm quality result](https://github.com/GuyPaddock/m40-llm/blob/d64a2edc93ee60c5f148874b51b6e2eac3174ce5/docs/experiments/2026-11-22-sparse-q4-live/quality-result/README.md) · [Expanded packed quality](https://github.com/GuyPaddock/m40-llm/blob/2269a0aa1f6fb3f61e4834a3d55cc2ddd82eeb25/docs/experiments/2026-11-22-sparse-q4-live/extended-result/README.md). |
+| SpQt-style sparse Q4 | Packed saved 41.63–42.95% against full packed at the operator level with thresholding and compaction. Its expanded gate preserved 26 of 26 dense-passing answers in 48 cases. Long code and arithmetic had no dense passes. The exact five-pair resident request gained 0.456% with a confidence interval spanning zero, while adding 37 MiB of sampled peak and 6.452 s of median cold load. Close the tested packed configuration. Thresholded zigzag failed its perplexity gate after a 4.348% increase. [Operator result](https://github.com/GuyPaddock/m40-llm/blob/be7bf4bbfa90eb468b2af53f5c8732e8d1a05c04/docs/experiments/2026-11-22-sparse-q4-live/operator-result/README.md) · [Initial quality](https://github.com/GuyPaddock/m40-llm/blob/d64a2edc93ee60c5f148874b51b6e2eac3174ce5/docs/experiments/2026-11-22-sparse-q4-live/quality-result/README.md) · [Expanded packed quality](https://github.com/GuyPaddock/m40-llm/blob/2269a0aa1f6fb3f61e4834a3d55cc2ddd82eeb25/docs/experiments/2026-11-22-sparse-q4-live/extended-result/README.md) · [Resident request result](https://github.com/GuyPaddock/m40-llm/blob/a6fef41d0f1569b176fe3f392e9f62d636719f89/docs/experiments/2026-11-23-sparse-q4-request/result/README.md). |
 | GSQ checkpoints | Defer to model preparation until supported layer mappings and kernels can execute the Q2_K and Q3_K_M tensor mixes. The GGUF type enums alone establish format recognition. [GSQ feasibility](https://github.com/GuyPaddock/m40-llm/blob/59aaf765e2d21078f41ff0e2f873df7ce029cc96/docs/experiments/2026-11-21-gsq-feasibility.md). |
 | Terminal prefill pruning | Keep the dependency trace. The valid KV-only saving estimated from the measured terminal operations was at most 0.092% of a complete request, below the admission gate. [Dependency and timing screen](https://github.com/GuyPaddock/m40-llm/blob/8965fd3f5f5ee2c021e928917fbfab67d7bdf3a3/docs/experiments/2026-11-21-output-pruning/README.md). |
 | Prefill fairness | The 16-position dense policy passed its frozen five-pair gate with 800 exact IDs. The median worst gap fell from 347.470 to 3.377 s. The short client's P95 gap rose from 0.379 to 3.318 s and the medium client's first sample arrived 4.632% later. Tracing-off makespan changed −0.287%, with a 3,564 MiB sampled peak in both arms. Keep it opt-in for the tested workload. [Completed fairness comparison](https://github.com/GuyPaddock/m40-llm/blob/3e362c7a7c14883cdbe7f45cff5e321b279d7afa/docs/experiments/2026-11-21-prefill-fairness/chunking-result/README.md) · [Chunking guard evidence](https://github.com/GuyPaddock/m40-llm/blob/c0cdbcb373b80248a551d87e6a942330cd5c7161/docs/experiments/2026-11-21-prefill-fairness/chunking-guards/README.md) · [Stopped first diagnostic](https://github.com/GuyPaddock/m40-llm/blob/f2333456ec479e4bd5fb68ed8a4bf7090bf341d7/docs/experiments/2026-11-21-prefill-fairness/chunking-attempt-01/README.md). |
@@ -145,7 +147,7 @@ reports for the raw observations, trial variability and the frozen stop.
 | C1. Small-N target verification | **PASS** for exact complete target and resident request costs at four rows on the frozen Qwen control. Retain the width sweep as evidence for this selection. |
 | C2. Batch and rollback correctness | **PASS** for the measured exact target paths, rejection/repair, zero-scale and near-tie cases. Keep these tests at the transaction boundary of any future target port. |
 | C3. Active-row compressed KV | **FAIL** at admission. The idle slot added no detectable work to the active sequence up to the measured 4,096 idle tokens. |
-| C4. Sparse Q4 | **PASS** for bounded packed and zigzag operator costs and the expanded packed quality gate. **FAIL** for thresholded zigzag's first perplexity gate. Packed entered a separate isolated request-cost comparison. |
+| C4. Sparse Q4 | **PASS** for charged operator costs and the expanded packed quality gate. **FAIL** for thresholded zigzag's perplexity and thresholded packed's 5% resident-speed gate. Preserve both layouts as controls. |
 | C5. GSQ | **FAIL** at runtime admission for the screened GGUF tensor mixes. Model preparation remains conditional on format-specific runtime support. |
 | D1. Copy speculation | **PASS** for both frozen live copy workloads versus ordinary decode and the correctness requirements. The incremental gains over the existing copy verifier missed the general 5% threshold. |
 | D2. Output-dependent pruning | **FAIL** at the bounded complete-request opportunity gate. The valid terminal dependency case accounted for at most 0.092%. |
@@ -153,6 +155,7 @@ reports for the raw observations, trial variability and the frozen stop.
 | D4. GGUF compatibility | **PASS** for the independently tested checked tensor and stride products. Native Q8 model mapping is separate foundation work on `main`. |
 | E. Closed directions | **PASS** for preservation and review. The closure register records each experiment's performance, quality or prerequisite failure and what new evidence could reopen it. |
 | F. Regression compatibility | **PASS** for the source-isolated build gates and the actual, directory-specific M40 tests linked in the reports. **INCONCLUSIVE** for the initial shared-target compatibility logs, retained separately. |
+| G. Integration planning | **PASS** for the candidate ledger, reproducible patch assembly and dependency-ordered roadmap. A combined build and device qualification remains part of the separately authorized integration review. |
 
 ## Evidence index
 
@@ -169,8 +172,10 @@ reports for the raw observations, trial variability and the frozen stop.
 | Dependency-ordered rebuild from `main` | [Atomic commit sequence, dependency graph and qualification commands](../2026-11-21-main-dependencies/README.md). |
 | Executive summary | Complete-request findings and November dispositions above. |
 
-The locally committed topic SHAs and paths are usable through
-`git show SHA:PATH`. GPU timing used the actual Tesla M40 and a
-shared host lock. The Windows VM was running during the current
-suite. The raw captures include the host process observations available
-for each run. A clean-host repeat would be a separate cohort.
+The topic SHAs and paths are usable through `git show SHA:PATH`. The
+26 research branches retain the original prototypes and evidence.
+GPU timing used the actual Tesla M40 and a shared host lock. The
+Windows VM was running during these workloads. Any clean-host repeat
+is a separate cohort. The November briefs were unavailable in the
+project sources checked, so the November feasibility review used the
+supplied PRs and papers pinned in the protocol.

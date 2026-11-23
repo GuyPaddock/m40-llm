@@ -22,3 +22,16 @@ closed multirow gate/up sweep. D1 can remeasure copy-oriented speculation
 if the new target changes measured verification costs. Each has its own
 gate; a result in those experiments cannot establish that the abandoned
 predictor, fusion sweep or adaptive controller works.
+
+## November stopping decisions
+
+The [candidate matrix](../2026-11-21-integration/candidates.tsv) and
+[executive summary](../2026-11-22-research-consolidation/README.md) retain
+the November gates and source records. Close the tested packed sparse-Q4
+configuration at its request gate and the tested zigzag cutoff at its
+perplexity gate. Reopening either requires a cost-changing layout or
+dataflow and adequate real-model quality. The measured inactive graph
+node and valid terminal-state pruning opportunity closed at their
+admission gates. Reopen them for a workflow with a larger measured
+complete-request share. The idle-slot KV study requires a different
+cache or scheduler ownership model that demonstrably reads idle history.

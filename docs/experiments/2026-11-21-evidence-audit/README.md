@@ -71,3 +71,28 @@ the 24 research branches published to `origin`.
 | C4 sparse Q4 | Match each dense generation against the independent capture, recompute repetition, and apply the frozen 3% likelihood rule. The operator evidence admits a quality test and the original quality report records the zigzag stop. The 48-case packed quality recheck has a separate runner. [Initial quality replay](https://github.com/GuyPaddock/m40-llm/blob/d64a2edc93ee60c5f148874b51b6e2eac3174ce5/docs/experiments/2026-11-22-sparse-q4-live/quality-result/README.md) · [Expanded runner](https://github.com/GuyPaddock/m40-llm/blob/aef2d6278a44d63069636d1eca3749583d8c2868/docs/experiments/2026-11-22-sparse-q4-live/extended.md). |
 | D3 prefill fairness | Replay the mixed-request admission and state guards. The first candidate archive preserves the interrupted diagnostic outside the complete performance gate. [Measured stall](https://github.com/GuyPaddock/m40-llm/blob/a37d0bc8b9d9537f626b696868857f88dd80ada2/docs/experiments/2026-11-21-prefill-fairness/result/README.md) · [Exact state and cancellation](https://github.com/GuyPaddock/m40-llm/blob/c0cdbcb373b80248a551d87e6a942330cd5c7161/docs/experiments/2026-11-21-prefill-fairness/chunking-guards/README.md) · [First instrumented pair and runner failure](https://github.com/GuyPaddock/m40-llm/blob/f2333456ec479e4bd5fb68ed8a4bf7090bf341d7/docs/experiments/2026-11-21-prefill-fairness/chunking-attempt-01/README.md). |
 | F5 build compatibility | Compare the exact source paths, target directories, test counts, flags and exit codes. Track each M40 guard in its topic result. [Source-specific build archive index](../2026-11-21-build-compatibility/README.md). |
+
+## Closing replay
+
+The final catalog resolves 13 October topics, 793 changed paths, 48
+implementation commits, 53 decisions and 49 distinct source reports.
+The rebuild ledger verifies 111 immutable sources. The executable
+rebuild recipe reconstructs the complete three-fix temporary index
+tree, including the graph fixture support omitted from the first
+assembly check. [Rebuild recipe](../2026-11-21-main-dependencies/README.md#independent-fixes).
+
+- The dense boundary archive contains all six checked device
+  intervals. The one-client dense serving replay regenerates five
+  exact timing pairs and reproduces zero packed forwards.
+  [Attention boundary](https://github.com/GuyPaddock/m40-llm/blob/141ad984b3bcac6f3da738f9850c3f0d3bedc3ff/docs/experiments/2026-11-22-long-context-boundary/result/README.md) ·
+  [Dense one-client serving](https://github.com/GuyPaddock/m40-llm/blob/e047b51036ad3c9b3222571842ed93498ca5050b/docs/experiments/2026-11-21-serving-concurrency/dense-one/README.md).
+- The expanded packed-Q4 replay recomputes 122 aligned comparisons
+  from 244 full FP32 files and accounts for 22 dense failures. The
+  separate request replay checks ten matching warm observations, zero
+  tracked allocation after teardown and the 5% speed gate failure.
+  [Expanded quality and vector hashes](https://github.com/GuyPaddock/m40-llm/blob/2269a0aa1f6fb3f61e4834a3d55cc2ddd82eeb25/docs/experiments/2026-11-22-sparse-q4-live/extended-result/README.md) ·
+  [Request cost replay](https://github.com/GuyPaddock/m40-llm/blob/a6fef41d0f1569b176fe3f392e9f62d636719f89/docs/experiments/2026-11-23-sparse-q4-request/result/README.md).
+- The corrected D3 runner passed all five measured fairness pairs
+  and matched its independently timed companions. Its report retains
+  the earlier stopped diagnostic and the completion replay.
+  [Final fairness archive](https://github.com/GuyPaddock/m40-llm/blob/3e362c7a7c14883cdbe7f45cff5e321b279d7afa/docs/experiments/2026-11-21-prefill-fairness/chunking-result/README.md).

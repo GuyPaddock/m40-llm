@@ -2,10 +2,10 @@
 
 The candidate base is e1403e0. The experimental baseline is 48c6333,
 470 commits ahead. The source IDs below expand to immutable objects in the
-[commit ledger](commits.tsv). These are dependency and review boundaries.
-The final feature selection depends on the serial M40 runs. All existing
-defaults, including compressed KV for supported generation, remain the
-reference behavior.
+[commit ledger](commits.tsv). The serial M40 runs support the three
+independent fixes and the optional scopes below. Use the existing main
+configuration, including compressed KV for supported generation, as the
+integration control.
 
 GitHub resolved both branch names to the same full commits on November
 22. The pinned main worktree was clean when the patch checks ran.
@@ -234,6 +234,13 @@ finish inside its existing deadline and remeasure the established short
 and medium controls before considering changes to automatic routing.
 
 ### Other optional runtime changes
+
+The charged sparse-Q4 operator improvement and the 26 retained
+dense-passing answers did not produce a meaningful resident request gain.
+Result a6fef41 measured +0.456% across five exact M40 pairs with extra
+residency and cold preparation. Exclude the tested three-layer packed
+and zigzag layouts from the review sequence. Preserve the artifacts for
+a different cost-changing hypothesis. [Packed request result](https://github.com/GuyPaddock/m40-llm/blob/a6fef41d0f1569b176fe3f392e9f62d636719f89/docs/experiments/2026-11-23-sparse-q4-request/result/README.md).
 
 - **Direct mixed KV on a single sequence** is already on main.
   `src/kv_compression.rs` validates the compatible backing/consumer, and

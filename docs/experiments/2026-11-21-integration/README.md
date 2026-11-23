@@ -1,13 +1,12 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 53 decisions for which the
-scope can already be established. Each row has the source branch, exact
+The [candidate matrix](candidates.tsv) records 53 decisions. Each row
+has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
 defaults, risk, recommendation, tier and reopening condition. A tier
-identifies the kind of integration; the recommendation states whether
-it is ready on main. Open hardware measurements will add rows and refine
-the dependent recommendations before the final shortlist.
+identifies the kind of integration. Each recommendation gives its scope
+and readiness on main.
 
 **Ready on the pinned main base.** GGUF tensor bounds, Q8 history-scale
 synchronization and the narrow CUDA Graph attention repair have
@@ -245,12 +244,14 @@ dense-passing answers. Zigzag thresholding raised the first held-out
 passage's perplexity 4.348%, which stopped that arm at its 3% gate.
 The packed arm completed all 48 cases in the broader grid and preserved
 all 26 dense-passing answers. Neither long code nor long arithmetic
-had a dense pass. Packed now enters a same-checkpoint, single-owner
-request-cost comparison. Both layouts add 38,043,648 requested device
-bytes for weights and 350,212 for scratch.
+had a dense pass. In five exact single-owner request pairs, packed
+gained 0.456% with a 95% interval spanning zero and added 37 MiB of
+sampled peak and 6.452 s of median cold load. Close the tested layout
+and cutoff configuration with its operator and quality controls.
 [Held-out operator result](https://github.com/GuyPaddock/m40-llm/blob/be7bf4bbfa90eb468b2af53f5c8732e8d1a05c04/docs/experiments/2026-11-22-sparse-q4-live/operator-result/README.md) ·
 [Four-arm quality result](https://github.com/GuyPaddock/m40-llm/blob/d64a2edc93ee60c5f148874b51b6e2eac3174ce5/docs/experiments/2026-11-22-sparse-q4-live/quality-result/README.md) ·
-[Expanded packed quality](https://github.com/GuyPaddock/m40-llm/blob/2269a0aa1f6fb3f61e4834a3d55cc2ddd82eeb25/docs/experiments/2026-11-22-sparse-q4-live/extended-result/README.md).
+[Expanded packed quality](https://github.com/GuyPaddock/m40-llm/blob/2269a0aa1f6fb3f61e4834a3d55cc2ddd82eeb25/docs/experiments/2026-11-22-sparse-q4-live/extended-result/README.md) ·
+[Resident request result](https://github.com/GuyPaddock/m40-llm/blob/a6fef41d0f1569b176fe3f392e9f62d636719f89/docs/experiments/2026-11-23-sparse-q4-request/result/README.md).
 
 The [dependency-ordered rebuild](../2026-11-21-main-dependencies/README.md)
 makes native Q8 checkpoint admission distinct from optional prepared

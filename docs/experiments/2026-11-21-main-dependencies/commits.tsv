@@ -108,3 +108,4 @@ f2333456ec479e4bd5fb68ed8a4bf7090bf341d7	docs(bench): retain mislabelled prefill
 a07d1ecb22af18bd3b18a58a96b26a787b3e95a1	perf(attn): parallelize head128 context work	Guy Elsmore-Paddock
 2269a0aa1f6fb3f61e4834a3d55cc2ddd82eeb25	docs(quality): qualify packed Q4 answer retention	Guy Elsmore-Paddock
 1880f66e01ce3844ef3fbe54cdb9f9ff7395dbab	test(bench): measure warmed sparse Q4 requests	Guy Elsmore-Paddock
+a6fef41d0f1569b176fe3f392e9f62d636719f89	docs(perf): close the packed Q4 request study	Guy Elsmore-Paddock

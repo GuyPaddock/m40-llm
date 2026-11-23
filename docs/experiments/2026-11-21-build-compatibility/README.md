@@ -112,3 +112,10 @@ standalone link. The later serial build finished the executable.
 [Raw build archive](sparse-q4-extended/sparse-q4-extended-build.tar.gz) ·
 [Archive checksum](sparse-q4-extended/sparse-q4-extended-build.sha256) ·
 [Executable checksum](sparse-q4-extended/sparse-q4-extended.binary.sha256).
+
+The isolated packed-Q4 request source `1880f66` passed formatting, two
+release evidence tests and targeted CUDA/server Clippy with warnings
+denied. The archived build and timed executable identify the real
+`sm_52` artifact. The original two-mode sparse projection guards
+remain the coverage for the shared production files, which this
+request example leaves untouched. [Request source and build archive](https://github.com/GuyPaddock/m40-llm/blob/a6fef41d0f1569b176fe3f392e9f62d636719f89/docs/experiments/2026-11-23-sparse-q4-request/result/README.md).
