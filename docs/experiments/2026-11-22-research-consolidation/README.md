@@ -23,6 +23,15 @@ Q8 model support, experimental prepared weights and verification.
 The [closure register](../2026-11-21-closed-directions/README.md) is the
 record for negative and prerequisite-limited studies.
 
+## Integration tiers
+
+| Tier | Scope on the pinned `main` |
+|---|---|
+| 1. Correctness and foundation | Review the checked GGUF tensor products, the Q8-history scale barriers with their guard, and the CUDA Graph dispatch repair with its parity fixtures as three atomic commits. The graph change keeps the existing opt-in dispatch and fallback. |
+| 2. Production-qualified performance | Keep the existing direct FP16-K/Q4-V history consumer. Its measured head64 win qualifies that workload and requires no new port. The current evidence supports zero new changes to automatic performance dispatch. |
+| 3. Opt-in experiments | Selective down/vocabulary preparation, shared four-row verification and fixed copy drafting need the native Q8 and exact-transaction foundations. Dense prefill chunking warrants a separate opt-in evaluation after a narrow server port. Keep top-64 history selection and graphs within their measured scope. |
+| 4. Preserve or exclude | Preserve the selected-Q4 execution controls, rejected Q8 layouts and negative study evidence. The closure register defines when to revisit failed predictors, lossless KV, ShiftAdd, DualPace, generic adaptive drafting and the other closed directions. |
+
 ## Complete-request and quality findings
 
 - **Graphs.** Qwen native-head128 Graph HTTP throughput gained 0.361%
@@ -108,12 +117,18 @@ record for negative and prerequisite-limited studies.
 
 ## Evidence index
 
-- [October branch and artifact inventory](../2026-11-21-inventory/README.md).
-- [Frozen hardware, workloads and November source provenance](../2026-11-21-protocol/README.md).
-- [Serving methodology, retained traces and reproducibility](../2026-11-21-serving-baseline/README.md).
-- [Independent correctness and source audit](../2026-11-21-evidence-audit/README.md).
-- [Build compatibility matrix](../2026-11-21-build-compatibility/README.md).
-- [Complete candidate decisions and current dispositions](../2026-11-21-integration/README.md).
+| Package deliverable | Record |
+|---|---|
+| Research inventory and exact branch provenance | [October inventory](../2026-11-21-inventory/README.md) and the [source audit](../2026-11-21-evidence-audit/README.md). |
+| Frozen workload baseline and benchmark method | [Hardware and November sources](../2026-11-21-protocol/README.md) and [serving baselines](../2026-11-21-serving-baseline/README.md). |
+| Per-experiment reports | Report links beside each finding above and the [candidate matrix](../2026-11-21-integration/candidates.tsv). |
+| Raw records and reproduction commands | Archive manifests, executable hashes and run commands linked from the individual reports and [replay index](../2026-11-21-evidence-audit/README.md). |
+| Independent correctness and evidence audits | [Evidence audit](../2026-11-21-evidence-audit/README.md) and [source-isolated compatibility checks](../2026-11-21-build-compatibility/README.md). |
+| Consolidated candidate comparison | [Disposition matrix](../2026-11-21-integration/candidates.tsv), with source, gates, memory, quality, flags and risk. |
+| Closed experiments and reopening conditions | [Closure register](../2026-11-21-closed-directions/README.md). |
+| Enhancement shortlist | The recommendations and tiers above. |
+| Dependency-ordered rebuild from `main` | [Atomic commit sequence, dependency graph and qualification commands](../2026-11-21-main-dependencies/README.md). |
+| Executive summary | Complete-request findings and November dispositions above. |
 
 The locally committed topic SHAs and paths are usable through
 `git show SHA:PATH`. GPU timing used the actual Tesla M40 and a
