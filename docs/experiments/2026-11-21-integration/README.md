@@ -1,6 +1,6 @@
 # Maxwell integration decisions
 
-The [candidate matrix](candidates.tsv) records 48 decisions for which the
+The [candidate matrix](candidates.tsv) records 51 decisions for which the
 scope can already be established. Each row has the source branch, exact
 commit and report, correctness and runtime tests, operator and complete
 request results, memory, quality, dependencies and modules, current
