@@ -52,6 +52,14 @@ for i in 0 1 2 3 4; do
             diff -u "$raw/diagnostic-$key.clocks.json" -
         jq -es -f "$study/responses.jq" "$raw"/{diagnostic,primary}-"$key.json" |
             diff -u "$raw/primary-$key.replay.json" -
+        progress=$(jq -er '
+            . as $run | .records[0].response.metrics as $short | .records[1].response.metrics as $medium |
+            ((($short.sample_origin_unix_ns|tonumber)-($run.client_origin_unix_ns|tonumber))/1000000) as $short_origin |
+            ((($medium.sample_origin_unix_ns|tonumber)-($run.client_origin_unix_ns|tonumber))/1000000+
+                $medium.token_elapsed_ms[0]) as $medium_first |
+            [$short.token_elapsed_ms[]+$short_origin |
+                select(.>$run.records[1].submitted_ms and .<$medium_first)] | length
+        ' "$raw/diagnostic-$key.json")
         for phase in diagnostic primary; do
             label="$phase-$key"
             flags="$raw/$label-server.start"
@@ -69,9 +77,10 @@ for i in 0 1 2 3 4; do
             else
                 if rg -q '^M40LLM_RESEARCH_TOKEN_TIMINGS=' "$flags"; then exit 1; fi
             fi
-            jq -nc --arg arm "$arm" --arg phase "$phase" --argjson pair "$i" \
+            jq -nc --arg arm "$arm" --arg phase "$phase" --argjson pair "$i" --argjson progress "$progress" \
                 --argjson peak "$(server_peak "$label")" \
-                '{pair:$pair,arm:$arm,phase:$phase,server_peak_mib:$peak}' >> "$records"
+                '{pair:$pair,arm:$arm,phase:$phase,server_peak_mib:$peak} |
+                 if $phase=="diagnostic" then .+{short_samples_during_medium_wait:$progress} else . end' >> "$records"
         done
     done
 done
