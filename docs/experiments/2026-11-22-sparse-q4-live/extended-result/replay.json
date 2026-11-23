@@ -1,0 +1,14 @@
+{
+  "cases": 48,
+  "dense_failures_short_long": [
+    7,
+    15
+  ],
+  "dense_passes_short_long": [
+    17,
+    9
+  ],
+  "disposition": "PASS",
+  "failure": null,
+  "replayed_fp32_comparisons": 122
+}
